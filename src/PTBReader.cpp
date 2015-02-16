@@ -35,7 +35,7 @@ uint64_t ClockGetTime() {
 PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     packet_rollover_(0),socket_(0),
     client_thread_collector_(0),client_thread_transmitor_(0),ready_(false), emu_mode_(emu),
-				 fragmented_(false),keep_transmitting_(true),/*ready_to_send_(false),*/first_ts_(true),keep_collecting_(true),previous_ts_(0)
+				 fragmented_(false),keep_transmitting_(true),/*ready_to_send_(false),*/first_ts_(true),keep_collecting_(true),previous_ts_(0),timeout_cnt_(0)
 
 {
   printf("Here\n");
@@ -183,17 +183,17 @@ void PTBReader::ClientCollector() {
       // Registers should be setup already.
       // TODO: Implement the DMA data taking code here.
       // First setup the DMA:
-#ifdef DATA_READER
+#ifdef ARM
       int status = xdma_init();
       if (status < 0) {
         Log(error,"Failed to initialize the DMA engine for data collection.");
         return;
       }
-      Log(verbose,"Allocating the DMA buffer.");
+      Log(debug,"Allocating the DMA buffer.");
 
       uint32_t *frame = NULL;
       const uint32_t nbytes_to_collect = 16; //128 bit frame
-
+      timeout_cnt_ = 0;
       while (keep_collecting_) {
         // Allocate the memory necessary for a packet.
         //uint32_t *frame = static_cast<uint32_t*>(new uint32_t[32]);
@@ -202,6 +202,7 @@ void PTBReader::ClientCollector() {
           frame[i] = 0;
         }
         //FIXME: Verify that the numbers are correct&(dst[pos])
+	Log(debug,"Calling for a transaction");
         status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[0]),nbytes_to_collect);
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
@@ -222,7 +223,7 @@ void PTBReader::ClientCollector() {
         pthread_mutex_unlock(&lock_);
       }
       xdma_exit();
-#endif /*DATA_READER*/
+#endif /*ARM*/
     }
 }
 

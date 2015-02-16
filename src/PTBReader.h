@@ -187,8 +187,8 @@ private:
 //  uint32_t freq_extTig;
 
   // Debugging and control variables
-  //uint32_t timeout_cnt_;
-  //const uint32_t timeout_cnt_threshold_ = 1000;
+uint32_t timeout_cnt_;
+const uint32_t timeout_cnt_threshold_ = 1000;
 
   std::priority_queue<evtType,std::vector<evtType>,closer> evt_queue_;
 };

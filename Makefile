@@ -17,10 +17,12 @@ DEF_LFLAGS := -lpthread
 
 # TPB Build
 ifeq ($(MACHINE), armv7l)
-   $(info Compiling for uZed)
+   $(info ======================)
+   $(info ++++Compiling for uZed)
+   $(info ======================)
    DEF      := -DARM
-   CFLAGS   := -g $(DEF_CFLAGS)
-   LFLAGS   := $(DEF_LFLAGS)
+   CFLAGS   := -g -O0 $(DEF_CFLAGS)
+   LFLAGS   := $(DEF_LFLAGS) -L/usr/local/lib -lxdma
    EXT_TARS := 
    CLN      := 
    UTL_DIR  := $(PWD)/util/ptb
@@ -30,7 +32,7 @@ else
    $(info +++ Compiling for Server) 
    DEF      :=
    CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
-   LFLAGS   := $(DEF_LFLAGS) 
+   LFLAGS   := $(DEF_LFLAGS)
    EXT_TARS := 
    CLN      := server_clean
    UTL_DIR  := $(PWD)/util/server

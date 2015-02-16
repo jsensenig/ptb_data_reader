@@ -198,7 +198,7 @@ int main() {
   //Log(debug) << "Going to sleep" <<endlog;
   //std::this_thread::sleep_for (std::chrono::seconds(10));
   Log(info,"Starting manager");
-  bool emulate = true;
+  bool emulate = false;//true;
   // Start in emulating mode.
   PTBManager manager(emulate);
 
