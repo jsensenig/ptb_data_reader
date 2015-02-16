@@ -327,7 +327,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   // This is the workhorse of the configuration.
   // At this point the registers should already be mapped and things should be flowing
 
-  Log(verbose,"Parsing the configuration." );
+  Log(info,"Parsing the configuration." );
 
   // First zero out all registers
 
