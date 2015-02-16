@@ -112,7 +112,8 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     Log(error,"Unable to get foreign address");
   }
   try {
-    Log(debug,"Port : %hu",sock->getForeignPort());
+	  uint32_t localPort = sock->getForeignPort();
+    Log(debug,"Port : %u",localPort);
   } catch (SocketException &e) {
     Log(error,"Unable to get foreign port");
   }
