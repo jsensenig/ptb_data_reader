@@ -82,6 +82,14 @@ void* reader_thread(void *arg) {
   // Create a client that connects to the PTB
   try{
 
+	  // Create a tcp server and listen to the connection
+	  TCPServerSocket servSock(8992);
+	  // Accept a client
+	  Log(info,"Entering waiting state");
+	  TCPSocket *sock = servSock.accept();
+	  Log(info,"--> Received a client request.");
+
+
    const PTBReader *reader = (const PTBReader *) arg;
    if (reader == NULL) {
      Log(error,"There is no reader");
@@ -94,12 +102,6 @@ void* reader_thread(void *arg) {
    Log(info,"Reader is ready... let's start the show!!!");
 
 
-  // Create a tcp server and listen to the connection
-  TCPServerSocket servSock(8992);
-  // Accept a client
-  Log(info,"Entering waiting state");
-  TCPSocket *sock = servSock.accept();
-  Log(info,"--> Received a client request.");
 
   // Keep looping to read data and dump it
   uint32_t header;
