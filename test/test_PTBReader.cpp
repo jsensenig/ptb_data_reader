@@ -178,7 +178,7 @@ void* reader_thread(void *arg) {
 // }
 
 int main() {
-  Logger::SetSeverity(Logger::verbose);
+  Logger::SetSeverity(Logger::debug);
   Log(info,"Just a test");
 
   // This doesn't work since the thread gets stuck in the constructor of ConfigServer
