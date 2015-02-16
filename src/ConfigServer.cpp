@@ -201,7 +201,9 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
         // Process the transmission.
         try {
           Log(verbose,"Processing buffer [%s]",tcp_buffer_.c_str());
-          ProcessTransmission(tcp_buffer_.c_str());
+          printf("About to process\n");
+	  std::this_thread::sleep_for (std::chrono::seconds(2));
+	  ProcessTransmission(tcp_buffer_.c_str());
           sprintf(instBuffer,"<success>true</success>");
         }
         catch (std::string &e) {
@@ -308,6 +310,7 @@ void ConfigServer::ProcessTransmission(const char* buffer) {
   // been registered. If not simply queue the command into a list and wait
   // Careful if the client connection in the meantime is lost, the memory will disappear.
   // Have to copy the string into the queue
+  printf("In ProcessTransmission\n");
   if (data_manager_ == NULL) {
     Log(warning,"Attempting to process a transmission without a valid data Manager. Queueing.");
     Log(verbose,"[%s]",buffer);
@@ -316,8 +319,10 @@ void ConfigServer::ProcessTransmission(const char* buffer) {
     Log(verbose,"Queue now composed of %u elements.",queue_.size());
     return;
   }
+  printf("Going to start processing\n");
+  printf("The string [%s]\n",buffer);
   Log(verbose,"Processing a transmission");
-  Log(verbose,"[%s]");
+  Log(verbose,"[%s]",buffer);
 
   // Instanciate the XML plugin
   pugi::xml_document doc;
