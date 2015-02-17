@@ -296,8 +296,8 @@ public:
         // drop 1 int
         static size_t const ptb_offset_u32 = 1;
         static size_t const ptb_offset_bytes = ptb_offset_u32*sizeof(uint32_t);
-        // The payload position offset from the top of the frame (header + discard)
 
+        // The payload position offset from the top of the frame (header + discard)
         static size_t const payload_offset_u32 = 1+ptb_offset_u32;
         static size_t const payload_offset_bytes = payload_offset_u32*sizeof(uint32_t);
 

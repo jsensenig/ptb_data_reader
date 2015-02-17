@@ -256,7 +256,9 @@ void PTBReader::StartDataTaking() {
 #endif
 
 #ifdef ARM_MMAP
+    Log(debug,"Mapping the data registers");
     // Map the physical addresses
+    SetupDataRegisters();
     mapped_data_base_addr_ = MapPhysMemory(data_reg.base_addr,data_reg.high_addr);
     control_register_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_data_base_addr_) + data_reg.addr_offset[0]);
     data_register_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_data_base_addr_) + data_reg.addr_offset[1]);
@@ -417,6 +419,7 @@ void PTBReader::ClientCollector() {
     xdma_buf.chan = xdma_device.rx_chan;
     xdma_buf.completion = xdma_device.rx_cmp;
     xdma_buf.cookie = 0;
+    xdma_buf.dir = XDMA_DEV_TO_MEM;
 
     xdma_trans.chan = xdma_device.rx_chan;
     xdma_trans.completion =  xdma_device.rx_cmp;
@@ -424,6 +427,7 @@ void PTBReader::ClientCollector() {
     dma_buffer_ = reinterpret_cast<uint32_t*>(g_dma_mem_map);
     uint64_t total_duration = 0;
     uint32_t iterations = 0;
+    Log(debug,"Starting the collection");
     auto begin = std::chrono::high_resolution_clock::now();
 
     while (keep_collecting_) {
@@ -432,7 +436,6 @@ void PTBReader::ClientCollector() {
       // offset in bytes
       xdma_buf.buf_offset = pos*sizeof(uint32_t);
       xdma_buf.buf_size = 16*sizeof(uint8_t); // Grab a data frame
-      xdma_buf.dir = XDMA_DEV_TO_MEM;
 
       // Prepare the buffer
       ret = (int)ioctl(g_dma_fd, XDMA_PREP_BUF, &xdma_buf);
@@ -440,15 +443,13 @@ void PTBReader::ClientCollector() {
       // Now perform the transation
       xdma_trans.cookie = xdma_buf.cookie;
       // should implement a wait or not?
-      // Try with a wait fpr now.
+      // Try with a wait for now.
       //FIXME: Try without waiting period (implying that the transfer occurs faster than
       // the time it takes to go there fetch the memory
       xdma_trans.wait = 1;
       ret = (int) ioctl(g_dma_fd, XDMA_START_TRANSFER, &xdma_trans);
 
       auto end_trf = std::chrono::high_resolution_clock::now();
-      total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();
-      iterations++;
       //      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&data[pos],frame_size_uint);
       // Log(verbose,"Received contents (hex): [%08X %08X %08X %08X]",data[0],data[1],data[2],data[3]);
       // Log(verbose,"%s",display_bits(&frame[pos],frame_size_bytes).c_str());
@@ -456,7 +457,8 @@ void PTBReader::ClientCollector() {
 
       if (ret == -1) {
         //#ifdef DEBUG
-        //        Log(warning,"Reached a timeout in the DMA transfer.");
+	//Log(warning,"Reached a timeout in the DMA transfer.");
+	printf(".");
         //#endif
         timeout_cnt_++;
         if (timeout_cnt_ > timeout_cnt_threshold_*10) {
@@ -466,11 +468,20 @@ void PTBReader::ClientCollector() {
           dma_buffer_[pos] = WARN_TIMEOUT;
           // Actually, a good way to work this out would be to send a warning word here indicating a timeout
           // And let the run stopping be handled dowstream
-
+	  printf("Warning set\n");
           // Don't throw. Actually this does not work at all since the thread has nothing that collects it
           //throw std::string("Reached timeout counter limit.");
         }
+	continue;
+      } else {
+	printf("\n");
       }
+      total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();
+      iterations++;
+      printf("Got something\n");
+      uint32_t* data = &dma_buffer_[pos];
+      printf("[%08X %08X %08X %08X]\n",data[0],data[1],data[2],data[3]);
+      
       /** Removed this but need to be careful that the timeout counter is reset when a new run is started
       else {
         // Would like to avoid this assignment
@@ -500,7 +511,7 @@ void PTBReader::ClientCollector() {
       //pos_pool += frame_size_bytes; 
       if (pos+frame_size_u32 >= buffer_end) {
         //#ifdef DEBUG
-        //        Log(info,"Reached buffer size.Resetting to start.\n");
+        Log(info,"Reached buffer size.Resetting to start.\n");
         //#endif
         pos = 0;
       } // pos check
@@ -551,7 +562,8 @@ void PTBReader::ClientCollector() {
 
       // enable read_ready to trigger a transaction
       control_register_.value() = control_register_.value() | 0x1;
-      if ((control_register_.value() >> 1 & 0x1) == 0x1) {
+      printf("Control -> %X\n",control_register_.value());
+      if (((control_register_.value() >> 1) & 0x1) == 0x1) {
 	// A transation was completed
 	// there is data to be collected
         std::memcpy(&memory_pool_[pos],data_register_.address,frame_size_bytes);
@@ -559,7 +571,8 @@ void PTBReader::ClientCollector() {
         total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();
         iterations++;
 
-        // DMA transaction was successful.
+	printf("%08X %08X %08X %08X\n",memory_pool_[pos],memory_pool_[pos+1],memory_pool_[pos+2],memory_pool_[pos+3]);
+        // transaction was successful.
         pthread_mutex_lock(&lock_);
         buffer_queue_.push(&memory_pool_[pos]);
         //buffer_queue_.push(&frame[pos]);
@@ -568,6 +581,10 @@ void PTBReader::ClientCollector() {
 
         pos += frame_size_u32;
         // set the
+      } else {
+	printf("There is nothing\n");
+	control_register_.value() = 0x0;
+	continue;
       }
       if (pos+frame_size_u32 >= buffer_size) {
         pos = 0;
@@ -712,9 +729,9 @@ void PTBReader::ClientTransmiter() {
   //uint8_t *frame_raw = NULL;
   uint32_t* frame = NULL;
   //uint32_t frame_header = 0;
-#ifdef DEBUG
+  //#ifdef DEBUG
   uint32_t* frame_casted = NULL;
-#endif
+  //#endif
   //uint64_t start_run_time_ = ClockGetTime();
   //static const size_t offset_ts = Word_Header::size_bytes+TimestampPayload::ptb_offset_bytes;
 
@@ -749,9 +766,7 @@ void PTBReader::ClientTransmiter() {
         of what the board actually produces. 
      */
 
-    // ipck   : Counter of bytes
-    // iframe : Frame counter.
-    // FIXME: Move all these variables out of the loop
+    // ipck   : Counter of uint32_t
     ipck = 0;
     carry_on = true;
 
@@ -764,7 +779,7 @@ void PTBReader::ClientTransmiter() {
     // Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
     // ipck should not include the header
     // But it also works as an index counter, so the manipulation is done at the end
-    ipck += sizeof(header);
+    ipck += 1;
 
     // while a packet_sending_condition is not reached
     // keep the loop going...
@@ -793,10 +808,11 @@ void PTBReader::ClientTransmiter() {
 
       // All packets become 16 bytes long and send everything as collected
 
-#ifdef DEBUG
-      frame_casted = reinterpret_cast_checked<uint32_t*>(frame);
-      Log(debug,"Grabbed : %08X %08X %08X %08X",frame_casted[0],frame_casted[1],frame_casted[2],frame_casted[3]);
-#endif      
+      //#ifdef DEBUG
+      // frame_casted = reinterpret_cast_checked<uint32_t*>(frame);
+      // Log(debug,"Grabbed : %08X %08X %08X %08X",frame_casted[0],frame_casted[1],frame_casted[2],frame_casted[3]);
+      Log(debug,"Grabbed : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
+      //#endif      
       // Don't do this any more
       //      // Reverse the bytes into big-endian
       //      for (uint32_t i =0; i < frame_size_bytes; ++i) {
@@ -826,19 +842,16 @@ void PTBReader::ClientTransmiter() {
       // Ghost frames are a mess. For the moment keep them but need to set up something more reliable.
       // Most likely on the firmware side
       if ((frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
-#ifdef DEBUG
+	//#ifdef DEBUG
         Log(warning,"Dropping ghost frame");
-#endif
+	//#endif
         continue;
       }
 
       // FIXME: THis is just temporary. Have to fix the firmware to grab the proper data
       // This problem is strongly related with the previous. Will have to fix it on the firmware side
       if (!ts_arrived && (frame_header->data_packet_type != DataTypeTimestamp)) {
-#ifdef DEBUG
-        if ((first_timestamp_ == 0) && (frame_header->data_packet_type != DataTypeTimestamp)) {
           Log(warning,"Dropping frames until a timestamp shows up.");
-#endif
           continue;
         }
 
@@ -847,7 +860,7 @@ void PTBReader::ClientTransmiter() {
           ts_arrived = true;
           // This is a timestamp word.
           // Check if this is the first TS after StartRun
-          // Log(verbose, "Timestamp frame...\n");
+          Log(verbose, "Timestamp frame...\n");
           // Log(verbose, "Sending the packet\n");
           // Log(verbose,"Offset %u ",offset);
 #ifdef DEBUG
@@ -907,7 +920,7 @@ void PTBReader::ClientTransmiter() {
           // and then just add the 2 additional bits from the header at the end
           // I put it hardcoded so that I don't end up messing up with it
           std::memcpy(&eth_buffer[ipck],&(frame[CounterPayload::payload_offset_u32]),CounterPayload::size_words_ptb_bytes);
-          // Now add the remaining 2 bits to the lsb of the next byte and pad the rest with zeros
+          // Now add the remaining 2 bits to the lsb of the next u32 and pad the rest with zeros
           ipck += CounterPayload::size_words_ptb_u32;
           eth_buffer[ipck] = 0x2 & frame_header->padding;
           ipck+=1;
@@ -934,21 +947,22 @@ void PTBReader::ClientTransmiter() {
 #endif
           break;
         case DataTypeWarning:
-#ifdef DEBUG
+	  //#ifdef DEBUG
           Log(warning,
               "+++ Received a FIFO warning of type %08X .+++",
               (reinterpret_cast_checked<uint32_t*>(frame))[0]);
           // We only really care for the header. Ignore everything else
           // Log(verbose, "Selftest word\n");
           num_word_fifo_warning_++;
-#endif
+	  //#endif
           break;
         default:
-          eth_buffer[ipck] = WARN_UNKNOWN_DATA;
-          ipck += 1;
-#ifdef DEBUG
+	  // Overwrite the header that has already been copied
+          eth_buffer[ipck-1] = WARN_UNKNOWN_DATA;
+          //ipck += 1;
+	  //#ifdef DEBUG
           Log(warning,"Unknown data type [%X] (%s)",frame[0] & 0xFF, display_bits(&frame_header,sizeof(frame_header)).c_str());
-#endif
+	  //#endif
 
           // Another warning word
 
@@ -958,7 +972,8 @@ void PTBReader::ClientTransmiter() {
           // throw PTBexception(msg);
           //	  keep_transmitting_ = false;
           //	  keep_collecting_ = false;
-        } // case
+
+	} // case
 
         // Log(verbose, "Frame processed\n");
         // Frame completed. check if we can wait for another or keep collecting
@@ -977,7 +992,7 @@ void PTBReader::ClientTransmiter() {
           break;
         }
 #endif
-      }
+    }
 
       // Transmit the data.
       // Log(verbose, "Packet completed. Calculating the checksum.\n");
@@ -994,9 +1009,9 @@ void PTBReader::ClientTransmiter() {
       // Is this correct? I would have thought that it already has the size
       // needed. The packet_size should not include the header, since that
       // is a fixed part of it
-      uint32_t packet_size = ipck+sizeof(uint32_t);
+      uint32_t packet_size = ipck*sizeof(uint32_t);
 
-      // Log(verbose,"Size was calculated to be %u",packet_size);
+      Log(verbose,"Size was calculated to be %u",packet_size);
 
       // eth_buffer is a uint8_t. Better to reassign to the header and then
       // memcopy the header into the buffer
@@ -1013,9 +1028,9 @@ void PTBReader::ClientTransmiter() {
       //
       // -- Followed the recipe in
       //    https://en.wikipedia.org/wiki/BSD_checksum
-#ifdef DEBUG
       static uint16_t checksum = 0x0;
       //    uint8_t*ch_buff = reinterpret_cast<uint8_t*>(eth_buffer);
+#ifdef DEBUG
       uint8_t*ch_buff = eth_buffer;
       for (uint32_t i = 0; i < ipck; ++i) {
 
@@ -1029,21 +1044,23 @@ void PTBReader::ClientTransmiter() {
       // Calculate 16 bit checksum of the packet
       // Add the checksum to the last packet
       //eth_buffer[ipck] = (0x4 << 29) | checksum;
+#endif
       static uint32_t checksum_word = (0x4 << 29) | checksum;
       std::memcpy(&eth_buffer[ipck],&checksum_word,sizeof(uint32_t));
+      ipck += 1;
       // JCF, Jul-18-2015
-      ipck += sizeof(checksum_word);
-#endif
+      //ipck += 1; //sizeof(checksum_word);
       // I'm switching "ipck+1" in place of "ipck+2", below - not sure
       // why there was an extra uint32_t (above and beyond the
       // microslice header) being sent
-#ifdef DEBUG
-      Log(debug,"Sending packet with %u bytes (including header)",ipck);
-      print_bits(eth_buffer,ipck);
+      //#ifdef DEBUG
+      packet_size += sizeof(uint32_t); // to account for the header that must be sent as well
+      Log(debug,"Sending packet with %u bytes (including header)",packet_size);
+      print_bits(eth_buffer,packet_size);
 
-#endif
+      //#endif
       try {
-        socket_->send(eth_buffer,ipck);
+        socket_->send(eth_buffer,packet_size);
       }
       catch(SocketException &e) {
         Log(error,"Socket exception caught : %s",e.what() );
@@ -1190,20 +1207,20 @@ void PTBReader::ClientTransmiter() {
         // Ghost frames are a mess. For the moment keep them but need to set up something more reliable.
         // Most likely on the firmware side
         if ((frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
-#ifdef DEBUG
+	  //#ifdef DEBUG
           Log(warning,"Dropping ghost frame");
-#endif
+	  //#endif
           continue;
         } // --
 
         // FIXME: THis is just temporary. Have to fix the firmware to grab the proper data
         // This problem is strongly related with the previous. Will have to fix it on the firmware side
         if (!ts_arrived && (frame_header->data_packet_type != DataTypeTimestamp)) {
-#ifdef DEBUG
-          if ((first_timestamp_ == 0) && (frame_header->data_packet_type != DataTypeTimestamp)) {
+	  //#ifdef DEBUG
+          //if ((first_timestamp_ == 0) && (frame_header->data_packet_type != DataTypeTimestamp)) {
             Log(warning,"Dropping frames until a timestamp shows up.");
-          }
-#endif
+	    //}
+	    //#endif
           continue;
         }
 
@@ -1300,14 +1317,14 @@ void PTBReader::ClientTransmiter() {
 #endif
           break;
         case DataTypeWarning:
-#ifdef DEBUG
+	  //#ifdef DEBUG
           Log(warning,
               "+++ Received a FIFO warning of type %08X .+++",
               (reinterpret_cast_checked<uint32_t*>(frame))[0]);
           // We only really care for the header. Ignore everything else
           // Log(verbose, "Selftest word\n");
           num_word_fifo_warning_++;
-#endif
+	  //#endif
           break;
         default:
           eth_buffer[ipck] = WARN_UNKNOWN_DATA;
