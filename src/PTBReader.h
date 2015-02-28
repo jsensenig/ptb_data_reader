@@ -99,11 +99,16 @@ public:
 
     //the size of the payloads (neglecting the Payload_Header)
     // FIXME: Since everythig is being worked in bytes the sizes can be trimmed
-    static microslice_size_t const payload_size_counter   = 4 * sizeof(uint32_t); //96-bit payload
+    static microslice_size_t const payload_size_counter   = 13; //104 bit payload. The smallest that contains all 97 counters
     static microslice_size_t const payload_size_trigger   = 1 * sizeof(uint32_t); //32-bit payload
     static microslice_size_t const payload_size_timestamp = 2 * sizeof(uint32_t); //64-bit payload
     static microslice_size_t const payload_size_selftest  = 1 * sizeof(uint32_t); //32-bit payload
     static microslice_size_t const payload_size_checksum  = 0 * sizeof(uint32_t); //32-bit payload
+    /* static microslice_size_t const payload_size_counter   = 4 * sizeof(uint32_t); //96-bit payload */
+    /* static microslice_size_t const payload_size_trigger   = 1 * sizeof(uint32_t); //32-bit payload */
+    /* static microslice_size_t const payload_size_timestamp = 2 * sizeof(uint32_t); //64-bit payload */
+    /* static microslice_size_t const payload_size_selftest  = 1 * sizeof(uint32_t); //32-bit payload */
+    /* static microslice_size_t const payload_size_checksum  = 0 * sizeof(uint32_t); //32-bit payload */
 
     //The types of data words
     static const Payload_Header::data_packet_type_t DataTypeSelftest  = 0x0; //0b000
@@ -221,11 +226,13 @@ private:
 
   // A few auxiliary constants
   static const uint32_t max_packet_size = 0xFFFF;
-  static const uint32_t frame_size = 0x80; // the buffer is 128 bits
-
+  static const uint32_t frame_size_bits = 0x80; // the buffer is 128 bits
+  static const uint32_t frame_size_bytes = 0x10; // 16 bytes
+  static const uint32_t frame_size_uint = 0x4; // 4xuint32_t
+  
   // A few more constants that are important
   // This is actually
-  static const uint32_t fw_version_ = 0x2;
+  static const uint32_t fw_version_ = 0x3;
 
   // Frame sequence number
   uint32_t seq_num_;
