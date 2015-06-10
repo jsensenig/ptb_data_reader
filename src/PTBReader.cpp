@@ -6,7 +6,6 @@
  */
 
 #include "PTBReader.h"
-#include "CommandDispatcher.h"
 
 PTBReader::PTBReader() {
 

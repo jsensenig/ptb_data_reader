@@ -42,9 +42,11 @@ std::ostream& Logger::message(Logger::severity sev, const char* where, const cha
     return *_nstream;
   }
 
+  // This part seems to be failing before the message is actually printed.
   if (sev == fatal) {
     *_ostream << ::endlog;
-    ::abort();
+    ::exit(1);
+    //::abort();
   }
   return *_ostream;
 }

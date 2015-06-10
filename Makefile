@@ -3,7 +3,8 @@ MACHINE    := $(shell uname -m)
 CC         := g++
 BIN        := $(PWD)/bin
 DEF_CFLAGS := -Wall -I$(PWD)/contrib/PracticalSocket -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src
-DEF_LFLAGS := -lpthread -lrt
+DEF_LFLAGS := -lpthread 
+#-lrt
 #DEF_LFLAGS := -lpthread -lrt -lbz2 
 
 
@@ -52,11 +53,18 @@ PTB_SRC := $(wildcard $(PTB_DIR)/*.cpp)
 PTB_HDR := $(wildcard $(PTB_DIR)/*.h)
 PTB_OBJ := $(patsubst $(PTB_DIR)/%.cpp,$(OBJ)/%.o,$(PTB_SRC))
 
+# Tests
+TEST_DIR := $(PWD)/test
+TEST_SRC := $(wildcard $(TEST_DIR)/*.cpp)
+TEST_HDR := $(wildcard $(TEST_DIR)/*.h)
+TEST_OBJ := $(patsubst $(TEST_DIR)/%.cpp,$(OBJ)/%.o,$(TEST_SRC))
+TEST_BIN := $(patsubst $(TEST_DIR)/%.cpp,$(TEST_DIR)/%,$(TEST_SRC))
+
 # Util Sources
 UTL_SRC := $(wildcard $(UTL_DIR)/*.cpp)
 UTL_BIN := $(patsubst $(UTL_DIR)/%.cpp,$(BIN)/%,$(UTL_SRC))
 
-all: dir $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ)
+all: dir $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ) $(TEST_BIN)
 
 dir:
 	test -d $(OBJ) || mkdir $(OBJ)
@@ -64,6 +72,7 @@ dir:
 clean: $(CLN)
 	rm -rf $(OBJ)
 	rm -f $(UTL_BIN)
+	rm -f $(TEST_BIN)
 
 server_clean:
 	echo ""
@@ -81,7 +90,15 @@ $(OBJ)/%.o: $(TCP_DIR)/%.cpp $(TCP_DIR)/%.h
 $(OBJ)/%.o: $(PTB_DIR)/%.cpp $(PTB_DIR)/%.h
 	$(CC) -c $(CFLAGS) $(DEF) -o $@ $<
 
-# Comile utilities
+# Compile utilities
 #$(BIN)/%: $(UTL_DIR)/%.cpp $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ)
 #	$(CC) $(CFLAGS) $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
+
+	
+# Compile tests
+$(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(GEN_OBJ) $(LOC_OBJ) $(DEV_OBJ) $(MYLIB_OBJ)
+	$(CC) $(CFLAGS) $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
+
+# Compile server
+
 

@@ -9,7 +9,6 @@
 #define PTBREADER_H_
 
 class ConfigServer;
-class CommandDispatcher;
 
 class PTBReader {
 public:
@@ -19,7 +18,7 @@ public:
 
 private:
 
-  ConfigServer *cfgSrv;
+  ConfigServer *cfg_srv_;
 
 };
 

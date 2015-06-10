@@ -14,12 +14,11 @@
 
 
 // Init with a new reader attached
-PTBManager::PTBManager() : reader_(), cfg_srv_(0) {
+PTBManager::PTBManager() : reader_(), cfg_srv_(0),status_(IDLE) {
   Log(verbose) << "Setting up pointers." << endlog;
   cfg_srv_ = ConfigServer::get();
   // Register to receive callbacks
-  cmd_disp_ = CommandDispatcher::get();
-  cmd_disp_->RegisterDataManager(this);
+  cfg_srv_->RegisterDataManager(this);
 }
 
 

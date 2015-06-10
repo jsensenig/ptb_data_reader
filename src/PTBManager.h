@@ -13,7 +13,6 @@
 // -- Forward declarations
 class PTBReader;
 class ConfigServer;
-class CommandDispatcher;
 
 /**
  * \class PTBManager
@@ -33,20 +32,20 @@ public:
   PTBManager();
   virtual ~PTBManager();
 
-  const PTBReader*& getReader() const {
+  const PTBReader* getReader() const {
     return reader_;
   }
 
-  void setReader(const PTBReader*& reader) {
+  void setReader(PTBReader* reader) {
     reader_ = reader;
   }
 
   Status getStatus() const {
-    return status;
+    return status_;
   }
 
   void setStatus(Status status) {
-    this->status = status;
+    this->status_ = status;
   }
 
 private:
@@ -57,12 +56,11 @@ private:
   // The class responsible for the data reading.
   PTBReader *reader_;
   ConfigServer *cfg_srv_;
-  CommandDispatcher *cmd_disp_;
 
   std::map<const char*,int> fRegisterMap;
   std::map<const char*,int> fRegisterValue;
 
-  Status status;
+  Status status_;
 
 };
 
