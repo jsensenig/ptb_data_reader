@@ -27,10 +27,6 @@ class PTBManager;
 class ConfigServer {
 public:
 
-  enum Command {RUNSTART=0,
-                RUNSTOP = 1
-               };
-
 	inline static ConfigServer* get();
 	virtual ~ConfigServer();
 
@@ -67,19 +63,18 @@ private:
 	// parameters
 	static unsigned int num_instances_;
 	static unsigned int port_;
-	static std::string cfg_buffer_;
+//	static std::string cfg_buffer_;
 	static bool shutdown_; ///< Handler for destroying object.
 	static std::string tcp_buffer_;
 
-	static std::map<std::string, int> commands_;
 	static std::list<const char*> queue_;
 
-	static std::map<std::string, int> init_map() {
-	  std::map<std::string, int> tmp_map;
-	  tmp_map.insert(std::map<std::string, int>::value_type("RUNSTART",RUNSTART));
-    tmp_map.insert(std::map<std::string, int>::value_type("RUNSTOP",RUNSTOP));
-	  return tmp_map;
-	}
+//	static std::map<std::string, int> init_map() {
+//	  std::map<std::string, int> tmp_map;
+//	  tmp_map.insert(std::map<std::string, int>::value_type("RUNSTART",RUNSTART));
+//    tmp_map.insert(std::map<std::string, int>::value_type("RUNSTOP",RUNSTOP));
+//	  return tmp_map;
+//	}
 
 };
 

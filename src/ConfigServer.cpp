@@ -29,10 +29,10 @@ using std::string;
 
 //-- Assignment of the static variables
 std::string ConfigServer::tcp_buffer_ = "";
-std::string ConfigServer::cfg_buffer_ = "";
+//std::string ConfigServer::cfg_buffer_ = "";
 unsigned int ConfigServer::num_instances_ = 0;
 unsigned int ConfigServer::port_ = 8991;
-std::map<std::string, int> ConfigServer::commands_ = init_map();
+//std::map<std::string, int> ConfigServer::commands_ = init_map();
 PTBManager *ConfigServer::data_manager_ = NULL;
 std::list<const char*> ConfigServer::queue_ = std::list<const char*>();
 pthread_t ConfigServer::thread_id_ = 0;
@@ -152,10 +152,23 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
       catch(std::out_of_range &e) {
         Log(error) << "Out of range : " << e.what() << endlog;
       }
-      catch(std::out_of_range &e) {
-        Log(error) << "Out of range " << e.what() << endlog;
+      catch(std::bad_alloc &e) {
+        Log(error) << "Bad alloc " << e.what() << endlog;
+      }
+      catch(std::invalid_argument &e) {
+        Log(error) << "Invalid argument error :" << e.what() << endlog;
+      }
+      catch(std::domain_error &e) {
+        Log(error) << "Domain error :" << e.what() << endlog;
+      }
+      catch(std::overflow_error &e) {
+        Log(error) << "Overflow error :" << e.what() << endlog;
+      }
+      catch(std::range_error &e) {
+        Log(error) << "Range error :" << e.what() << endlog;
       }
 
+      // Generic
       catch(std::exception &e) {
         Log(error) << "Caught std exception : " << e.what() << endlog;
       }
@@ -268,7 +281,11 @@ void ConfigServer::ProcessConfig(pugi::xml_node &config) {
   Log(verbose) << "Value: [" << config.child_value() << "]"<< endlog;
 
   // Store the buffer in the local variable.
-  config.print(std::cout,"",pugi::format_raw);
+  if (Logger::GetSeverity() <= Logger::debug) {
+    config.print(std::cout,"",pugi::format_raw);
+  }
+  data_manager_->ProcessConfig(config);
+  //FIXME: Add call to process the configuration in the manager.
 }
 
 void ConfigServer::ProcessCommand(pugi::xml_node &command) {
@@ -278,44 +295,14 @@ void ConfigServer::ProcessCommand(pugi::xml_node &command) {
   Log(verbose) << "Value: [" << command.child_value() << "]"<< endlog;
   try{
     const char* cmd = command.child_value();
-    Log(debug) << "Checking command [" << cmd << "] as part of :" << endlog;
+    Log(debug) << "Checking command [" << cmd << "]." << endlog;
 
-    std::map<std::string, int>::iterator it;
-    for (it = commands_.begin(); it != commands_.end(); ++it) {
-      Log(verbose) << "Key : [" << it->first << "] : Value : [" << it->second << "]" << endlog;
-      if (cmd == it->first) {
-        Log(debug) << "It is the same" << endlog;
-      }
-    }
+    // Pass the command to the manager and let it handle it properly
+    data_manager_->ExecuteCommand(cmd);
 
-    Log(verbose) << "Going into the switch to try " <<  commands_.at(cmd) << endlog;
-    Log(verbose) << "DataManager is "<< data_manager_ << endlog;
-    switch (commands_.at(cmd)) {
-    case RUNSTART:
-      // Only starts a run if the manager is in IDLE state
-      // Otherwise issue a warning
-      if (data_manager_->getStatus() != PTBManager::IDLE) {
-        Log(warning) << "A run is already running. Ignoring command" << endlog;
-      } else {
-        // Start the run
-        Log(verbose) << "The Run should START now" << endlog;
-        break;
-      }
-      // -- Send the signal to start the run. Should be a register, I guess.
-      break;
-    case RUNSTOP:
-      if (data_manager_->getStatus() != PTBManager::RUNNING) {
-        Log(warning) << "Called for RUNSTOP but there is no run ongoing. Ignoring." << endlog;
-        // -- Same thing. This for sure
-        break;
-      } else {
-        Log(verbose) << "The Run should STOP now" << endlog;
-
-      }
-    }
   }
-  catch (const std::out_of_range &oor) {
-    Log(error) << "Out of range error: " << oor.what() << endlog;
+  catch (const std::exception &e) {
+    Log(error) << "STL exception caught : " << e.what() << endlog;
   }
   catch(...) {
     Log(error) << "Unknown exception caught." << endlog;

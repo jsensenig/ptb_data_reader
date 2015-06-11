@@ -9,6 +9,7 @@
 #define PTBMANAGER_H_
 
 #include <map>
+#include "pugixml.hpp"
 
 // -- Forward declarations
 class PTBReader;
@@ -29,6 +30,11 @@ public:
     RUNNING = 0,
     IDLE = 1
   };
+
+  enum Command {RUNSTART=0,
+                RUNSTOP = 1
+               };
+
   PTBManager();
   virtual ~PTBManager();
 
@@ -48,6 +54,17 @@ public:
     this->status_ = status;
   }
 
+  void ExecuteCommand(const char* cmd) throw(std::exception);
+  // Receive the configuration as
+  // Passed by copy to keep locally
+  void ProcessConfig(pugi::xml_node config) throw(std::exception);
+
+protected:
+  // Commands that need to be implemented
+  void StartRun();
+  void StopRun();
+  void SetupRegisters() throw(std::exception);
+
 private:
   // Disallow copies
   PTBManager(const PTBManager &other);
@@ -56,9 +73,13 @@ private:
   // The class responsible for the data reading.
   PTBReader *reader_;
   ConfigServer *cfg_srv_;
+  pugi::xml_node config_;
 
-  std::map<const char*,int> fRegisterMap;
-  std::map<const char*,int> fRegisterValue;
+//
+//  std::map<const char*,int> fRegisterMap;
+//  std::map<const char*,int> fRegisterValue;
+
+  std::map<std::string, Command> commands_;
 
   Status status_;
 
