@@ -80,24 +80,24 @@ server_clean:
 ## No library is created. Everything is compiled into a single object
 # Compile XML parser Sources
 $(OBJ)/%.o: $(XML_DIR)/%.cpp $(XML_DIR)/%.hpp
-	$(CC) -c $(CFLAGS) $(DEF) -o $@ $<
+	$(CC) -c $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) -o $@ $<
 
 # Compile TCP socket Sources
 $(OBJ)/%.o: $(TCP_DIR)/%.cpp $(TCP_DIR)/%.h
-	$(CC) -c $(CFLAGS) $(DEF) -o $@ $<
+	$(CC) -c $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) -o $@ $<
 
 # Compile PTB Sources
 $(OBJ)/%.o: $(PTB_DIR)/%.cpp $(PTB_DIR)/%.h
-	$(CC) -c $(CFLAGS) $(DEF) -o $@ $<
+	$(CC) -c $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) -o $@ $<
 
 # Compile utilities
 #$(BIN)/%: $(UTL_DIR)/%.cpp $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ)
-#	$(CC) $(CFLAGS) $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
+#	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
 
 	
 # Compile tests
 $(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(GEN_OBJ) $(LOC_OBJ) $(DEV_OBJ) $(MYLIB_OBJ)
-	$(CC) $(CFLAGS) $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
+	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
 
 # Compile server
 
