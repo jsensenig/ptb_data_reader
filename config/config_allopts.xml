@@ -148,3 +148,11 @@
 		  <ChannelMask>0xF</ChannelMask>
 		</Calibration>
 	</config>
+	
+	<command>
+		<!-- Set Run to start. Reset everything and start clock with the next sync -->
+		<StartRun></StartRun>
+		<!-- Set Run to stop. When next sync comes, stop reading data. Data already in buffers is still sent --> 
+		<StopRun></StopRun>
+		<SelfTest></SelfTest>
+	</command>
