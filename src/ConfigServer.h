@@ -16,6 +16,7 @@
 #include <list>
 #include "pugixml.hpp"
 
+// -- C headers
 extern "C" {
 #include <pthread.h>         // For POSIX threads
 };
@@ -46,7 +47,7 @@ public:
     return thread_id_;
   }
 
-  void Shutdown(bool shutdown);
+  void Shutdown(bool force = false);
 protected:
   static void ProcessTransmission(const char* buffer);
   static void ProcessConfig(pugi::xml_node &config);
@@ -66,8 +67,9 @@ private:
 	// parameters
 	static unsigned int num_instances_;
 	static unsigned int port_;
-	static std::string buffer_;
+	static std::string cfg_buffer_;
 	static bool shutdown_; ///< Handler for destroying object.
+	static std::string tcp_buffer_;
 
 	static std::map<std::string, int> commands_;
 	static std::list<const char*> queue_;

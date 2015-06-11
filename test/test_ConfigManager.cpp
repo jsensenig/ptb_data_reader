@@ -18,13 +18,13 @@ extern "C" {
 
 void* shutdown(void *arg) {
 
-  for (int i = 0; i < 5; ++i) {
+  for (int i = 0; i < 25; ++i) {
     std::this_thread::sleep_for (std::chrono::seconds(1));
     Log(info) << i+1 << " seconds elapsed." << endlog;
   }
 
   ConfigServer *cfg = (ConfigServer*)arg;
-  cfg->Shutdown(true);
+  cfg->Shutdown();
 }
 
 int main() {

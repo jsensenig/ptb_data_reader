@@ -3,28 +3,33 @@
  *
  *  Created on: Jun 2, 2015
  *      Author: nbarros
+ *
+ *  Revision History: 10-Jun-2015  - N. Barros:
+ *                                    * Added threaded server configuration
+ *                                    * Added forced shutdown
  */
 
 
+// -- Local classes
 #include "ConfigServer.h"
 #include "PTBManager.h"
+#include "Logger.h"
+
+// -- Contrib classes
 // For Socket, ServerSocket, and SocketException
 #include "PracticalSocket.h"
-#include "Logger.h"
+
+// -- STL classes
 #include <string>
+#include <iostream>
+#include <stdexcept>
+#include <cstring>
 
 using std::string;
 
-
-// -- STL headers
-#include <iostream>
-#include <stdexcept>
-extern "C" {
-#include <pthread.h>         // For POSIX threads
-};
-
 //-- Assignment of the static variables
-std::string ConfigServer::buffer_ = "";
+std::string ConfigServer::tcp_buffer_ = "";
+std::string ConfigServer::cfg_buffer_ = "";
 unsigned int ConfigServer::num_instances_ = 0;
 unsigned int ConfigServer::port_ = 8991;
 std::map<std::string, int> ConfigServer::commands_ = init_map();
@@ -37,22 +42,17 @@ ConfigServer::ConfigServer() {
   // Use the practical socket to establish a connection
   Log(verbose) << "Building object" << endlog;
 
-  // Start a new thread here for listening
-
-  //pthread_t threadID;  // Thread ID from pthread_create()
-  // pthread_attr_t threadAttr;
+  // Start a new thread to handle the TCP server socket
+  // for the control channel
   if (pthread_create(&thread_id_, NULL, &(ConfigServer::listen),(void*)NULL) != 0) {
     Log(fatal) << "Unable to create master thread." << endlog;
   }
   Log(info) << "Master server thread created. [" << thread_id_ << "]" << endlog;
-  Log(info) << thread_id_->__sig << endlog;
+  Log(verbose) << thread_id_->__sig << endlog;
 
 }
 
 void* ConfigServer::listen(void *arg) {
-  // Guarantees that resources are deallocated upon return
-  //pthread_detach(pthread_self());
-
   try {
     Log(info) << "Creating server listening socket." << endlog;
     TCPServerSocket servSock(port_);   // Socket descriptor for server
@@ -66,27 +66,23 @@ void* ConfigServer::listen(void *arg) {
 
       Log(verbose) << "Starting listener for connection." << endlog;
       // Create a separate socket for the client
-      // Wait indefinitely until the client sets in.
+      // Wait indefinitely until the client kicks in.
       TCPSocket *clntSock = servSock.accept();
-      Log(debug) << "Received client connection request." << endlog;
+      Log(verbose) << "Received client connection request." << endlog;
       ThreadMain(clntSock);
-      // We have a model of 1 server- 1 client, so no need to spawn another thread.
-      // Create a client thread
-      // This is wrong... the whole server should be living on a separate thread
-      //      pthread_t threadID;  // Thread ID from pthread_create()
-      //      if (pthread_create(&threadID, NULL, &(ConfigServer::ThreadMain),(void *) clntSock) != 0) {
-      //        Log(fatal) << "Unable to create client thread" << endlog;
-      //      }
-      //      Log(info) << "Client configuration thread created." << endlog;
     }
   }
   catch(SocketException &e) {
     Log(error) << "Socket exception caught." << endlog;
-    Log(fatal) << e.what() << endlog;
+    Log(error) << e.what() << endlog;
+    ::abort();
 
   }
+  catch(std::exception &e) {
+    Log(error) << "Caught standard exception : " << e.what() << endlog;
+  }
   catch(...) {
-    Log(fatal) << "Failed to establish configuration socket with unknown failure." << endlog;
+    Log(error) << "Failed to establish configuration socket with unknown failure." << endlog;
   }
   Log(warning) << "Reaching the end, but not sure why..." << endlog;
   return NULL;
@@ -113,29 +109,80 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
   // Receive 1kB at a time.
   // Loop into the permanent buffer so that we know have all the configuration
   const int RCVBUFSIZE = 20480; //20 kB. Really hope will not overdo this.
-  static char tmpBuffer[RCVBUFSIZE];
+
+  static char instBuffer[RCVBUFSIZE];
   int recvMsgSize;
-  // What doesthis loop mean?
+
+  // All the transmissions are done in two parts. At the top comes a token
+  // with the size of the incoming transmission
+  // Then the packet itself follows.
+  // Keep accepting until the </system> token comes in.
+  // THis signals the end of the message
+
+  std::string localBuffer = "";
   // What if the string sent is bigger than the one being read?
-  while ((recvMsgSize = sock->recv(tmpBuffer, RCVBUFSIZE)) > 0) { // Zero means
+  while ((recvMsgSize = sock->recv(instBuffer, RCVBUFSIZE)) > 0) { // Zero means
+
+    // Truncate the instantaneous buffer on the number of bytes
+    instBuffer[recvMsgSize+1] = '\0';
     // end of transmission
     Log(debug) << "Received " << recvMsgSize << " bytes." << endlog;
-    Log(verbose) << "[" << tmpBuffer << "]" << endlog;
+    Log(verbose) << "[" << instBuffer << "]" << endlog;
     // Append into the permanent buffer
-    buffer_ = tmpBuffer;
+    //cfg_buffer_ = tmpBuffer;
+
+    // Keep accumulating the transmission until one of the closing
+    // tokens are passed (</config></command>)
+
+    localBuffer += instBuffer;
+    std::size_t pos = 0;
+    if ((pos = localBuffer.find("</config>")) != std::string::npos) {
+      // Found the end of a config block.
+      // Pass that buffer to process and erase it from the string
+      // 9 = strlen("</config>")
+      Log(verbose) << "Found a config block." << endlog;
+      try{
+        tcp_buffer_ = localBuffer.substr(0,pos+strlen("</config>"));
+        // Remove the entry from localBuffer
+        localBuffer = localBuffer.substr(pos+strlen("</config>")+1);
+      }
+      catch(std::length_error &e) {
+        Log(error) << "Length error : " << e.what() << endlog;
+      }
+      catch(std::out_of_range &e) {
+        Log(error) << "Out of range : " << e.what() << endlog;
+      }
+      catch(std::out_of_range &e) {
+        Log(error) << "Out of range " << e.what() << endlog;
+      }
+
+      catch(std::exception &e) {
+        Log(error) << "Caught std exception : " << e.what() << endlog;
+      }
+      ProcessTransmission(tcp_buffer_.c_str());
+    } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
+      Log(verbose) << "Found a command block." << endlog;
+      // Found the end of a config block.
+      // Pass that buffer to process and erase it from the string
+      // 9 = strlen("</config>")
+      tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
+      // Remove the entry from localBuffer
+      localBuffer = localBuffer.substr(pos+strlen("</command>")+1);
+      ProcessTransmission(tcp_buffer_.c_str());
+    }
 
     // Process the string
     // Now the newly received string should be processed.
     // This method decides only if the data is configuration or a command
-    ProcessTransmission(buffer_.c_str());
+    //ProcessTransmission(tmpBuffer);
 
     // Echo message back to client
     //sock->send(echoBuffer, recvMsgSize);
   }
 
   //
-  Log(warning) << "Connection was requested to be closed." << endlog;
-  Log(warning) << "Socket will be closed" << endlog;
+  Log(warning) << "Connection to the client was lost." << endlog;
+  Log(warning) << "Socket will be closed." << endlog;
   // Destructor closes socket
 }
 
@@ -170,13 +217,18 @@ void ConfigServer::CheckInstances() const {
 void ConfigServer::ProcessTransmission(const char* buffer) {
   // Before doing any processing check that a DataManager has already
   // been registered. If not simply queue the command into a list and wait
+  // Careful if the client connection in the meantime is lost, the memory will disappear.
+  // Have to copy the string into the queue
   if (data_manager_ == NULL) {
     Log(warning) << "Attempting to process a transmission without a valid data Manager. Queueing." << endlog;
-    queue_.push_back(buffer);
+    Log(verbose) << "[" << buffer << "]" << endlog;
+
+    queue_.push_back(strdup(buffer));
     Log(verbose) << "Queue now composed of " << queue_.size() << " elements." << endlog;
     return;
   }
-
+  Log(verbose) << "Processing a transmission" << endlog;
+  Log(verbose) << "[" << buffer << "]" << endlog;
 
   // Instanciate the XML plugin
   pugi::xml_document doc;
@@ -186,7 +238,7 @@ void ConfigServer::ProcessTransmission(const char* buffer) {
   pugi::xml_parse_result result = doc.load(buffer);
   //]
 
-  Log(debug) << "Load result : " << result.description() << endlog;
+  Log(verbose) << "Load result : " << result.description() << endlog;
   // Search if there is a command in here
   pugi::xml_node command = doc.child("command");
   pugi::xml_node config = doc.child("config");
@@ -215,6 +267,8 @@ void ConfigServer::ProcessConfig(pugi::xml_node &config) {
   Log(verbose) << "Name: [" << config.name() << "]"<< endlog;
   Log(verbose) << "Value: [" << config.child_value() << "]"<< endlog;
 
+  // Store the buffer in the local variable.
+  config.print(std::cout,"",pugi::format_raw);
 }
 
 void ConfigServer::ProcessCommand(pugi::xml_node &command) {
@@ -283,14 +337,31 @@ void ConfigServer::RegisterDataManager(PTBManager *manager)  {
 }
 
 
-void ConfigServer::Shutdown(bool shutdown) {
-  shutdown_ = shutdown;
-  Log(warning) << "Shutdown asked. Forcing it into server thread." << endlog;
-  if (queue_.size() == 0) {
+void ConfigServer::Shutdown(bool force) {
+  shutdown_ = true;
+  Log(warning) << "Shutdown requested." << endlog;
+  // Check if force is passed
+  if (force || queue_.size() == 0) {
+    if (force)
+      Log(warning) << "Forcing it into server thread." << endlog;
     // Detach to deallocate resources
     pthread_detach(thread_id_);
     // Send a cancel call.
     pthread_cancel(thread_id_);
+  } else if (queue_.size() != 0){
+    // Soft shutdown requested. Do nothing and wait for the client to disconnect
+    Log(warning) << "Soft shutdown requested with non-empty queue. Shutdown will occur when queue empties." << endlog;
+    // Kill the server.
+    // Detach to deallocate resources
+    pthread_detach(thread_id_);
+    // Send a cancel call.
+    pthread_cancel(thread_id_);
+    // Process the queue
+    while (queue_.size() > 0) {
+      Log(verbose) << "Processing an entry" << endlog;
+      ProcessTransmission(queue_.front());
+      queue_.pop_front();
+    }
   }
 }
 
