@@ -96,7 +96,14 @@ $(OBJ)/%.o: $(PTB_DIR)/%.cpp $(PTB_DIR)/%.h
 
 	
 # Compile tests
-$(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(GEN_OBJ) $(LOC_OBJ) $(DEV_OBJ) $(MYLIB_OBJ)
+$(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)
+#	echo " <: $< "
+#	echo " @: $@ "
+#	echo " ?: $? "
+#	echo " %: $% "
+#	echo " ^: $^ "
+#	echo " *:  $*"
+#	echo " $(GEN_OBJ)"
 	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
 
 # Compile server
