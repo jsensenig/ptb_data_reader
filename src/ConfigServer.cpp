@@ -175,7 +175,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
       ProcessTransmission(tcp_buffer_.c_str());
     } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
       Log(verbose) << "Found a command block." << endlog;
-      // Found the end of a config block.
+      // Found the end of a command block.
       // Pass that buffer to process and erase it from the string
       // 9 = strlen("</config>")
       tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));

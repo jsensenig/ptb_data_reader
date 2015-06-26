@@ -18,7 +18,9 @@ public:
 
 private:
 
+  // The configuration is grabbed directly from the ConfigServer
   ConfigServer *cfg_srv_;
+
 
 };
 

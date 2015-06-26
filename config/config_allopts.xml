@@ -19,13 +19,6 @@
      -->
     <RollOver>80</RollOver>
   </DataBuffer>
-		<!--
-		<RunMode>
-			<calibrations>true</calibrations>
-			<ExtTriggers>true</ExtTriggers>
-			<MuonTriggers>true</MuonTriggers>
-		</RunMode>
-		-->
 		<debug>
 			<!-- enable creation of a log file/DEBUG mode -->
 			<enable>true</enable>
@@ -41,90 +34,94 @@
 		</ChannelMask>
 		<MuonTriggers>
 		  <!-- Number of clock cycles that the trigger out pulse is high -->
-		  <TrigOutWidth>2</TrigOutWidth>
+		  <TrigOutWidth>0x2</TrigOutWidth>
 			<enabled>true</enabled>
 			<!-- Number of clock cycles that each pulse should be extended to validate triggers -->
-			<TriggerWindow>3</TriggerWindow>
+			<TriggerWindow>0x3</TriggerWindow>
 			<!-- Number of clock cycles, after the trigger window, to lock the channel off -->
-			<LockoutWindow>13</LockoutWindow>
+			<LockoutWindow>0xD</LockoutWindow>
 			<!-- The trigger masks are complicated because it is an AND of the OR of each group, i.e. 
 				trigger=AND(OR(grp1),OR(grp2)). We have to mask each group separately.
 				This has to be serialized into a common string. Here only the streaming code is used -->
-			
+       
+      <!-- The possible logic operations are: (0x0:AND , Ox1:OR, 0x2:XOR)-->
 			<!-- Trigger A - one BSU counter in the RM1-16 series in coincidence with one BSU counter in the CL1-13 -->
 			<!-- FIXME: These are the masks assuming the list as masked in the Excel sheet -->
-			<TriggerMask id="A">
+			<TriggerMask id="A" mask="1000">
 				<group1>
+          <!-- The internal operation is between the channels of each group-->
+				  <Logic>0x2</Logic>
 				  <!-- RM 1-16 -->
           <BSU>0xFFFF</BSU>
           <TSU>0x0</TSU>
         </group1>
 				<group2>
+          <Logic>0x2</Logic>
 				  <!-- CL 1-13-->
           <BSU>0x7F7E000000</BSU>
           <TSU>0x0</TSU>
         </group2>
-        <!-- The possible operations are: (0x0:AND , Ox1:OR, 0x2:XOR)-->
-				<!-- The internal operation is between the channels of each group-->
-        <IntOperation>0x2</IntOperation>
         <!-- The external operation is between the groups -->
-				<ExtOperation>0x0</ExtOperation>
+				<ExtLogic>0x0</ExtLogic>
         <!-- Prescale : Number of triggers that are ignored after a successful one --> 
-        <Prescale>0</Prescale>				
+        <Prescale>0x0</Prescale>				
 			</TriggerMask>
 			<!-- Trigger B - any TSU counter from the NU1-6 series in coincidence with any TSU counter from the SL1-6 series.-->
-      <TriggerMask id="B">
+      <TriggerMask id="B"  mask="0100">
         <group1>
+          <!-- The possible operations are: (0x0:AND , Ox1:OR, 0x2:XOR)-->
+          <!-- The internal operation is between the channels of each group-->
+          <Logic>0x1</Logic>
           <!-- NU 1-6 -->
           <BSU>0x0</BSU>
           <TSU>0x3F000000</TSU>
         </group1>
         <group2>
+          <Logic>0x1</Logic>
           <!-- SL 1-6-->
           <BSU>0x0</BSU>
           <TSU>0xFC0000000</TSU>
         </group2>
-        <!-- The possible operations are: (0x0:AND , Ox1:OR, 0x2:XOR)-->
-        <!-- The internal operation is between the channels of each group-->
-        <IntOperation>0x1</IntOperation>
         <!-- The external operation is between the groups -->
-        <ExtOperation>0x0</ExtOperation>
+        <ExtLogic>0x0</ExtLogic>
         <!-- Prescale : Number of triggers that are ignored after a successful one --> 
-        <Prescale>0</Prescale>
+        <Prescale>0x0</Prescale>
       </TriggerMask>
 			<!-- Trigger C - any TSU counter from the SU1-6 series in coincidence with any TSU counter from the NL1-6 series. -->
-			<TriggerMask id="C">
+			<TriggerMask id="C"  mask="0010">
 				<group1>
+          <Logic>0x1</Logic>
 				  <!-- SU 1-6 -->
 				  <BSU>0x0</BSU>
 				  <TSU>0xFC0000000000</TSU>
 				</group1>
 				<group2>
+          <Logic>0x1</Logic>
 				  <!-- NL 1-6-->
           <BSU>0x0</BSU>
           <TSU>0x3F000000000</TSU>
 				</group2>
-				<IntOperation>0x1</IntOperation>
-				<ExtOperation>0x0</ExtOperation>
+				<ExtLogic>0x0</ExtLogic>
         <!-- Prescale : Number of triggers that are ignored after a successful one --> 
-        <Prescale>0</Prescale>
+        <Prescale>0x0</Prescale>
 			</TriggerMask>
 			<!-- Trigger D - any TSU counter from the EL1-10 series in coincidence with any TSU counter from the WU1-10 series. -->
-      <TriggerMask id="D">
+      <TriggerMask id="D"  mask="0001">
         <group1>
+          <Logic>0x1</Logic>
           <!-- EL 1-10 -->
           <BSU>0x0</BSU>
           <TSU>0x7FE00</TSU>
         </group1>
         <group2>
+          <Logic>0x1</Logic>
           <!-- WU 1-10 -->
           <BSU>0x0</BSU>
           <TSU>0x1FF</TSU>
         </group2>
-        <IntOperation>0x1</IntOperation>
-        <ExtOperation>0x0</ExtOperation>
+        <ExtLogic>0x0</ExtLogic>
         <!-- Prescale : Number of triggers that are ignored after a successful one --> 
-        <Prescale>0</Prescale>
+        <Prescale>0x0</Prescale>
       </TriggerMask>
 			<!-- Expected trigger rates for these : Trigger A = 60 Hz, Trigger B+C+D = 2-3 Hz -->
 		</MuonTriggers>
@@ -143,7 +140,7 @@
 		<Calibration>
 		  <enable>true</enable>
 		  <!-- Number of clock ticks between calibration pulses -->
-		  <Period>10</Period>
+		  <Period>0xA</Period>
 		  <!-- There are 4 independent channels. Mask for which are to be enabled. Default: all -->
 		  <ChannelMask>0xF</ChannelMask>
 		</Calibration>

@@ -1,15 +1,15 @@
-	<config>
+  <config>
     <!-- If there is something non-empty here, the data will be encoded into a local file -->
-	  <!-- Not implemented yet. -->
-		<DataFile></DataFile>
-		<!-- This is only meaningful if the data is being stored locally. -->
-		<!-- Not implemented yet -->
-	  <RunID></RunID>
-	  <DataBuffer>
-	    <!-- NOT IMPLEMENTED YET. --> 
-	    <LatencyBuffer></LatencyBuffer>
-	    <DaqHost>192.168.1.1</DaqHost>
-	    <DaqPort>8991</DaqPort>
+    <!-- Not implemented yet. -->
+    <DataFile></DataFile>
+    <!-- This is only meaningful if the data is being stored locally. -->
+    <!-- Not implemented yet -->
+    <RunID></RunID>
+    <DataBuffer>
+      <!-- NOT IMPLEMENTED YET. --> 
+      <LatencyBuffer></LatencyBuffer>
+      <DaqHost>192.168.1.1</DaqHost>
+      <DaqPort>8991</DaqPort>
       <!-- Size of the ethernet packet in bytes is set by the 16-bit header register : 65535 bytes -->
       <!-- 28 bit rollover corresponds to approx. 17 s (2^29-1*32 ns). Plenty of time to accumulate data -->
       <!-- Rollover Parameter is the size of the packet that one can accumulate before sending. 
@@ -19,132 +19,129 @@
      -->
     <RollOver>80</RollOver>
   </DataBuffer>
-		<!--
-		<RunMode>
-			<calibrations>true</calibrations>
-			<ExtTriggers>true</ExtTriggers>
-			<MuonTriggers>true</MuonTriggers>
-		</RunMode>
-		-->
-		<debug>
-			<!-- enable creation of a log file/DEBUG mode -->
-			<enable>true</enable>
-			<!-- store timestamp of command received in the log file -->
-			<CmdTime>true</CmdTime>
-		</debug>
-		<ChannelMask>
-			<!-- All 49 channels are on, encoded into a 64 bit hex word-->
-	    <!-- The code is on the LSB but the numbering starts from the MSB-->		
-			<BSU>0x1FFFFFFFFFFFF</BSU>
-			<!-- All 48 channels are on, encoded into a 64 bit hex word-->
-			<TSU>0xFFFFFFFFFFFF</TSU>
-		</ChannelMask>
-		<MuonTriggers>
-		  <!-- Number of clock cycles that the trigger out pulse is high -->
-		  <TrigOutWidth>2</TrigOutWidth>
-			<enabled>true</enabled>
-			<!-- Number of clock cycles that each pulse should be extended to validate triggers -->
-			<TriggerWindow>3</TriggerWindow>
-			<!-- Number of clock cycles, after the trigger window, to lock the channel off -->
-			<LockoutWindow>13</LockoutWindow>
-			<!-- The trigger masks are complicated because it is an AND of the OR of each group, i.e. 
-				trigger=AND(OR(grp1),OR(grp2)). We have to mask each group separately.
-				This has to be serialized into a common string. Here only the streaming code is used -->
-			
-			<!-- Trigger A - one BSU counter in the RM1-16 series in coincidence with one BSU counter in the CL1-13 -->
-			<!-- FIXME: These are the masks assuming the list as masked in the Excel sheet -->
-			<TriggerMask id="A">
-				<group1>
-				  <!-- RM 1-16 -->
+    <debug>
+      <!-- enable creation of a log file/DEBUG mode -->
+      <enable>true</enable>
+      <!-- store timestamp of command received in the log file -->
+      <CmdTime>true</CmdTime>
+    </debug>
+    <ChannelMask>
+      <!-- All 49 channels are on, encoded into a 64 bit hex word-->
+      <!-- The code is on the LSB but the numbering starts from the MSB-->    
+      <BSU>0x1FFFFFFFFFFFF</BSU>
+      <!-- All 48 channels are on, encoded into a 64 bit hex word-->
+      <TSU>0xFFFFFFFFFFFF</TSU>
+    </ChannelMask>
+    <MuonTriggers>
+      <!-- Number of clock cycles that the trigger out pulse is high -->
+      <TrigOutWidth>0x2</TrigOutWidth>
+      <enabled>true</enabled>
+      <!-- Number of clock cycles that each pulse should be extended to validate triggers -->
+      <TriggerWindow>0x3</TriggerWindow>
+      <!-- Number of clock cycles, after the trigger window, to lock the channel off -->
+      <LockoutWindow>0xD</LockoutWindow>
+      <!-- The trigger masks are complicated because it is an AND of the OR of each group, i.e. 
+        trigger=AND(OR(grp1),OR(grp2)). We have to mask each group separately.
+        This has to be serialized into a common string. Here only the streaming code is used -->
+       
+      <!-- The possible logic operations are: (0x0:AND , Ox1:OR, 0x2:XOR)-->
+      <!-- Trigger A - one BSU counter in the RM1-16 series in coincidence with one BSU counter in the CL1-13 -->
+      <!-- FIXME: These are the masks assuming the list as masked in the Excel sheet -->
+      <TriggerMask id="A" mask="1000">
+        <group1>
+          <!-- The internal operation is between the channels of each group-->
+          <Logic>0x2</Logic>
+          <!-- RM 1-16 -->
           <BSU>0xFFFF</BSU>
           <TSU>0x0</TSU>
         </group1>
-				<group2>
-				  <!-- CL 1-13-->
+        <group2>
+          <Logic>0x2</Logic>
+          <!-- CL 1-13-->
           <BSU>0x7F7E000000</BSU>
           <TSU>0x0</TSU>
         </group2>
-        <!-- The possible operations are: (0x0:AND , Ox1:OR, 0x2:XOR)-->
-				<!-- The internal operation is between the channels of each group-->
-        <IntOperation>0x2</IntOperation>
         <!-- The external operation is between the groups -->
-				<ExtOperation>0x0</ExtOperation>
+        <ExtLogic>0x0</ExtLogic>
         <!-- Prescale : Number of triggers that are ignored after a successful one --> 
-        <Prescale>0</Prescale>				
-			</TriggerMask>
-			<!-- Trigger B - any TSU counter from the NU1-6 series in coincidence with any TSU counter from the SL1-6 series.-->
-      <TriggerMask id="B">
+        <Prescale>0x0</Prescale>        
+      </TriggerMask>
+      <!-- Trigger B - any TSU counter from the NU1-6 series in coincidence with any TSU counter from the SL1-6 series.-->
+      <TriggerMask id="B"  mask="0100">
         <group1>
+          <!-- The possible operations are: (0x0:AND , Ox1:OR, 0x2:XOR)-->
+          <!-- The internal operation is between the channels of each group-->
+          <Logic>0x1</Logic>
           <!-- NU 1-6 -->
           <BSU>0x0</BSU>
           <TSU>0x3F000000</TSU>
         </group1>
         <group2>
+          <Logic>0x1</Logic>
           <!-- SL 1-6-->
           <BSU>0x0</BSU>
           <TSU>0xFC0000000</TSU>
         </group2>
-        <!-- The possible operations are: (0x0:AND , Ox1:OR, 0x2:XOR)-->
-        <!-- The internal operation is between the channels of each group-->
-        <IntOperation>0x1</IntOperation>
         <!-- The external operation is between the groups -->
-        <ExtOperation>0x0</ExtOperation>
+        <ExtLogic>0x0</ExtLogic>
         <!-- Prescale : Number of triggers that are ignored after a successful one --> 
-        <Prescale>0</Prescale>
+        <Prescale>0x0</Prescale>
       </TriggerMask>
-			<!-- Trigger C - any TSU counter from the SU1-6 series in coincidence with any TSU counter from the NL1-6 series. -->
-			<TriggerMask id="C">
-				<group1>
-				  <!-- SU 1-6 -->
-				  <BSU>0x0</BSU>
-				  <TSU>0xFC0000000000</TSU>
-				</group1>
-				<group2>
-				  <!-- NL 1-6-->
+      <!-- Trigger C - any TSU counter from the SU1-6 series in coincidence with any TSU counter from the NL1-6 series. -->
+      <TriggerMask id="C"  mask="0010">
+        <group1>
+          <Logic>0x1</Logic>
+          <!-- SU 1-6 -->
+          <BSU>0x0</BSU>
+          <TSU>0xFC0000000000</TSU>
+        </group1>
+        <group2>
+          <Logic>0x1</Logic>
+          <!-- NL 1-6-->
           <BSU>0x0</BSU>
           <TSU>0x3F000000000</TSU>
-				</group2>
-				<IntOperation>0x1</IntOperation>
-				<ExtOperation>0x0</ExtOperation>
+        </group2>
+        <ExtLogic>0x0</ExtLogic>
         <!-- Prescale : Number of triggers that are ignored after a successful one --> 
-        <Prescale>0</Prescale>
-			</TriggerMask>
-			<!-- Trigger D - any TSU counter from the EL1-10 series in coincidence with any TSU counter from the WU1-10 series. -->
-      <TriggerMask id="D">
+        <Prescale>0x0</Prescale>
+      </TriggerMask>
+      <!-- Trigger D - any TSU counter from the EL1-10 series in coincidence with any TSU counter from the WU1-10 series. -->
+      <TriggerMask id="D"  mask="0001">
         <group1>
+          <Logic>0x1</Logic>
           <!-- EL 1-10 -->
           <BSU>0x0</BSU>
           <TSU>0x7FE00</TSU>
         </group1>
         <group2>
+          <Logic>0x1</Logic>
           <!-- WU 1-10 -->
           <BSU>0x0</BSU>
           <TSU>0x1FF</TSU>
         </group2>
-        <IntOperation>0x1</IntOperation>
-        <ExtOperation>0x0</ExtOperation>
+        <ExtLogic>0x0</ExtLogic>
         <!-- Prescale : Number of triggers that are ignored after a successful one --> 
-        <Prescale>0</Prescale>
+        <Prescale>0x0</Prescale>
       </TriggerMask>
-			<!-- Expected trigger rates for these : Trigger A = 60 Hz, Trigger B+C+D = 2-3 Hz -->
-		</MuonTriggers>
-		<CounterWords>
-			<Enabled>true</Enabled>
-			<!-- Pooling mode is nothing for now
-			<PoolingMode>false</PoolingMode> -->
-		</CounterWords>
-		<ExtTriggers>
-			<enabled>true</enabled>
-			<!-- Mask of the external triggers. There are 4 independent and 8 ored, so 5 bits. Defaults to all on -->
-			<Mask>0x1F</Mask>
-			<!-- Echo triggers indicates if a TrigOut should be sent to the other systems -->
-			<EchoTriggers>true</EchoTriggers>
-		</ExtTriggers>
-		<Calibration>
-		  <enable>true</enable>
-		  <!-- Number of clock ticks between calibration pulses -->
-		  <Period>10</Period>
-		  <!-- There are 4 independent channels. Mask for which are to be enabled. Default: all -->
-		  <ChannelMask>0xF</ChannelMask>
-		</Calibration>
-	</config>
+      <!-- Expected trigger rates for these : Trigger A = 60 Hz, Trigger B+C+D = 2-3 Hz -->
+    </MuonTriggers>
+    <CounterWords>
+      <Enabled>true</Enabled>
+      <!-- Pooling mode is nothing for now
+      <PoolingMode>false</PoolingMode> -->
+    </CounterWords>
+    <ExtTriggers>
+      <enabled>true</enabled>
+      <!-- Mask of the external triggers. There are 4 independent and 8 ored, so 5 bits. Defaults to all on -->
+      <Mask>0x1F</Mask>
+      <!-- Echo triggers indicates if a TrigOut should be sent to the other systems -->
+      <EchoTriggers>true</EchoTriggers>
+    </ExtTriggers>
+    <Calibration>
+      <enable>true</enable>
+      <!-- Number of clock ticks between calibration pulses -->
+      <Period>0xA</Period>
+      <!-- There are 4 independent channels. Mask for which are to be enabled. Default: all -->
+      <ChannelMask>0xF</ChannelMask>
+    </Calibration>
+  </config>

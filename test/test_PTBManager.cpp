@@ -18,7 +18,7 @@ extern "C" {
 
 void* shutdown(void *arg) {
 
-  for (int i = 0; i < 25; ++i) {
+  for (int i = 0; i < 3; ++i) {
     std::this_thread::sleep_for (std::chrono::seconds(1));
     Log(info) << i+1 << " seconds elapsed." << endlog;
   }
@@ -37,10 +37,14 @@ int main() {
 
   ConfigServer*cfg = ConfigServer::get();
 
-  Log(debug) << "Going to sleep" <<endlog;
-  std::this_thread::sleep_for (std::chrono::seconds(10));
+  //Log(debug) << "Going to sleep" <<endlog;
+  //std::this_thread::sleep_for (std::chrono::seconds(10));
   Log(info) << "Starting manager" << endlog;
-  PTBManager manager;
+  bool emulate = true;
+  // Start in emulating mode.
+  PTBManager manager(emulate);
+  manager.DumpConfigurationRegisters();
+
   Log(info) << "Waiting for thread [" << cfg->getThreadId() << "] to finish." << endlog;
   Log(info) << cfg->getThreadId()->__sig << endlog;
   Log(info) << "Adding a new thread to shutdown eventually..." << endlog;

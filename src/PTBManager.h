@@ -15,6 +15,11 @@
 class PTBReader;
 class ConfigServer;
 
+typedef struct LocalRegister {
+  void      *address;
+  uint32_t  value;
+} LocalRegister;
+
 /**
  * \class PTBManager
  * \brief Responsible for the configuration registers of the PTB.
@@ -35,7 +40,7 @@ public:
                 RUNSTOP = 1
                };
 
-  PTBManager();
+  PTBManager(bool emu_mode = false);
   virtual ~PTBManager();
 
   const PTBReader* getReader() const {
@@ -59,12 +64,26 @@ public:
   // Passed by copy to keep locally
   void ProcessConfig(pugi::xml_node config) throw(std::exception);
 
+  /**
+   * Loops over the registers and dum their contents, both in decimal and Hex.
+   */
+  void DumpConfigurationRegisters();
+
 protected:
   // Commands that need to be implemented
   void StartRun();
   void StopRun();
   void SetupRegisters() throw(std::exception);
-
+  void FreeRegisters() throw(std::exception);
+  void LoadDefaultConfig();
+  // This is a rather messy function
+  /**
+   * Parses a node for a muon trigger
+   * @param T is the node to be parsed
+   * @param reg is the configuration register. The masks are placed in consecutive registers
+   * @param reg_type is the register offset to place the masks
+   */
+  void ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_offset);
 private:
   // Disallow copies
   PTBManager(const PTBManager &other);
@@ -75,14 +94,16 @@ private:
   ConfigServer *cfg_srv_;
   pugi::xml_node config_;
 
-//
-//  std::map<const char*,int> fRegisterMap;
-//  std::map<const char*,int> fRegisterValue;
+  // This is a cache of what is in each register now
+  std::map<uint32_t,LocalRegister> register_map_;
 
   std::map<std::string, Command> commands_;
 
   Status status_;
+  bool emu_mode_;
 
+  static const uint8_t num_registers_ = 31;
+  static const char *default_config_;
 };
 
 #endif /* PTBMANAGER_H_ */
