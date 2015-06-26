@@ -17,7 +17,7 @@
 const char* PTBManager::default_config_ = "./config/config_default.xml";
 
 // Init with a new reader attached
-PTBManager::PTBManager(bool emu_mode) : reader_(), cfg_srv_(0),status_(IDLE),emu_mode_(emu_mode) {
+PTBManager::PTBManager(bool emu_mode) : reader_(new PTBReader), cfg_srv_(0),status_(IDLE),emu_mode_(emu_mode) {
   Log(verbose) << "Setting up pointers." << endlog;
 
   // Register the available commands
@@ -99,6 +99,23 @@ void PTBManager::StartRun() {
   Log(verbose) << "Starting the run" << endlog;
   // FIXME: IMplement the specifics for setting the appropriate registers
   //        to start the run
+
+  // Order of execution:
+  // Tell the PTBReader to start takign data (it won't receive anything but it will be ready)
+  // Set the GLB_EN register to 1 (start readout in the fabric)
+  // Set status flag to RUNNING
+
+  if (!reader_ || !reader_->isReady()) {
+    Log(error) << "Received call to start transmitting but reader is not ready. Refusing to run." << endlog;
+    return;
+  }
+  reader_->StartDataTaking();
+
+  // The GLB_EN is located in bin 31 of register 4
+  *(volatile uint32_t*)(register_map_[3].address) |= (0x1 << 31);
+  register_map_[3].value |= (0x1 << 31);
+  Log(verbose) << "GLB_EN set. Register: " << std::setw(8) << std::setfill('0') << std::hex << register_map_[3].value << endlog;
+
   status_ = RUNNING;
 }
 
@@ -113,6 +130,14 @@ void PTBManager::StopRun() {
   // 1. Set the GLB_EN register to 0 (stop readout in the fabric)
   // 2. Set the status to IDLE
   // 3. Tell the PTB reader to stop streaming
+
+  // The GLB_EN is located in bin 31 of register 4
+  *(volatile uint32_t*)(register_map_[3].address) |= (0x0 << 31);
+  register_map_[3].value |= (0x0 << 31);
+  Log(verbose) << "GLB_EN set. Register: " << std::setw(8) << std::setfill('0') << std::hex << register_map_[3].value << endlog;
+
+  reader_->StopDataTaking();
+
   status_ = IDLE;
 }
 
@@ -162,7 +187,7 @@ void PTBManager::FreeRegisters() throw (std::exception) {
 }
 
 void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
-// Only accept a new configuration if we are not running.
+  // Only accept a new configuration if we are not running.
   if (status_ == RUNNING) {
     Log(warning) << "Attempted to pass a new configuration during a run. Ignoring the new configuration." << endlog;
     return;
@@ -178,23 +203,26 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
   ///!
   ///! DataBuffer
   ///!
- // pugi::xml_node reader = doc.child("Data").child("Tools");
+  char *pEnd = NULL;
+
   for (pugi::xml_node_iterator it = config.begin(); it != config.end(); ++it) {
     Log(debug) << " Child name : " << it->name() << " " << endlog;
     // The reader should take care of this by itself.
-    //    if (!strcmp(it->name(),"DataBuffer")) {
-    //      // Get the host, if exists
-    //      pugi::xml_object_range<pugi::xml_node_iterator>children = it->children();
-    //      for (pugi::xml_node_iterator itc = children.begin(); itc != children.end(); ++itc) {
-    //        Log(debug) << "Name :" << itc->name() << endlog;
-    //        Log(debug) << "Value :" << itc->value() << endlog;
-    //        Log(debug) << "Child Value :" << itc->child_value() << endlog;
-    //        if (!strcmp(itc->name(),"DaqHost")) {
-    //
-    //        }
-    //      }
-    //    }
-    char *pEnd;
+    if (!strcmp(it->name(),"DataBuffer")) {
+      if (!reader_) {
+        Log(error) << "Don't have a valid PTBReader instance. Things are going to break." << endlog;
+      }
+      //-- Get the host
+      std::string host = it->child("DaqHost").child_value();
+      reader_->setTcpHost(host);
+      uint32_t port = strtoul(it->child("DaqPort").child_value(),&pEnd,10);
+      reader_->setTcpPort(port);
+      uint32_t rollOver = strtoul(it->child("RollOver").child_value(),&pEnd,10);
+      reader_->setTcpPort(rollOver);
+      Log(info) << "Setting data transmission channel to [" << host << ":" << port << "]" << endlog;
+      Log(debug) << "Packet rollover set to " << rollOver << endlog;
+
+    }
     if (!strcmp(it->name(),"ChannelMask")) {
       // Deal directly with the childs.
 
@@ -403,7 +431,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
     register_map_[reg].value |= ((input_word & mask) << (word_offset+bit_offset));
     Log(verbose) << "Conf register " << std::dec << reg << " (" << field_name << ")" << std::hex
-      << *(volatile uint32_t*)(register_map_[reg].address) << endlog;
+        << *(volatile uint32_t*)(register_map_[reg].address) << endlog;
 
     // Now get the mask into a 64 bit word
     input_longword = strtoull(G.child("BSU").child_value(),&pEnd,16);
@@ -414,7 +442,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) |= (input_longword & mask);
     register_map_[reg+reg_offset+(i*3)].value |= (input_word & mask);
     Log(verbose) << "Mask register " << std::dec << reg+reg_offset+(i*3) << " (W1)" << std::hex
-      << *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) << endlog;
+        << *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) << endlog;
 
     // The remaining 17 bits (49-32) go into the lower 17 bits of the next word
     // [0-16]
@@ -422,7 +450,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) |= (input_longword >> 32 ) & mask;
     register_map_[reg+reg_offset+(i*3)+1].value |= (input_longword >> 32 ) & mask;
     Log(verbose) << "Mask register " << std::dec << reg+reg_offset+(i*3)+1 << " (W2)" << std::hex
-      << *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) << endlog;
+        << *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) << endlog;
 
 
     // Now grab the TSU part to complete the mask of this register
@@ -435,7 +463,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) |= (input_longword & mask ) << bit_offset;
     register_map_[reg+reg_offset+(i*3)+1].value |= (input_longword & mask ) << bit_offset;
     Log(verbose) << "Mask register " << std::dec << reg+reg_offset+(i*3)+1 << " (W2)" << std::hex
-      << *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) << endlog;
+        << *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) << endlog;
 
     // The next 32 (47-15) bits go into the next register
     mask = 0xFFFFFFFF;
@@ -444,7 +472,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) |= (input_longword >> bit_offset) & mask;
     register_map_[reg+reg_offset+(i*3)+2].value |= (input_longword >> bit_offset) & mask;
     Log(verbose) << "Mask register " << std::dec << reg+reg_offset+(i*3)+2 << " (W3)" << std::hex
-      << *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) << endlog;
+        << *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) << endlog;
 
     // The final bit (48) goes into the lsb of the configuration register
     mask = 0x1;
@@ -452,7 +480,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     *(volatile uint32_t*)(register_map_[reg].address) |= ((input_longword >> 47) && mask) << bit_offset;
     register_map_[reg].value |= ((input_longword >> 47) && mask) << bit_offset;
     Log(verbose) << "Conf register " << std::dec << reg << " (MASK)" << std::hex
-      << *(volatile uint32_t*)(register_map_[reg].address) << endlog;
+        << *(volatile uint32_t*)(register_map_[reg].address) << endlog;
   }
 
 }
