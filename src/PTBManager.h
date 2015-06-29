@@ -69,10 +69,11 @@ public:
    */
   void DumpConfigurationRegisters();
 
-protected:
-  // Commands that need to be implemented
   void StartRun();
   void StopRun();
+
+protected:
+  // Commands that need to be implemented
   void SetupRegisters() throw(std::exception);
   void FreeRegisters() throw(std::exception);
   void LoadDefaultConfig();

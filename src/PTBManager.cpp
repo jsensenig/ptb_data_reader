@@ -17,7 +17,7 @@
 const char* PTBManager::default_config_ = "./config/config_default.xml";
 
 // Init with a new reader attached
-PTBManager::PTBManager(bool emu_mode) : reader_(new PTBReader), cfg_srv_(0),status_(IDLE),emu_mode_(emu_mode) {
+PTBManager::PTBManager(bool emu_mode) : reader_(new PTBReader(emu_mode)), cfg_srv_(0),status_(IDLE),emu_mode_(emu_mode) {
   Log(verbose) << "Setting up pointers." << endlog;
 
   // Register the available commands
@@ -221,7 +221,6 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       reader_->setTcpPort(rollOver);
       Log(info) << "Setting data transmission channel to [" << host << ":" << port << "]" << endlog;
       Log(debug) << "Packet rollover set to " << rollOver << endlog;
-
     }
     if (!strcmp(it->name(),"ChannelMask")) {
       // Deal directly with the childs.
@@ -364,6 +363,11 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
   // After parsing everything (and making sure that all the configuration is set)
   // Store the configuration locally
   config_ = config;
+
+  // Tell the reader to start the connection
+  Log(debug) << "Initalizing connection to DAQ upstream." << endlog;
+  reader_->InitConnection();
+
 }
 
 void PTBManager::DumpConfigurationRegisters() {

@@ -48,7 +48,7 @@ ConfigServer::ConfigServer() {
     Log(fatal) << "Unable to create master thread." << endlog;
   }
   Log(info) << "Master server thread created. [" << thread_id_ << "]" << endlog;
-  Log(verbose) << thread_id_->__sig << endlog;
+  //Log(verbose) << thread_id_->__sig << endlog;
 
 }
 
