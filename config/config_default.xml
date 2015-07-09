@@ -1,15 +1,7 @@
   <config>
-    <!-- If there is something non-empty here, the data will be encoded into a local file -->
-    <!-- Not implemented yet. -->
-    <DataFile></DataFile>
-    <!-- This is only meaningful if the data is being stored locally. -->
-    <!-- Not implemented yet -->
-    <RunID></RunID>
     <DataBuffer>
-      <!-- NOT IMPLEMENTED YET. --> 
-      <LatencyBuffer></LatencyBuffer>
-      <DaqHost>192.168.1.1</DaqHost>
-      <DaqPort>8991</DaqPort>
+      <DaqHost>localhost</DaqHost>
+      <DaqPort>8992</DaqPort>
       <!-- Size of the ethernet packet in bytes is set by the 16-bit header register : 65535 bytes -->
       <!-- 28 bit rollover corresponds to approx. 17 s (2^29-1*32 ns). Plenty of time to accumulate data -->
       <!-- Rollover Parameter is the size of the packet that one can accumulate before sending. 
@@ -18,6 +10,10 @@
       Reasonable guess for rollover: 80 (corresponds to a packet of 1280 bytes)
      -->
     <RollOver>80</RollOver>
+    
+    <!-- Size of the time slice that each packet should represent. Make sure to be smaller than the rollover of 28 bits. -->
+    <!-- 28 bit rollover of a 64 MHz clock is about 8s. The packet size should never get that big.-->  
+    <MicroSliceDuration>7</MicroSliceDuration>
   </DataBuffer>
     <debug>
       <!-- enable creation of a log file/DEBUG mode -->
@@ -32,14 +28,13 @@
       <!-- All 48 channels are on, encoded into a 64 bit hex word-->
       <TSU>0xFFFFFFFFFFFF</TSU>
     </ChannelMask>
-    <MuonTriggers>
+    <MuonTriggers num_triggers="4">
       <!-- Number of clock cycles that the trigger out pulse is high -->
       <TrigOutWidth>0x2</TrigOutWidth>
-      <enabled>true</enabled>
       <!-- Number of clock cycles that each pulse should be extended to validate triggers -->
       <TriggerWindow>0x3</TriggerWindow>
       <!-- Number of clock cycles, after the trigger window, to lock the channel off -->
-      <LockoutWindow>0xD</LockoutWindow>
+      <LockdownWindow>0xD</LockdownWindow>
       <!-- The trigger masks are complicated because it is an AND of the OR of each group, i.e. 
         trigger=AND(OR(grp1),OR(grp2)). We have to mask each group separately.
         This has to be serialized into a common string. Here only the streaming code is used -->
@@ -125,23 +120,18 @@
       </TriggerMask>
       <!-- Expected trigger rates for these : Trigger A = 60 Hz, Trigger B+C+D = 2-3 Hz -->
     </MuonTriggers>
-    <CounterWords>
-      <Enabled>true</Enabled>
-      <!-- Pooling mode is nothing for now
-      <PoolingMode>false</PoolingMode> -->
-    </CounterWords>
     <ExtTriggers>
-      <enabled>true</enabled>
       <!-- Mask of the external triggers. There are 4 independent and 8 ored, so 5 bits. Defaults to all on -->
       <Mask>0x1F</Mask>
       <!-- Echo triggers indicates if a TrigOut should be sent to the other systems -->
       <EchoTriggers>true</EchoTriggers>
+      <EchoWidth>2</EchoWidth>
     </ExtTriggers>
     <Calibration>
-      <enable>true</enable>
       <!-- Number of clock ticks between calibration pulses -->
       <Period>0xA</Period>
       <!-- There are 4 independent channels. Mask for which are to be enabled. Default: all -->
       <ChannelMask>0xF</ChannelMask>
+      <PulseWidth>2</PulseWidth>
     </Calibration>
   </config>

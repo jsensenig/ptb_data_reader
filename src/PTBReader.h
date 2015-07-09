@@ -9,6 +9,7 @@
 #define PTBREADER_H_
 
 #include <string>
+#include <iostream>
 #include <queue>
 extern "C" {
 #include<pthread.h>
@@ -70,6 +71,7 @@ public:
   }
 
   void setTcpPort(uint32_t tcpPort) {
+    std::cout << "====> Received port " << tcpPort << std::endl;
     tcp_port_ = tcpPort;
   }
 
@@ -97,6 +99,14 @@ public:
 
   void setEmuMode(bool emuMode) {
     emu_mode_ = emuMode;
+  }
+
+  uint64_t getTimeRollover() const {
+    return time_rollover_;
+  }
+
+  void setTimeRollover(uint64_t timeRollover) {
+    time_rollover_ = timeRollover;
   }
 
 protected:
@@ -136,7 +146,8 @@ private:
   static const uint32_t frame_size = 0x80; // the buffer is 128 bits
 
   // A few more constants that are important
-  static const uint8_t fw_version = 0x1;
+  // This is actually
+  static const uint8_t fw_version = 0xE1;
 
   // Frame sequence number
   uint8_t seq_num_;
@@ -144,6 +155,13 @@ private:
   bool emu_mode_;
   bool fragmented_;
   bool keep_transmitting_;
+  bool ready_to_send_;
+  bool first_ts_;
+
+  // Previous timestamp
+  uint64_t previous_ts_;
+  uint64_t time_rollover_;
+  uint64_t current_ts_;
 
   // -- Simulator parameters
   uint32_t freq_counter;

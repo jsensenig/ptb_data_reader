@@ -3,7 +3,7 @@
     <DataBuffer>
       <LatencyBuffer></LatencyBuffer>
       <DaqHost>192.168.1.1</DaqHost>
-      <DaqPort>8991</DaqPort>
+      <DaqPort>8992</DaqPort>
     <RollOver>80</RollOver>
   </DataBuffer>
 </config>  

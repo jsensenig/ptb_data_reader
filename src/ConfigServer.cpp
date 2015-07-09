@@ -91,9 +91,12 @@ void* ConfigServer::listen(void *arg) {
 
 // TCP client handling function
 void ConfigServer::HandleTCPClient(TCPSocket *sock) {
-  Log(debug) << "Handling client "  << endlog;
+  std::ostringstream msg;
+  msg << "Handling client "  << endlog;
+  Log(debug) << msg;
   try {
-    Log(debug) << "Address : " << sock->getForeignAddress() << endlog;
+     msg << "Address : " << sock->getForeignAddress() << endlog;
+     Log(debug) << msg;
   } catch (SocketException &e) {
     Log(error) << "Unable to get foreign address" << endlog;
   }
@@ -172,16 +175,59 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
       catch(std::exception &e) {
         Log(error) << "Caught std exception : " << e.what() << endlog;
       }
-      ProcessTransmission(tcp_buffer_.c_str());
+      // Process the transmission.
+      try {
+        ProcessTransmission(tcp_buffer_.c_str());
+        sprintf(instBuffer,"<success>true</success>");
+      }
+      catch (std::string &e) {
+        Log(error) << "Config exception caught :" << e << endlog;
+        // Return a failure signal.
+        sprintf(instBuffer,"<error>%s</error>",e.c_str());
+      }
+      catch (std::exception &e) {
+        Log(error) << "STD exception caught :" << e.what() << endlog;
+        // Return a failure signal.
+        sprintf(instBuffer,"<error>%s</error>",e.what());
+      }
+      catch (...) {
+        sprintf(instBuffer,"<error>Unknown</error>");
+      }
+      sock->send(instBuffer,strlen(instBuffer));
+
     } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
       Log(verbose) << "Found a command block." << endlog;
+      Log(verbose) << "|" << localBuffer << "|"<<endlog;
       // Found the end of a command block.
       // Pass that buffer to process and erase it from the string
       // 9 = strlen("</config>")
+      Log(debug) << "POS " << pos << " LEN " << strlen("</command>") << endlog;
+
       tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
+      Log(verbose) << tcp_buffer_ << endlog;
       // Remove the entry from localBuffer
-      localBuffer = localBuffer.substr(pos+strlen("</command>")+1);
-      ProcessTransmission(tcp_buffer_.c_str());
+      localBuffer = localBuffer.substr(pos+strlen("</command>"));
+      try {
+        ProcessTransmission(tcp_buffer_.c_str());
+        sprintf(instBuffer,"<success>true</success>");
+      }
+      catch (std::string &e) {
+        Log(error) << "Config exception caught :" << e << endlog;
+        // Return a failure signal.
+        sprintf(instBuffer,"<error>%s</error>",e.c_str());
+      }
+      catch (std::exception &e) {
+        Log(error) << "STD exception caught :" << e.what() << endlog;
+        // Return a failure signal.
+        sprintf(instBuffer,"<error>%s</error>",e.what());
+      }
+      catch (...) {
+        sprintf(instBuffer,"<error>Unknown error</error>");
+      }
+      Log(debug) << "Sending answer" << endlog;
+      Log(debug) << instBuffer << endlog;
+      sock->send(instBuffer,strlen(instBuffer));
+      Log(debug) << "Answer sent" << endlog;
     }
 
     // Process the string
@@ -284,7 +330,14 @@ void ConfigServer::ProcessConfig(pugi::xml_node &config) {
   if (Logger::GetSeverity() <= Logger::debug) {
     config.print(std::cout,"",pugi::format_raw);
   }
-  data_manager_->ProcessConfig(config);
+  try {
+    data_manager_->ProcessConfig(config);
+  }
+  catch(std::string &e) {
+    Log(error) << "Configuration exception caught: " << e << endlog;
+
+  }
+
   //FIXME: Add call to process the configuration in the manager.
 }
 
@@ -299,15 +352,18 @@ void ConfigServer::ProcessCommand(pugi::xml_node &command) {
 
     // Pass the command to the manager and let it handle it properly
     data_manager_->ExecuteCommand(cmd);
-
   }
   catch (const std::exception &e) {
     Log(error) << "STL exception caught : " << e.what() << endlog;
   }
+  catch (std::string &str) {
+    Log(error) << "Caught STR exception " << str << endlog;
+    throw;
+  }
   catch(...) {
     Log(error) << "Unknown exception caught." << endlog;
   }
-  // Get the command
+  // Get the command answer
 
 }
 

@@ -14,6 +14,9 @@
 #include <string>
 #include <map>
 #include <list>
+#include <stdexcept>
+#include <sstream>
+
 #include "pugixml.hpp"
 
 // -- C headers
@@ -23,6 +26,44 @@ extern "C" {
 
 class TCPSocket;
 class PTBManager;
+
+//// Some custom exceptions
+//class config_exception : public std::runtime_error
+//{
+//public:
+//  config_exception(std::string msg) : std::runtime_error("configuration error"), message_(msg) {};
+//  virtual ~config_exception() _NOEXCEPT { };
+//  virtual const char* what() const throw() {
+//    cnvt_.str("");
+//    cnvt_ << std::runtime_error::what() << " : " << message_ ;
+//    return cnvt_.str().c_str();
+//  }
+//private:
+//  static std::ostringstream cnvt_;
+//  std::string message_;
+//};
+//
+//// Some custom exceptions
+//class command_exception : public std::runtime_error
+//{
+//public:
+//  command_exception(std::string msg) : std::runtime_error("command error"), message_(msg) {};
+//  virtual ~command_exception() _NOEXCEPT { };
+//  virtual const char* what() const throw() {
+//    cnvt_.str("");
+//    cnvt_ << std::runtime_error::what() << " : " << message_ ;
+//    return cnvt_.str().c_str();
+//  }
+//private:
+//  static std::ostringstream cnvt_;
+//  std::string message_;
+//};
+//
+//std::ostringstream config_exception::cnvt_;
+//std::ostringstream command_exception::cnvt_;
+
+
+
 
 class ConfigServer {
 public:

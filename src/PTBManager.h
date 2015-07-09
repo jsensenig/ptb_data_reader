@@ -36,8 +36,10 @@ public:
     IDLE = 1
   };
 
-  enum Command {RUNSTART=0,
-                RUNSTOP = 1
+  enum Command {STARTRUN=0,
+                STOPRUN = 1,
+                SOFTRESET = 2,
+                HARDRESET = 3
                };
 
   PTBManager(bool emu_mode = false);
