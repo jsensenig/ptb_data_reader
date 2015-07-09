@@ -10,6 +10,7 @@
 #include "PracticalSocket.h"
 
 #include <sys/time.h>
+#include <stdint.h>
 
 // Completely auxiliary clock function
 uint64_t ClockGetTime() {
@@ -29,10 +30,13 @@ PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     fragmented_(false),keep_transmitting_(true),ready_to_send_(false),previous_ts_(0)
 
 {
-  Log(debug) << "Creating an instance of the reader." << endlog;
+  printf("Creating an instance of the reader with emu %s\n",emu_mode_?"true":"false");
 
   if (emu_mode_) {
-    void InitEmuSampler();
+    printf("Filling emulator queue\n");
+    InitEmuSampler();
+  } else {
+    printf("Not filling emulator queue\n");
   }
 }
 
@@ -43,8 +47,13 @@ PTBReader::~PTBReader() {
 
 void PTBReader::StopDataTaking() {
 
-  pthread_mutex_destroy(&lock_);
+  printf("Killing the daughter threads.\n");
+  // Kill the collector thread first
+  pthread_cancel(client_thread_collector_);
+  // Kill the transmittor thread.
+  pthread_cancel(client_thread_transmitor_);
 
+  pthread_mutex_destroy(&lock_);
 
 }
 
@@ -58,11 +67,13 @@ void PTBReader::StartDataTaking() {
     }
 
     // We are ready to do business. Start reading the DMA into the queue.
+    std::cout << "==> Creating collector\n" << std::endl;
     if (pthread_create(&client_thread_collector_,NULL,&(PTBReader::ClientCollectorFunc),this) != 0) {
       Log(error) << "Unable to create client thread. Failing..." << endlog;
       return;
     }
     // We are ready to do business. Start reading the DMA into the queue.
+    std::cout << "==> Creating transmitter\n" << std::endl;
     if (pthread_create(&client_thread_transmitor_,NULL,&(PTBReader::ClientTransmitorFunc),this) != 0) {
       Log(error) << "Unable to create client thread. Failing..." << endlog;
       return;
@@ -113,8 +124,9 @@ void PTBReader::ClientCollector() {
     if (emu_mode_) {
       // Reserve the memory for one frame (128 bits long)
       uint32_t* frame = (uint32_t*)calloc(4,sizeof(uint32_t));
-      std::cout << "Generating the frame\n" << endl;
+      printf("Generating the frame\n");
       GenerateFrame(&frame);
+      printf("Frame generated\n");
       pthread_mutex_lock(&lock_);
       buffer_queue_.push(frame);
       pthread_mutex_unlock(&lock_);
@@ -128,11 +140,11 @@ void PTBReader::ClientCollector() {
 
 
 void PTBReader::ClientTransmiter() {
-std::cout << "Starting transmitter\n" << std::endl;
-
+  printf("Starting transmitter\n");
+  printf("previous : %u roll %u \n",previous_ts_,time_rollover_);
   // FIXME: Finish implementation
   // Fetch a frame from the queue
-
+  seq_num_ = 1;
 
   // The whole methd runs on an infinite loop with a control variable
   // That is set from the main thread.
@@ -158,32 +170,41 @@ std::cout << "Starting transmitter\n" << std::endl;
     static const uint32_t max_packet_num = max_packet_size/sizeof(uint32_t);
     uint32_t ipck = 0,iframe = 0;
     bool carry_on = true;
-    eth_buffer[0] = (fw_version << 28 ) | (seq_num_  << 20);
+    eth_buffer[0] = (fw_version << 24 ) | ((seq_num_  << 16) & 0xFF);
+    printf("Temp HEADER : %x (%x %x)\n",eth_buffer[0],(uint32_t)fw_version,(uint32_t)seq_num_);
     ipck += 1;
     // while a packet_sending_condition is not reached
     // keep the loop going...
     while(carry_on) {
 
+
       // Grab a frame
+      if (buffer_queue_.size() == 0) {
+        continue;
+      }
+      printf("Transmitting data...\n");
       pthread_mutex_lock(&lock_);
       uint32_t *frame = buffer_queue_.front();
       buffer_queue_.pop();
       pthread_mutex_unlock(&lock_);
 
       // If we still didn't get the first timestamp just drop the packages
+      printf("--> Frame1 %x \n",frame[0]);
 
       /// -- Check if it is a TS frame
-      if ((frame[0] >> 27 | 0x7) == 0x7) {
+      if ((frame[0] >> 29 & 0x7) == 0x7) {
         // This is a timestamp word.
         // Check if this is the first TS after StartRun
-        current_ts_ = (frame[1] << 31) | frame[2];
+        printf("Timestamp frame...\n");
+        current_ts_ = (frame[1] << 32) | frame[2];
 
         if (first_ts_) {
           // First TS after Run start
           previous_ts_ = (frame[1] << 31) | frame[2];
           first_ts_ = false;
           continue;
-        } else if (current_ts_ == (previous_ts_ + time_rollover_)) {
+        } else if (current_ts_ >= (previous_ts_ + time_rollover_)) {
+          printf("Sending the packet\n");
           // Check if we are ready to send the packet (reached the time rollover).
           // Close the packet
           eth_buffer[ipck] = frame[0];
@@ -205,16 +226,17 @@ std::cout << "Starting transmitter\n" << std::endl;
       /// --  Not a TS packet...just accumulate it
       // Start another index to move in words of 32 bits
       // These can loop all the
+      printf("--> Frame2 %x \n",frame[0]);
       eth_buffer[ipck] = frame[0];
       ipck += 1;
       // trim the data depending on the type
-      if ((frame[0] >> 27 | 0x7) == 0x1) { // counter word. Just assign as it is
+      if ((frame[0] >> 29 & 0x7) == 0x1) { // counter word. Just assign as it is
         for (size_t k = 0; k < 3; ++k) {
           eth_buffer[ipck+k] = frame[k+1];
         }
         // Refresh ipck to the latest position
         ipck += 3;
-      } else if ((frame[0] >> 27 | 0x7) == 0x2) {
+      } else if ((frame[0] >> 29 & 0x7) == 0x2) {
         // trigger word: Only the first 32 bits of the payload
         // are actually needed
         eth_buffer[ipck+1] = frame[1];
@@ -233,6 +255,8 @@ std::cout << "Starting transmitter\n" << std::endl;
       }
 
     }
+    printf("Broke out of the loop.\n");
+
 
 
     //    // Exited the packet loop.
@@ -243,11 +267,11 @@ std::cout << "Starting transmitter\n" << std::endl;
     //    }
 
     // Transmit the data.
-    Log(verbose) << "Packet completed. Calculating the checksum." << endlog;
+    printf("Packet completed. Calculating the checksum.\n");
 
     // Write the size (in bytes)
     uint16_t packet_size = (ipck*sizeof(uint32_t));
-    eth_buffer[1] |= packet_size ;
+    eth_buffer[0] |= packet_size ;
 
     // Calculate the checksum
     //
@@ -282,6 +306,7 @@ std::cout << "Starting transmitter\n" << std::endl;
     if (!fragmented_) {
       seq_num_++;
       previous_ts_ = current_ts_;
+      fragmented_ =false;
     }
 
 
@@ -296,23 +321,34 @@ std::cout << "Starting transmitter\n" << std::endl;
 
 
 void PTBReader::GenerateFrame(uint32_t **buffer) {
+
+  printf("In GenerateFrame\n");
+  printf("== [%x] \n",buffer[0][0]);
+  printf("== [%x] \n",buffer[0][1]);
   uint32_t*lbuf = buffer[0];
+  printf("Getting time\n");
   uint64_t now = ClockGetTime();
+  std::cout << "Clock " << now << std::endl;
 
   // Here we decide which type of packet I am going to generate
   // It should be dependent on the frequencies that I attach to each type
   // (not using calibrations for now)
 
   evtType nextEvt = evt_queue_.top();
+  printf("Got an event.\n");
   evt_queue_.pop();
 
   // If we haven't reached the time for the next event just send a TS packet.
   if (now < nextEvt.next) {
+    printf("Creating a TS packet\n");
     lbuf[0] = (0x7 << 29) | (now & 0xFFFFFFF);
     lbuf[1] = (now >> 32 & 0xFFFFFFF);
     lbuf[2] = (now & 0xFFFFFFF);
+
     return;
   }
+  printf("Creating something else\n");
+
   //  // Wait for the time to be ready
   //  while (now < nextEvt.next) {
   //    now = ClockGetTime();
@@ -337,23 +373,24 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
   // Put it back again in the queue
   if (nextEvt.type == 0x1) {
     nextEvt.next =now + (1.0/freq_counter)*1000000UL;;
-  }
-  switch(nextEvt.trigger) {
+  } else {
 
-  case 0x8:
-    nextEvt.next = now + (1.0/freq_trigA)*1000000UL;
-    break;
-  case 0x4:
-    nextEvt.next = now + (1.0/freq_trigB)*1000000UL;
-    break;
-  case 0x2:
-    nextEvt.next = now + (1.0/freq_trigC)*1000000UL;
-    break;
-  case 0x1:
-    nextEvt.next = now + (1.0/freq_trigD)*1000000UL;
-    break;
-  default:
-    Log(error) << "Failed to figure out the evt type to requeue." << endlog;
+    switch(nextEvt.trigger) {
+    case 0x8:
+      nextEvt.next = now + (1.0/freq_trigA)*1000000UL;
+      break;
+    case 0x4:
+      nextEvt.next = now + (1.0/freq_trigB)*1000000UL;
+      break;
+    case 0x2:
+      nextEvt.next = now + (1.0/freq_trigC)*1000000UL;
+      break;
+    case 0x1:
+      nextEvt.next = now + (1.0/freq_trigD)*1000000UL;
+      break;
+    default:
+      Log(error) << "Failed to figure out the evt type to requeue." << endlog;
+    }
   }
   evt_queue_.push(nextEvt);
 }
@@ -361,6 +398,7 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
 
 void PTBReader::InitEmuSampler() {
   // Attach the evt frequencies -- in Hz
+  printf("Starting the Sampler\n");
 
   freq_counter = 1000;
   freq_trigA = 100;
@@ -396,5 +434,7 @@ void PTBReader::InitEmuSampler() {
   evt.trigger = 0x8;
   evt.next = now + (1.0/freq_trigD)*1000000UL;
   evt_queue_.push(evt);
+
+  printf("Finished the Sampler\n");
 
 }

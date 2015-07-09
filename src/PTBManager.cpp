@@ -46,6 +46,7 @@ PTBManager::PTBManager(bool emu_mode) : reader_(new PTBReader(emu_mode)), cfg_sr
 PTBManager::~PTBManager() {
   std::cout << "Destroying object." << std::endl;
   //FIXME: Implement memory deallocations to free the microZed.
+  delete reader_;
 }
 
 

@@ -57,13 +57,14 @@ void* controller(void *arg) {
   uint16_t size;
   uint8_t wtype;
   uint32_t *buffer = NULL;
-  for (uint32_t i = 0; i < 10000; ++i) {
+  for (uint32_t i = 0; i < 10; ++i) {
     // First listen for a header
     sock->recv(&header, sizeof(header));
-    std::cout << "Header : " << std::hex << header << std::endl;
+    //std::cout << "Header : " << std::hex << header << std::endl;
+    printf("HEADER %x %u\n",header,header);
     // Catch the size
     size = header & 0xFFFF;
-    std::cout << "size : " << std::hex << header << std::dec << " bytes " << (uint32_t) size << std::endl;
+    printf("SIZE %x %u\n",(uint32_t)size,(uint32_t)size);
 
     // Allocate a buffer to grab the whole thing from the ethernet
     //buffer = (uint32_t*) malloc(size);
@@ -72,34 +73,36 @@ void* controller(void *arg) {
     //sock->recv(buffer, size);
 
     // Now parse it properly.
-    uint16_t i_size = sizeof(uint32_t);
+    uint16_t i_size = (uint16_t)sizeof(uint32_t);
     while (i_size < size) {
       sock->recv(&header, sizeof(header));
-      i_size += sizeof(header);
-      std::cout << "Header : " << std::hex << header << std::dec << std::bitset<32>(header) << std::endl;
-      wtype = (header >> 29 & 0x7);
+      i_size += (uint16_t)sizeof(header);
+      printf("PHEADER : %x \n",header);
+      //std::cout << "Header : " << std::hex << header << std::dec << std::bitset<32>(header) << std::endl;
+      wtype = ((header >> 29) & 0x7);
+      printf("WTYPE %x %u\n",(uint32_t)wtype,(uint32_t)wtype);
       if (wtype == 0x1) { // counter word
         //pick up a counter word
         sock->recv(body_counter, sizeof(body_counter));
-        std::cout << "COUNTER   : "<< std::hex << body_counter[0] << " "<< body_counter[1] << " "<< body_counter[2] << std::endl;
+        printf("COUNTER   : %x %x %x \n",body_counter[0],body_counter[1],body_counter[2]);
         i_size += sizeof(body_counter);
       } else if (wtype == 0x2) { // parse a trigger word
         sock->recv(&body_trigger, sizeof(body_trigger));
-        std::cout << "TRIGGER   : "<< std::hex << body_trigger << std::dec << endl;
+        printf("TRIGGER   : %x \n",body_trigger);
         i_size += sizeof(body_trigger);
       } else if (wtype == 0x7) { // It is a timestamp
         sock->recv(timestamp, sizeof(timestamp));
-        std::cout << "TIMESTAMP : " << std::hex << timestamp[0] << " " << timestamp[1] << dec << endl;
+        printf("TIMESTAMP : %x %x \n",timestamp[0],timestamp[1]);
         i_size += sizeof(timestamp);
       } else if (wtype == 0x4) { // checksum
         sock->recv(&checksum, sizeof(checksum));
-        std::cout << "CHECKSUM : " << std::hex << checksum << dec << endl;
+        printf("CHECKSUM : %x \n",checksum);
         i_size += sizeof(checksum);
       }
     }
     std::cout << "== Packet printed." << endl;
-
   }
+  printf("Sending STOP RUN\n");
   const char *stop_run = "<command>StopRun</command>";
   socksrv.send(stop_run,26);
   socksrv.recv(answer,1000);
@@ -108,7 +111,6 @@ void* controller(void *arg) {
   catch(SocketException &e) {
     cout << "Socket exception caught." << endl;
     cout << e.what() << endl;
-    cout << "XXXXXXXXXXXXXXXXXXX" << endl;
     ::abort();
   }
 }

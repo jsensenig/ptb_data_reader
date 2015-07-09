@@ -142,15 +142,15 @@ private:
   std::queue<uint32_t*> buffer_queue_;
 
   // A few auxiliary constants
-  static const uint16_t max_packet_size = 0xFFFF;
+  static const uint32_t max_packet_size = 0xFFFF;
   static const uint32_t frame_size = 0x80; // the buffer is 128 bits
 
   // A few more constants that are important
   // This is actually
-  static const uint8_t fw_version = 0xE1;
+  static const uint32_t fw_version = 0xE1;
 
   // Frame sequence number
-  uint8_t seq_num_;
+  uint32_t seq_num_;
 
   bool emu_mode_;
   bool fragmented_;
