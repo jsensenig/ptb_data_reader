@@ -32,7 +32,7 @@ PTBManager::PTBManager(bool emu_mode) : reader_(new PTBReader(emu_mode)), cfg_sr
 
   // In fact, load also a default configuration as well.
   // Won't work...client is not ready
-  LoadDefaultConfig();
+  //LoadDefaultConfig();
 
   // This had to occur after setting up the command list or we might run into trouble.
   cfg_srv_ = ConfigServer::get();
