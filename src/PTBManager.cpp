@@ -14,6 +14,10 @@
 #include "pugixml.hpp"
 #include <iomanip>
 
+extern "C" {
+#include <unistd.h>
+};
+
 const char* PTBManager::default_config_ = "./config/config_default.xml";
 
 // Init with a new reader attached
@@ -393,6 +397,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
   config_ = config;
 
   // Tell the reader to start the connection
+  sleep(5);
   std::cout << "Initializing connection to DAQ upstream." << std::endl;
   //std::cout << "Host : " << host << " port " << tcp_port_ << endl;
   reader_->InitConnection();

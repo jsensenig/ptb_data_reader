@@ -99,7 +99,7 @@ void PTBReader::InitConnection() {
     }
 
     try{
-      std::cout << "Opening socket connection : " << tcp_host_ << " " << tcp_port_ << std::endl;
+      std::cout << "Opening socket connection : " << tcp_host_ << " " << (unsigned short)tcp_port_ << std::endl;
       socket_ = new TCPSocket(tcp_host_,tcp_port_);
 
       if (socket_ == NULL) {

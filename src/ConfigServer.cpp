@@ -133,7 +133,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     // Truncate the instantaneous buffer on the number of bytes
     instBuffer[recvMsgSize+1] = '\0';
     // end of transmission
-    Log(debug) << "Received " << recvMsgSize << " bytes." << endlog;
+    Log(debug) << "Received " << std::dec << recvMsgSize << " bytes." << endlog;
     Log(verbose) << "[" << instBuffer << "]" << endlog;
     // Append into the permanent buffer
     //cfg_buffer_ = tmpBuffer;
@@ -141,7 +141,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     // Keep accumulating the transmission until one of the closing
     // tokens are passed (</config></command>)
 
-    localBuffer += instBuffer;
+    localBuffer += strdup(instBuffer);
     std::size_t pos = 0;
     if ((pos = localBuffer.find("</config>")) != std::string::npos) {
       // Found the end of a config block.
