@@ -24,7 +24,11 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
+#include <cstdlib>
 
+extern "C" {
+#include <stdio.h>
+};
 using std::string;
 
 //-- Assignment of the static variables
@@ -75,7 +79,7 @@ void* ConfigServer::listen(void *arg) {
   catch(SocketException &e) {
     Log(error) << "Socket exception caught." << endlog;
     Log(error) << e.what() << endlog;
-    ::abort();
+    std::abort();
 
   }
   catch(std::exception &e) {
@@ -345,6 +349,8 @@ void ConfigServer::ProcessCommand(pugi::xml_node &command) {
 
   Log(verbose) << "Processing input buffer" << endlog;
   Log(verbose) << "Name: [" << command.name() << "]"<< endlog;
+  Log(verbose) << "Value: [" << command.value() << "]"<< endlog;
+  
   Log(verbose) << "Value: [" << command.child_value() << "]"<< endlog;
   try{
     const char* cmd = command.child_value();

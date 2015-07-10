@@ -36,6 +36,7 @@
 #endif
 
 #include <errno.h>             // For errno
+#include <cstring>
 
 using namespace std;
 

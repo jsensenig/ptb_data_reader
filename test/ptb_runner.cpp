@@ -10,8 +10,6 @@
 #include "PTBManager.h"
 #include "PTBReader.h"
 #include <bitset>
-#include <thread>         // std::this_thread::sleep_for
-#include <chrono>         // std::chrono::seconds
 #include "PracticalSocket.h"
 extern "C" {
 #include <pthread.h>         // For POSIX threads

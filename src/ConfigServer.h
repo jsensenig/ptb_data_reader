@@ -22,6 +22,7 @@
 // -- C headers
 extern "C" {
 #include <pthread.h>         // For POSIX threads
+#include <stdint.h>
 };
 
 class TCPSocket;

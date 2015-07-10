@@ -5,6 +5,9 @@
  *      Author: nbarros
  */
 
+extern "C" {
+#include <stdint.h>
+};
 #include "util.h"
 #include "Logger.h"
 

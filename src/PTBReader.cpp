@@ -92,7 +92,7 @@ void PTBReader::InitConnection() {
 
     try{
       Log(verbose) << "Opening socket connection : " << tcp_host_ << " " << tcp_port_ << endlog;
-      socket_ = new TCPSocket(tcp_host_,tcp_port_);
+      socket_ = new TCPSocket(tcp_host_,(uint8_t)tcp_port_);
 
       if (socket_ == NULL) {
         Log(error) << "Unable to establish the client socket. Failing." << endlog;
@@ -195,12 +195,15 @@ void PTBReader::ClientTransmiter() {
       if ((frame[0] >> 29 & 0x7) == 0x7) {
         // This is a timestamp word.
         // Check if this is the first TS after StartRun
-        printf("Timestamp frame...\n");
-        current_ts_ = (frame[1] << 32) | frame[2];
+        //printf("Timestamp frame...\n");
+	uint64_t tmp = frame[1];
+	uint64_t tmp2 = frame[2];
+
+        current_ts_ = (tmp << 32) | tmp2;
 
         if (first_ts_) {
           // First TS after Run start
-          previous_ts_ = (frame[1] << 31) | frame[2];
+          previous_ts_ = current_ts_;
           first_ts_ = false;
           continue;
         } else if (current_ts_ >= (previous_ts_ + time_rollover_)) {

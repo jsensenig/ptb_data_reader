@@ -11,7 +11,9 @@
 #include <sstream>
 #include <cstdlib>
 #include <unistd.h>
-
+extern "C" {
+#include <stdio.h>
+};
 
 static struct nullstream:
     std::ostream {

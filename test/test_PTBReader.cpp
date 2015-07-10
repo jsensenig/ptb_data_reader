@@ -10,8 +10,8 @@
 #include "PTBManager.h"
 #include "PTBReader.h"
 #include <bitset>
-#include <thread>         // std::this_thread::sleep_for
-#include <chrono>         // std::chrono::seconds
+// #include <thread>         // std::this_thread::sleep_for
+// #include <chrono>         // std::chrono::seconds
 #include "PracticalSocket.h"
 extern "C" {
 #include <pthread.h>         // For POSIX threads
@@ -115,17 +115,17 @@ void* controller(void *arg) {
   }
 }
 
-void* shutdown(void *arg) {
+// void* shutdown(void *arg) {
 
-  for (int i = 0; i < 3; ++i) {
-    std::this_thread::sleep_for (std::chrono::seconds(1));
-    Log(info) << i+1 << " seconds elapsed." << endlog;
-  }
+//   for (int i = 0; i < 3; ++i) {
+//     std::this_thread::sleep_for (std::chrono::seconds(1));
+//     Log(info) << i+1 << " seconds elapsed." << endlog;
+//   }
 
-  ConfigServer *cfg = (ConfigServer*)arg;
-  cfg->Shutdown();
-  return NULL;
-}
+//   ConfigServer *cfg = (ConfigServer*)arg;
+//   cfg->Shutdown();
+//   return NULL;
+// }
 
 int main() {
   Logger::SetSeverity(Logger::verbose);
