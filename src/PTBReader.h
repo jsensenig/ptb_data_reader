@@ -66,13 +66,14 @@ public:
     tcp_host_ = tcpHost;
   }
 
-  uint32_t getTcpPort() const {
+  unsigned short getTcpPort() const {
     return tcp_port_;
   }
 
-  void setTcpPort(uint32_t tcpPort) {
+  void setTcpPort(unsigned short tcpPort) {
     std::cout << "====> Received port " << tcpPort << std::endl;
     tcp_port_ = tcpPort;
+    std::cout << "====> Received port " << tcp_port_ << std::endl;
   }
 
   uint32_t getPacketRollover() const {
@@ -127,7 +128,7 @@ private:
   static void * ClientCollectorFunc(void * This) {((PTBReader *)This)->ClientCollector(); return NULL;}
   static void * ClientTransmitorFunc(void * This) {((PTBReader *)This)->ClientTransmiter(); return NULL;}
 
-  uint32_t tcp_port_;
+  unsigned short tcp_port_;
   std::string tcp_host_;
   uint32_t packet_rollover_;
 

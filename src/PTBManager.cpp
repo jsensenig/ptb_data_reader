@@ -233,7 +233,9 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       //-- Get the host
       std::string host = it->child("DaqHost").child_value();
       reader_->setTcpHost(host);
-      uint32_t port = strtoul(it->child("DaqPort").child_value(),&pEnd,10);
+      unsigned short port = atoi(it->child("DaqPort").child_value());
+      Log(debug) << "Received port " << port << endlog;
+
       reader_->setTcpPort(port);
       uint32_t rollOver = strtoul(it->child("RollOver").child_value(),&pEnd,10);
       reader_->setPacketRollover(rollOver);
