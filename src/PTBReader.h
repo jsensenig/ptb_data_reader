@@ -13,8 +13,12 @@
 #include <queue>
 extern "C" {
 #include<pthread.h>
+#include <stdint.h>
+#include <stdio.h>
 };
 
+#include <cstdlib>
+#include <cstring>
 class TCPSocket;
 
 /** Auxiliary classes
@@ -73,7 +77,7 @@ public:
   void setTcpPort(unsigned short tcpPort) {
     std::cout << "====> Received port " << tcpPort << std::endl;
     tcp_port_ = tcpPort;
-    std::cout << "====> Received port " << tcp_port_ << std::endl;
+    std::cout << "====> Set port " << tcp_port_ << std::endl;
   }
 
   uint32_t getPacketRollover() const {

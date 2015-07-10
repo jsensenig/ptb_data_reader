@@ -11,6 +11,10 @@
 #include <map>
 #include "pugixml.hpp"
 
+extern "C" {
+#include <stdint.h>
+};
+
 // -- Forward declarations
 class PTBReader;
 class ConfigServer;

@@ -233,13 +233,17 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       //-- Get the host
       std::string host = it->child("DaqHost").child_value();
       reader_->setTcpHost(host);
+      //uint32_t port = strtoul(it->child("DaqPort").child_value(),&pEnd,10);
       unsigned short port = atoi(it->child("DaqPort").child_value());
-      Log(debug) << "Received port " << port << endlog;
-
+      Log(debug) << "REceived port " << port << endlog;
       reader_->setTcpPort(port);
-      uint32_t rollOver = strtoul(it->child("RollOver").child_value(),&pEnd,10);
+      //uint32_t rollOver = strtoul(it->child("RollOver").child_value(),&pEnd,10);
+      uint32_t rollOver = atoi(it->child("RollOver").child_value());
+      Log(debug) << "Rollover " << rollOver << endlog;
       reader_->setPacketRollover(rollOver);
-      uint32_t duration = strtoul(it->child("MicroSliceDuration").child_value(),&pEnd,10);
+      // uint32_t duration = strtoul(it->child("MicroSliceDuration").child_value(),&pEnd,10);
+      uint32_t duration = atoi(it->child("MicroSliceDuration").child_value());
+      Log(debug) << "MicroSlice Duration " << duration << endlog;
       uint64_t timeRollOver = (1 << duration);
       reader_->setTimeRollover(timeRollOver);
 

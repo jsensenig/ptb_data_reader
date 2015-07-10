@@ -90,6 +90,14 @@ void PTBReader::InitConnection() {
   // Check if the server data is set up, and compute
   if (tcp_host_ != "" && tcp_port_ != 0) {
 
+    if (tcp_port_ == 2320) {
+     std::cout << "JCF: the true tcp_port_ value is 2320" << std::endl;
+    } else if (tcp_port_ == 8992) {
+      std::cout << "JCF: the true tcp_port_ value is 8992" << std::endl;
+    } else {
+      std::cout << "JCF: the true tcp_port_ value is neither 2320 nor 8992, cout prints it as " << tcp_port_ << std::endl;
+    }
+
     try{
       std::cout << "Opening socket connection : " << tcp_host_ << " " << tcp_port_ << std::endl;
       socket_ = new TCPSocket(tcp_host_,tcp_port_);
