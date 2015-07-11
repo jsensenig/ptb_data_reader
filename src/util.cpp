@@ -14,7 +14,7 @@ extern "C" {
 uint32_t CreateMask(uint32_t begin, uint32_t end) {
 
   if (begin > end) {
-    Log(error) << "Trying to create an invalid mask [" << begin << "," << end << "]."<< endlog;
+    Log(error,"Trying to create an invalid mask [%u,%u]", begin ,end );
     return 0;
   }
   uint32_t mask = 0;

@@ -10,10 +10,15 @@
 
 #include <sstream>
 #include <cstdlib>
-#include <unistd.h>
+#include <cstdarg>
+#include <mutex>
+
 extern "C" {
 #include <stdio.h>
+#include <unistd.h>
 };
+
+std::mutex print_mutex;
 
 static struct nullstream:
     std::ostream {
@@ -25,7 +30,7 @@ static struct nullstream:
 
 Logger::severity Logger::_sev = Logger::info;
 std::ostream* Logger::_ostream (&std::cout);
-std::ostream* Logger::_estream (&std::cerr);
+//std::ostream* Logger::_estream (&std::cerr);
 std::ostream* Logger::_nstream (&devnull);
 bool Logger::_print = true;
 // By default do not allow colored output
@@ -35,27 +40,38 @@ Logger::Logger() { }
 
 Logger::~Logger() { }
 
-std::ostream& Logger::message(Logger::severity sev, const char* where, const char*code){
+void Logger::message(Logger::severity sev, const char* where, const char* fmt...){
+  print_mutex.lock();
+
   _print = true;
   if (sev >= _sev) {
-    *_ostream << tostr(sev) << ":" << where << ":";
+
+
+    char header[250];
+    sprintf(header,"%s:%s:",tostr(sev),where);
+    std::string tmp_fmt = header;
+    tmp_fmt += fmt;
+    char msg[2048];
+    va_list args;
+    va_start(args,fmt);
+    vsprintf(msg,tmp_fmt.c_str(),args);
+    va_end(args);
+
+    *_ostream << msg << std::endl;
   } else {
     _print = false;
-    return *_nstream;
   }
 
+  print_mutex.unlock();
   // This part seems to be failing before the message is actually printed.
   if (sev == fatal) {
-    *_ostream << ::endlog;
-    ::exit(1);
-    //::abort();
+    throw;
   }
-  return *_ostream;
 }
 
-void Logger::endlog(std::ostream&){
-  if(_print)*_ostream << std::endl;
-}
+//void Logger::endlog(std::ostream&){
+//  if(_print)*_ostream << std::endl;
+//}
 
 const char* Logger::tostr(Logger::severity sev) {
   _color=isatty(fileno(stdout))?true:false;
@@ -89,7 +105,7 @@ const char* Logger::tostr(Logger::severity sev) {
 }
 
 
-std::ostream& endlog(std::ostream& os) {
-  Logger::endlog(os);
-  return devnull;
-}
+//std::ostream& endlog(std::ostream& os) {
+//  Logger::endlog(os);
+//  return devnull;
+//}

@@ -30,24 +30,25 @@ PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     fragmented_(false),keep_transmitting_(true),ready_to_send_(false),previous_ts_(0)
 
 {
-  printf("Creating an instance of the reader with emu %s\n",emu_mode_?"true":"false");
+  printf("Here\n");
+  Log(verbose,"Creating an instance of the reader with emu %s\n",emu_mode_?"true":"false");
 
   if (emu_mode_) {
-    printf("Filling emulator queue\n");
+    Log(verbose,"Filling emulator queue");
     InitEmuSampler();
   } else {
-    printf("Not filling emulator queue\n");
+    Log(verbose,"Not filling emulator queue");
   }
 }
 
 PTBReader::~PTBReader() {
-  Log(debug) << "Destroying the reader." << endlog;
+  Log(debug,"Destroying the reader." );
 
 }
 
 void PTBReader::StopDataTaking() {
 
-  printf("Killing the daughter threads.\n");
+  Log(verbose,"Killing the daughter threads.\n");
   // Kill the collector thread first
   pthread_cancel(client_thread_collector_);
   // Kill the transmittor thread.
@@ -62,25 +63,25 @@ void PTBReader::StartDataTaking() {
     // Init the mutex for the queue
     if (pthread_mutex_init(&lock_, NULL) != 0)
     {
-      Log(error) << "\n Failed to create the mutex for the data queue\n" << endlog;
+      Log(error,"\n Failed to create the mutex for the data queue\n" );
       return;
     }
 
     // We are ready to do business. Start reading the DMA into the queue.
-    std::cout << "==> Creating collector\n" << std::endl;
+    Log(verbose, "==> Creating collector\n" );
     if (pthread_create(&client_thread_collector_,NULL,&(PTBReader::ClientCollectorFunc),this) != 0) {
-      Log(error) << "Unable to create client thread. Failing..." << endlog;
+      Log(error,"Unable to create client thread. Failing..." );
       return;
     }
     // We are ready to do business. Start reading the DMA into the queue.
-    std::cout << "==> Creating transmitter\n" << std::endl;
+    Log(verbose, "==> Creating transmitter\n" );
     if (pthread_create(&client_thread_transmitor_,NULL,&(PTBReader::ClientTransmitorFunc),this) != 0) {
-      Log(error) << "Unable to create client thread. Failing..." << endlog;
+      Log(error,"Unable to create client thread. Failing..." );
       return;
     }
 
   } else {
-    Log(error) << "Calling to start taking data connection is not ready yet." << endlog;
+    Log(error,"Calling to start taking data connection is not ready yet." );
 
   }
 }
@@ -91,19 +92,19 @@ void PTBReader::InitConnection() {
   if (tcp_host_ != "" && tcp_port_ != 0) {
 
     if (tcp_port_ == 2320) {
-     std::cout << "JCF: the true tcp_port_ value is 2320" << std::endl;
+     Log(verbose, "JCF: the true tcp_port_ value is 2320" );
     } else if (tcp_port_ == 8992) {
-      std::cout << "JCF: the true tcp_port_ value is 8992" << std::endl;
+      Log(verbose, "JCF: the true tcp_port_ value is 8992" );
     } else {
-      std::cout << "JCF: the true tcp_port_ value is neither 2320 nor 8992, cout prints it as " << tcp_port_ << std::endl;
+      Log(warning, "JCF: the true tcp_port_ value is neither 2320 nor 8992, cout prints it as %hu", tcp_port_ );
     }
 
     try{
-      std::cout << "Opening socket connection : " << tcp_host_ << " " << (unsigned short)tcp_port_ << std::endl;
+      Log(verbose, "Opening socket connection : %s : %hu",tcp_host_.c_str(),tcp_port_ );
       socket_ = new TCPSocket(tcp_host_,tcp_port_);
 
       if (socket_ == NULL) {
-        Log(error) << "Unable to establish the client socket. Failing." << endlog;
+        Log(error,"Unable to establish the client socket. Failing." );
         throw;
       }
       // Otherwise just tell we're ready and start waiting for data.
@@ -111,36 +112,36 @@ void PTBReader::InitConnection() {
 
     }
     catch(SocketException &e) {
-      Log(error) << "Socket exception caught : " << e.what() << endlog;
+      Log(error,"Socket exception caught : %s",e.what() );
       throw;
     }
     catch(std::exception &e) {
-      Log(error) << "STD exception caught : " << e.what() << endlog;
+      Log(error,"STD exception caught : %s",e.what() );
     }
     catch(...) {
-      Log(error) << "Unknown exception caught." << endlog;
+      Log(error,"Unknown exception caught." );
     }
   } else {
-    Log(error) << "Calling to start connection without defining connection parameters." << endlog;
+    Log(error,"Calling to start connection without defining connection parameters." );
   }
 
 }
 
 void PTBReader::ClientCollector() {
-  std::cout << "Starting collector\n" << std::endl;
+  Log(verbose, "Starting collector\n" );
   while(true) {
     if (emu_mode_) {
       // Reserve the memory for one frame (128 bits long)
       uint32_t* frame = (uint32_t*)calloc(4,sizeof(uint32_t));
-      printf("Generating the frame\n");
+      Log(verbose, "Generating the frame\n");
       GenerateFrame(&frame);
-      printf("Frame generated\n");
+      Log(verbose, "Frame generated\n");
       pthread_mutex_lock(&lock_);
       buffer_queue_.push(frame);
       pthread_mutex_unlock(&lock_);
 
     } else {
-      Log(warning) << "Real data taking mode is not ready yet. " << endlog;
+      Log(warning,"Real data taking mode is not ready yet. " );
     }
   }
 
@@ -148,8 +149,8 @@ void PTBReader::ClientCollector() {
 
 
 void PTBReader::ClientTransmiter() {
-  printf("Starting transmitter\n");
-  printf("previous : %u roll %u \n",previous_ts_,time_rollover_);
+  Log(verbose, "Starting transmitter\n");
+  Log(verbose, "previous : %u roll %u \n",previous_ts_,time_rollover_);
   // FIXME: Finish implementation
   // Fetch a frame from the queue
   seq_num_ = 1;
@@ -175,11 +176,11 @@ void PTBReader::ClientTransmiter() {
 
 
     // Primary loop is at 32bit word packets
-    static const uint32_t max_packet_num = max_packet_size/sizeof(uint32_t);
+    //static const uint32_t max_packet_num = max_packet_size/sizeof(uint32_t);
     uint32_t ipck = 0,iframe = 0;
     bool carry_on = true;
     eth_buffer[0] = (fw_version << 24 ) | ((seq_num_  << 16) & 0xFF);
-    printf("Temp HEADER : %x (%x %x)\n",eth_buffer[0],(uint32_t)fw_version,(uint32_t)seq_num_);
+    Log(verbose, "Temp HEADER : %x (%x %x)\n",eth_buffer[0],(uint32_t)fw_version,(uint32_t)seq_num_);
     ipck += 1;
     // while a packet_sending_condition is not reached
     // keep the loop going...
@@ -190,21 +191,24 @@ void PTBReader::ClientTransmiter() {
       if (buffer_queue_.size() == 0) {
         continue;
       }
-      printf("Transmitting data...\n");
+      Log(verbose, "Transmitting data...\n");
       pthread_mutex_lock(&lock_);
       uint32_t *frame = buffer_queue_.front();
       buffer_queue_.pop();
       pthread_mutex_unlock(&lock_);
 
       // If we still didn't get the first timestamp just drop the packages
-      printf("--> Frame1 %x \n",frame[0]);
+      Log(verbose, "--> Frame1 %x \n",frame[0]);
 
       /// -- Check if it is a TS frame
       if ((frame[0] >> 29 & 0x7) == 0x7) {
         // This is a timestamp word.
         // Check if this is the first TS after StartRun
-        printf("Timestamp frame...\n");
-        current_ts_ = (frame[1] << 32) | frame[2];
+        Log(verbose, "Timestamp frame...\n");
+        uint64_t tmp_val1 = frame[1];
+        uint64_t tmp_val2 = frame[2];
+
+        current_ts_ = (tmp_val1 << 32) | tmp_val2;
 
         if (first_ts_) {
           // First TS after Run start
@@ -212,7 +216,7 @@ void PTBReader::ClientTransmiter() {
           first_ts_ = false;
           continue;
         } else if (current_ts_ >= (previous_ts_ + time_rollover_)) {
-          printf("Sending the packet\n");
+          Log(verbose, "Sending the packet\n");
           // Check if we are ready to send the packet (reached the time rollover).
           // Close the packet
           eth_buffer[ipck] = frame[0];
@@ -234,7 +238,7 @@ void PTBReader::ClientTransmiter() {
       /// --  Not a TS packet...just accumulate it
       // Start another index to move in words of 32 bits
       // These can loop all the
-      printf("--> Frame2 %x \n",frame[0]);
+      Log(verbose, "--> Frame2 %x \n",frame[0]);
       eth_buffer[ipck] = frame[0];
       ipck += 1;
       // trim the data depending on the type
@@ -263,19 +267,19 @@ void PTBReader::ClientTransmiter() {
       }
 
     }
-    printf("Broke out of the loop.\n");
+    Log(verbose, "Broke out of the loop.\n");
 
 
 
     //    // Exited the packet loop.
     //    // Check if the first packet is a timestamp word
     //    if ((eth_buffer[1] >> 29 & 0x7) == 0x7) {
-    //      Log(warning) << "Empty packet found. Dropping it without sending." << endlog;
+    //      Log(warning,"Empty packet found. Dropping it without sending." );
     //      continue;
     //    }
 
     // Transmit the data.
-    printf("Packet completed. Calculating the checksum.\n");
+    Log(verbose, "Packet completed. Calculating the checksum.\n");
 
     // Write the size (in bytes)
     uint16_t packet_size = (ipck*sizeof(uint32_t));
@@ -302,7 +306,7 @@ void PTBReader::ClientTransmiter() {
       socket_->send(eth_buffer,ipck);
     }
     catch(SocketException &e) {
-      Log(error) << "Cocket exception caught : " << e.what() << endlog;
+      Log(error,"Cocket exception caught : %s",e.what() );
       // Retry
       socket_->send(eth_buffer,ipck);
     }
@@ -320,7 +324,7 @@ void PTBReader::ClientTransmiter() {
 
   }
   // Exited the  run loop. Return.
-  Log(info) << "Exited transmission loop. Checking for queued packets." << endlog;
+  Log(info,"Exited transmission loop. Checking for queued packets." );
 }
 
 /// Everything that is under this part is mostly for simulation
@@ -336,26 +340,26 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
   uint32_t*lbuf = buffer[0];
   printf("Getting time\n");
   uint64_t now = ClockGetTime();
-  std::cout << "Clock " << now << std::endl;
+  Log(verbose, "Clock %lu",now );
 
   // Here we decide which type of packet I am going to generate
   // It should be dependent on the frequencies that I attach to each type
   // (not using calibrations for now)
 
   evtType nextEvt = evt_queue_.top();
-  printf("Got an event.\n");
+  Log(verbose, "Got an event.\n");
   evt_queue_.pop();
 
   // If we haven't reached the time for the next event just send a TS packet.
   if (now < nextEvt.next) {
-    printf("Creating a TS packet\n");
+    Log(verbose, "Creating a TS packet\n");
     lbuf[0] = (0x7 << 29) | (now & 0xFFFFFFF);
     lbuf[1] = (now >> 32 & 0xFFFFFFF);
     lbuf[2] = (now & 0xFFFFFFF);
 
     return;
   }
-  printf("Creating something else\n");
+  Log(verbose, "Creating something else\n");
 
   //  // Wait for the time to be ready
   //  while (now < nextEvt.next) {
@@ -397,7 +401,7 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
       nextEvt.next = now + (1.0/freq_trigD)*1000000UL;
       break;
     default:
-      Log(error) << "Failed to figure out the evt type to requeue." << endlog;
+      Log(error,"Failed to figure out the evt type to requeue." );
     }
   }
   evt_queue_.push(nextEvt);
@@ -406,7 +410,7 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
 
 void PTBReader::InitEmuSampler() {
   // Attach the evt frequencies -- in Hz
-  printf("Starting the Sampler\n");
+  Log(verbose, "Starting the Sampler\n");
 
   freq_counter = 1000;
   freq_trigA = 100;
@@ -443,6 +447,6 @@ void PTBReader::InitEmuSampler() {
   evt.next = now + (1.0/freq_trigD)*1000000UL;
   evt_queue_.push(evt);
 
-  printf("Finished the Sampler\n");
+  Log(verbose, "Finished the Sampler\n");
 
 }
