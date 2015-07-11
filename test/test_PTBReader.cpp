@@ -10,8 +10,10 @@
 #include "PTBManager.h"
 #include "PTBReader.h"
 #include <bitset>
-//#include <thread>         // std::this_thread::sleep_for
-// #include <chrono>         // std::chrono::seconds
+#include <thread>         // std::this_thread::sleep_for
+#include <chrono>         // std::chrono::seconds
+#include <string>
+#include <fstream>
 #include "PracticalSocket.h"
 extern "C" {
 #include <pthread.h>         // For POSIX threads
@@ -19,13 +21,73 @@ extern "C" {
 
 using namespace std;
 
-void* controller(void *arg) {
+void control_thread() {
+  std::thread::id thread_id = std::this_thread::get_id();
+  std::ostringstream stream;
+  stream << std::hex << thread_id << " " << std::dec << thread_id;
+  Log(info,"#### Control thread: %s",stream.str().c_str());
 
+  try{
+  TCPSocket socksrv("localhost", 8991);
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+
+  // Send the configuration:
+  std::ifstream config("./config/config_default.xml");
+  // Read the whole file contents
+  std::string config_contents((std::istreambuf_iterator<char>(config)), std::istreambuf_iterator<char>());
+  //std::string config_contents;
+  //config >> config_contents;
+  config.close();
+
+  char answer[1000];
+
+  socksrv.send(config_contents.c_str(),config_contents.length());
+  socksrv.recv(answer,1000);
+  Log(info,"Got answer [%s]",answer);
+
+  std::this_thread::sleep_for(std::chrono::seconds(5));
+  // Tell to start the run
+  Log(info,"Starting the run");
+  const char *start_run = "<command>StartRun</command>";
+  socksrv.send(start_run,27);
+  socksrv.recv(answer,1000);
+  Log(info,"Got answer [%s]",answer);
+
+
+  // Sleep for 15 s and then stop the run
+  std::this_thread::sleep_for(std::chrono::seconds(15));
+
+  Log(warning,"Sending STOP RUN\n");
+  const char *stop_run = "<command>StopRun</command>";
+  socksrv.send(stop_run,26);
+  socksrv.recv(answer,1000);
+  Log(debug,"Got answer [%s]", answer);
+  }
+  catch(SocketException &e) {
+    Log(error,"Socket exception caught: %s",e.what());
+    ::abort();
+  }
+
+}
+
+void* reader_thread(void *arg) {
+
+  Log(info,"Working in reader_thread!!!");
+
+  std::thread::id thread_id = std::this_thread::get_id();
+  std::ostringstream stream;
+  stream << std::hex << thread_id << " " << std::dec << thread_id;
+  Log(info,"#### Reader thread: %s",stream.str().c_str());
 
   // Create a client that connects to the PTB
   try{
 
    const PTBReader *reader = (const PTBReader *) arg;
+   if (reader == NULL) {
+     Log(error,"There is no reader");
+     return NULL;
+   }
+   Log(info,"Waiting for reader to be ready...");
    while (!reader->isReady()) {
      ;
    }
@@ -39,15 +101,6 @@ void* controller(void *arg) {
   TCPSocket *sock = servSock.accept();
   Log(info,"--> Received a client request.");
 
-
-  TCPSocket socksrv("localhost", 8991);
-
-  // Tell to start the run
-  const char *start_run = "<command>StartRun</command>";
-  socksrv.send(start_run,27);
-  char answer[1000];
-  socksrv.recv(answer,1000);
-  Log(info,"Got answer [%s]",answer);
   // Keep looping to read data and dump it
   uint32_t header;
   uint32_t body_counter[3];
@@ -102,15 +155,13 @@ void* controller(void *arg) {
     }
     std::cout << "== Packet printed." << endl;
   }
-  Log(warning,"Sending STOP RUN\n");
-  const char *stop_run = "<command>StopRun</command>";
-  socksrv.send(stop_run,26);
-  socksrv.recv(answer,1000);
-  Log(debug,"Got answer [%s]", answer);
   }
   catch(SocketException &e) {
     Log(error,"Socket exception caught: %s",e.what());
     ::abort();
+  }
+  catch(...) {
+    Log(error,"Caught some nasty exception.");
   }
 }
 
@@ -133,14 +184,14 @@ int main() {
   // This doesn't work since the thread gets stuck in the constructor of ConfigServer
   // Need to make the acceptance of the client into a separate thread.
 
-  Log(info,"Starting the reader thread...");
-  // -- Create a board reader facsimile
-  pthread_t threadID_controller;
-  if (pthread_create(&threadID_controller, NULL, &(controller),(void*)NULL/*reader*/) != 0) {
-      Log(fatal,"Unable to create master thread.");
-    }
 
   ConfigServer*cfg = ConfigServer::get();
+
+  std::thread::id thread_id = std::this_thread::get_id();
+  std::ostringstream stream;
+  stream << std::hex << thread_id << " " << std::dec << thread_id;
+  Log(info,"#### Main thread: %s",stream.str().c_str());
+  // Create a thread that passes the configuration
 
   //Log(debug) << "Going to sleep" <<endlog;
   //std::this_thread::sleep_for (std::chrono::seconds(10));
@@ -151,19 +202,32 @@ int main() {
 
   manager.DumpConfigurationRegisters();
 
+  Log(info,"Creating control thread");
+  std::thread t1(control_thread);
+
+
   // Get the reader
   const PTBReader* reader = manager.getReader();
   Log(info,"Showing the reader: 0x%X", reader);
   //manager.StartRun();
+
+  Log(info,"Starting the reader thread...");
+  // -- Create a board reader facsimile
+  pthread_t threadID_controller;
+  if (pthread_create(&threadID_controller, NULL, &(reader_thread),(void*)reader) != 0) {
+      Log(fatal,"Unable to create master thread.");
+    }
 
 //  while (!reader->isReady()) {
 //    ;
 //  }
 
 
-
+  Log(info,"Joining the threads");
   pthread_join(threadID_controller,NULL);
-
+  Log(info,"One joined");
+  t1.join();
+  Log(info,"Other joined");
 //  Log(info) << "Waiting for thread [" << cfg->getThreadId() << "] to finish." << endlog;
 //  Log(info) << cfg->getThreadId()->__sig << endlog;
 //  Log(info) << "Adding a new thread to shutdown eventually..." << endlog;

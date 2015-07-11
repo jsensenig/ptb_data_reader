@@ -2,7 +2,7 @@
 MACHINE    := $(shell uname -m)
 CC         := g++
 BIN        := $(PWD)/bin
-DEF_CFLAGS := -Wall -I$(PWD)/contrib/PracticalSocket -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src
+DEF_CFLAGS := -g -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src
 DEF_LFLAGS := -lpthread 
 #-lrt
 #DEF_LFLAGS := -lpthread -lrt -lbz2 
@@ -22,7 +22,7 @@ ifeq ($(MACHINE), armv7l)
 else
    $(info Compiling for Server) 
    DEF      :=
-   CFLAGS   := $(DEF_CFLAGS) -fpermissive
+   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
    LFLAGS   := $(DEF_LFLAGS) 
    EXT_TARS := gui 
    CLN      := server_clean

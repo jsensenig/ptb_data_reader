@@ -11,14 +11,12 @@
 #include <sstream>
 #include <cstdlib>
 #include <cstdarg>
-#include <mutex>
 
 extern "C" {
 #include <stdio.h>
 #include <unistd.h>
 };
 
-std::mutex print_mutex;
 
 static struct nullstream:
     std::ostream {
@@ -35,15 +33,15 @@ std::ostream* Logger::_nstream (&devnull);
 bool Logger::_print = true;
 // By default do not allow colored output
 bool Logger::_color = false;
+std::mutex Logger::print_mutex_;
 
 Logger::Logger() { }
 
 Logger::~Logger() { }
 
-void Logger::message(Logger::severity sev, const char* where, const char* fmt...){
-  print_mutex.lock();
+void Logger::message(Logger::severity sev, const char* where, const char* fmt,...){
+  print_mutex_.lock();
 
-  _print = true;
   if (sev >= _sev) {
 
 
@@ -57,12 +55,11 @@ void Logger::message(Logger::severity sev, const char* where, const char* fmt...
     vsprintf(msg,tmp_fmt.c_str(),args);
     va_end(args);
 
+    //printf("%s\n",msg);
     *_ostream << msg << std::endl;
-  } else {
-    _print = false;
   }
 
-  print_mutex.unlock();
+  print_mutex_.unlock();
   // This part seems to be failing before the message is actually printed.
   if (sev == fatal) {
     throw;

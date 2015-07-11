@@ -25,6 +25,7 @@
 #include <stdexcept>
 #include <cstring>
 #include <cstdlib>
+#include <thread>
 
 extern "C" {
 #include <stdio.h>
@@ -59,6 +60,11 @@ ConfigServer::ConfigServer() {
 
 void* ConfigServer::listen(void *arg) {
   printf("In listen\n");
+  std::thread::id thread_id = std::this_thread::get_id();
+  std::ostringstream stream;
+  stream << std::hex << thread_id << " " << std::dec << thread_id;
+  Log(info,"#### PTB Listen thread: %s",stream.str().c_str());
+
   try {
     printf("Inside try\n");
     Log(info,"Creating server listening socket.");
@@ -105,7 +111,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     Log(error,"Unable to get foreign address");
   }
   try {
-    Log(debug,"Port : %u",sock->getForeignPort());
+    Log(debug,"Port : %hu",sock->getForeignPort());
   } catch (SocketException &e) {
     Log(error,"Unable to get foreign port");
   }
@@ -141,9 +147,12 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     // Keep accumulating the transmission until one of the closing
     // tokens are passed (</config></command>)
 
+    Log(verbose,"Duplicating the input");
     localBuffer += strdup(instBuffer);
+    Log(verbose,"Duplicated");
     std::size_t pos = 0;
-    if ((pos = localBuffer.find("</config>")) != std::string::npos) {
+    // CHeck if it is a compelte configuration set
+    if ((pos = localBuffer.find("</config>")) != std::string::npos && (localBuffer.find("<config>")!= std::string::npos)) {
       // Found the end of a config block.
       // Pass that buffer to process and erase it from the string
       // 9 = strlen("</config>")

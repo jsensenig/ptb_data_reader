@@ -9,6 +9,7 @@
 #define MYLIB_LOGGER_H_
 // -- STL includes
 #include <iostream>
+#include <mutex>
 
 //-- A few helpful defines
 #define ERRLINE_SEGMENT_1(line)   #line
@@ -22,7 +23,7 @@
 #ifndef __FILENAME__
 #define __FILENAME__ __FILE__
 #endif
-#define Log(sev,...) Logger::message(Logger::sev,__FILENAME__ "(" ERRLINE_SEGMENT_2(__LINE__) ")",##__VA_ARGS__)
+#define Log(sev,fmt,...) Logger::message(Logger::sev,__FILENAME__ "(" ERRLINE_SEGMENT_2(__LINE__) ")",fmt,##__VA_ARGS__)
 
 
 class Logger {
@@ -46,7 +47,7 @@ public:
   static void SetOutputFile(std::ostream &out = std::cout) { _ostream = &out;};
 
   static void endlog(std::ostream& s);
-  static void message(Logger::severity sev, const char* where, const char* fmt...);
+  static void message(Logger::severity sev, const char* where, const char* fmt,...);
 
 private:
   Logger();
@@ -69,6 +70,9 @@ private:
 
   ///Private member to aux the conversion of the severity level into a string
   static const char* tostr(severity);
+
+  static std::mutex print_mutex_;
+
 
 
 };
