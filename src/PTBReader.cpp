@@ -204,7 +204,9 @@ void PTBReader::ClientTransmiter() {
         // This is a timestamp word.
         // Check if this is the first TS after StartRun
         printf("Timestamp frame...\n");
-        current_ts_ = (frame[1] << 32) | frame[2];
+        uint64_t tmp1 = frame[1];
+        uint64_t tmp2 = frame[2];
+        current_ts_ = (tmp1 << 32) | tmp2;
 
         if (first_ts_) {
           // First TS after Run start
