@@ -88,6 +88,12 @@ void PTBReader::StartDataTaking() {
 
 void PTBReader::InitConnection() {
 
+  // First thing is. If a connection exists. Close it
+  if (socket_ != NULL) {
+    Log(warning,"Destroying existing socket!");
+    delete socket_;
+  }
+
   // Check if the server data is set up, and compute
   if (tcp_host_ != "" && tcp_port_ != 0) {
 
@@ -101,7 +107,7 @@ void PTBReader::InitConnection() {
 
     try{
       Log(verbose, "Opening socket connection : %s : %hu",tcp_host_.c_str(),tcp_port_ );
-      socket_ = new TCPSocket(tcp_host_,tcp_port_);
+      socket_ = new TCPSocket(tcp_host_.c_str(),tcp_port_);
 
       if (socket_ == NULL) {
         Log(error,"Unable to establish the client socket. Failing." );

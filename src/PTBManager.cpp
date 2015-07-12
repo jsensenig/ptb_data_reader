@@ -125,6 +125,9 @@ void PTBManager::StartRun() {
   // Tell the PTBReader to start takign data (it won't receive anything but it will be ready)
   // Set the GLB_EN register to 1 (start readout in the fabric)
   // Set status flag to RUNNING
+  if (!reader_ || !reader_->isReady()) {
+    reader_->InitConnection();
+  }
 
   if (!reader_ || !reader_->isReady()) {
     Log(warning,"Received call to start transmitting but reader is not ready. Refusing to run." );
@@ -214,6 +217,12 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
     Log(warning,"Attempted to pass a new configuration during a run. Ignoring the new configuration." );
     return;
   }
+
+  // // Check if the reader is ready. If it is ignore the change
+  // if (reader_->isReady()) {
+  //   Log(warning,"FIXME: Reader is ready. Do not overwrite config.");
+  //   return;
+  // }
 
   // This is the workhorse of the configuration.
   // At this point the registers should already be mapped and things should be flowing
@@ -397,7 +406,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
   config_ = config;
 
   // Tell the reader to start the connection
-  sleep(5);
+  sleep(10);
   Log(verbose,"Initializing connection to DAQ upstream." );
   //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
   reader_->InitConnection();

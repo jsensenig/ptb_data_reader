@@ -137,7 +137,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
   while ((recvMsgSize = sock->recv(instBuffer, RCVBUFSIZE)) > 0) { // Zero means
 
     // Truncate the instantaneous buffer on the number of bytes
-    instBuffer[recvMsgSize+1] = '\0';
+    instBuffer[recvMsgSize] = '\0';
     // end of transmission
     Log(debug,"Received %u bytes",recvMsgSize);
     Log(verbose,"[%s]",instBuffer);
@@ -148,10 +148,13 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     // tokens are passed (</config></command>)
 
     Log(verbose,"Duplicating the input");
-    localBuffer += strdup(instBuffer);
-    Log(verbose,"Duplicated");
+    localBuffer += instBuffer;
+    Log(verbose,"Duplicated [%s]",localBuffer.c_str());
     std::size_t pos = 0;
     // CHeck if it is a compelte configuration set
+    // Loop until all configurations and commands are processed
+    while (localBuffer.find("</config>")!= std::string::npos  || localBuffer.find("</command>")!= std::string::npos) {
+      Log(verbose,"There is something to be processed");
     if ((pos = localBuffer.find("</config>")) != std::string::npos && (localBuffer.find("<config>")!= std::string::npos)) {
       // Found the end of a config block.
       // Pass that buffer to process and erase it from the string
@@ -160,7 +163,9 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
       try{
         tcp_buffer_ = localBuffer.substr(0,pos+strlen("</config>"));
         // Remove the entry from localBuffer
-        localBuffer = localBuffer.substr(pos+strlen("</config>")+1);
+	Log(verbose,"Shifting buffer");
+        localBuffer = localBuffer.substr(pos+strlen("</config>"));
+	Log(verbose,"new buffer [%s]",localBuffer.c_str());
       }
       catch(std::length_error &e) {
         Log(error,"Length error : %s ",e.what());
@@ -190,6 +195,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
       }
       // Process the transmission.
       try {
+	Log(verbose,"Processing buffer [%s]",tcp_buffer_.c_str());
         ProcessTransmission(tcp_buffer_.c_str());
         sprintf(instBuffer,"<success>true</success>");
       }
@@ -217,10 +223,13 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
       Log(debug,"POS %u LEN %u",pos,strlen("</command>"));
 
       tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
-      Log(verbose,"%s",tcp_buffer_.c_str() );
       // Remove the entry from localBuffer
-      localBuffer = localBuffer.substr(pos+strlen("</command>"));
-      try {
+      try{
+	Log(verbose,"Shifting buffer");
+	localBuffer = localBuffer.substr(pos+strlen("</command>"));
+	Log(verbose,"new buffer [%s]",localBuffer.c_str());
+      
+	Log(verbose,"Processing commadn buffer [%s]",tcp_buffer_.c_str() );
         ProcessTransmission(tcp_buffer_.c_str());
         sprintf(instBuffer,"<success>true</success>");
       }
@@ -241,6 +250,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
       Log(debug,"%s",instBuffer);
       sock->send(instBuffer,strlen(instBuffer));
       Log(debug,"Answer sent");
+    }
     }
 
     // Process the string
