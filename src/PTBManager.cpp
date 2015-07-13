@@ -252,16 +252,21 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       reader_->setTcpPort(port);
       //uint32_t rollOver = strtoul(it->child("RollOver").child_value(),&pEnd,10);
       uint32_t rollOver = atoi(it->child("RollOver").child_value());
-      Log(debug,"Rollover %u",rollOver );
+      Log(debug,"Packet Rollover %u",rollOver );
       reader_->setPacketRollover(rollOver);
       // uint32_t duration = strtoul(it->child("MicroSliceDuration").child_value(),&pEnd,10);
       uint32_t duration = atoi(it->child("MicroSliceDuration").child_value());
       Log(debug,"MicroSlice Duration %u",duration );
+      if (duration > 28) {
+	Log(warning,"Input value of [%u] above maximum rollover [28]. Truncating to maximum.",duration);
+	duration = 28;
+      }
       uint64_t timeRollOver = (1 << duration);
+      Log(debug,"MicroSlice time rollover : [%u] --> %lu clock ticks.",duration,timeRollOver);
       reader_->setTimeRollover(timeRollOver);
 
       Log(verbose,"Setting data transmission channel to [%s:%hu]",host.c_str(),port);
-      Log(verbose,"Packet rollover set to %u ",rollOver );
+      //Log(verbose,"Packet rollover set to %u ",rollOver );
     }
     if (!strcmp(it->name(),"ChannelMask")) {
       // Deal directly with the childs.
