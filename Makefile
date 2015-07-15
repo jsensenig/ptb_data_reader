@@ -2,7 +2,7 @@
 MACHINE    := $(shell uname -m)
 CC         := g++
 BIN        := $(PWD)/bin
-DEF_CFLAGS := -g -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src
+DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src
 DEF_LFLAGS := -lpthread 
 #-lrt
 #DEF_LFLAGS := -lpthread -lrt -lbz2 
@@ -20,11 +20,11 @@ ifeq ($(MACHINE), armv7l)
    OBJ      := $(PWD)/.ptb_obj
 # Server Build
 else
-   $(info Compiling for Server) 
+   $(info +++ Compiling for Server) 
    DEF      :=
    CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
    LFLAGS   := $(DEF_LFLAGS) 
-   EXT_TARS := gui 
+   EXT_TARS := 
    CLN      := server_clean
    UTL_DIR  := $(PWD)/util/server
    OBJ      := $(PWD)/.obj
@@ -76,7 +76,7 @@ clean: $(CLN)
 
 server_clean:
 	echo ""
-	
+
 ## No library is created. Everything is compiled into a single object
 # Compile XML parser Sources
 $(OBJ)/%.o: $(XML_DIR)/%.cpp $(XML_DIR)/%.hpp
@@ -94,7 +94,7 @@ $(OBJ)/%.o: $(PTB_DIR)/%.cpp $(PTB_DIR)/%.h
 #$(BIN)/%: $(UTL_DIR)/%.cpp $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ)
 #	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
 
-	
+
 # Compile tests
 $(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)
 #	echo " <: $< "

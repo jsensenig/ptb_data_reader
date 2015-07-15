@@ -75,9 +75,9 @@ public:
   }
 
   void setTcpPort(unsigned short tcpPort) {
-    std::cout << "====> Received port " << tcpPort << std::endl;
+    //std::cout << "====> Received port " << tcpPort << std::endl;
     tcp_port_ = tcpPort;
-    std::cout << "====> Set port " << tcp_port_ << std::endl;
+    //std::cout << "====> Set port " << tcp_port_ << std::endl;
   }
 
   uint32_t getPacketRollover() const {
@@ -125,7 +125,7 @@ protected:
 
   void GenerateFrame(uint32_t **buffer);
 
-
+  void DumpPacket(uint32_t* buffer, uint32_t tot_size);
   /** Method used to initialize the sampler for the simulations **/
   void InitEmuSampler();
 private:
@@ -152,7 +152,7 @@ private:
 
   // A few more constants that are important
   // This is actually
-  static const uint32_t fw_version = 0xE1;
+  static const uint32_t fw_version = 0x1;
 
   // Frame sequence number
   uint32_t seq_num_;
@@ -162,7 +162,7 @@ private:
   bool keep_transmitting_;
   bool ready_to_send_;
   bool first_ts_;
-
+  bool keep_collecting_;
   // Previous timestamp
   uint64_t previous_ts_;
   uint64_t time_rollover_;

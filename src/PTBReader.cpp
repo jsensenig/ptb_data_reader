@@ -11,6 +11,10 @@
 
 #include <sys/time.h>
 #include <stdint.h>
+#include <bitset>
+#include <sstream>
+#include <thread>
+#include <chrono>
 
 // Completely auxiliary clock function
 uint64_t ClockGetTime() {
@@ -27,7 +31,7 @@ uint64_t ClockGetTime() {
 PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     packet_rollover_(0),socket_(0),
     client_thread_collector_(0),client_thread_transmitor_(0),ready_(false), emu_mode_(emu),
-    fragmented_(false),keep_transmitting_(true),ready_to_send_(false),previous_ts_(0)
+				 fragmented_(false),keep_transmitting_(true),ready_to_send_(false),first_ts_(true),keep_collecting_(true),previous_ts_(0)
 
 {
   printf("Here\n");
@@ -49,9 +53,14 @@ PTBReader::~PTBReader() {
 void PTBReader::StopDataTaking() {
 
   Log(verbose,"Killing the daughter threads.\n");
+  // First stop the loops
+  keep_collecting_ = false;
+  std::this_thread::sleep_for (std::chrono::seconds(2));
   // Kill the collector thread first
   pthread_cancel(client_thread_collector_);
   // Kill the transmittor thread.
+  keep_transmitting_ = false;
+  std::this_thread::sleep_for (std::chrono::seconds(2));
   pthread_cancel(client_thread_transmitor_);
 
   pthread_mutex_destroy(&lock_);
@@ -69,12 +78,14 @@ void PTBReader::StartDataTaking() {
 
     // We are ready to do business. Start reading the DMA into the queue.
     Log(verbose, "==> Creating collector\n" );
+    keep_collecting_ = true;
     if (pthread_create(&client_thread_collector_,NULL,&(PTBReader::ClientCollectorFunc),this) != 0) {
       Log(error,"Unable to create client thread. Failing..." );
       return;
     }
     // We are ready to do business. Start reading the DMA into the queue.
     Log(verbose, "==> Creating transmitter\n" );
+    keep_transmitting_ = true;
     if (pthread_create(&client_thread_transmitor_,NULL,&(PTBReader::ClientTransmitorFunc),this) != 0) {
       Log(error,"Unable to create client thread. Failing..." );
       return;
@@ -135,7 +146,7 @@ void PTBReader::InitConnection() {
 
 void PTBReader::ClientCollector() {
   Log(verbose, "Starting collector\n" );
-  while(true) {
+  while(keep_collecting_) {
     if (emu_mode_) {
       // Reserve the memory for one frame (128 bits long)
       uint32_t* frame = (uint32_t*)calloc(4,sizeof(uint32_t));
@@ -154,9 +165,98 @@ void PTBReader::ClientCollector() {
 }
 
 
+void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
+
+
+  // First get the 32 bit header
+  uint32_t header = buffer[0];
+  std::ostringstream bitdump;
+  bitdump << std::bitset<32>(header);
+  // And now print it
+  Log(debug,"HEADER : 0x%X [%s]",header,bitdump.str().c_str());
+
+  // extract the different parts of the header
+  uint32_t version = (header >> 28 & 0xF); // 4msb [28-31]
+  uint32_t version_completement = (header >> 24 & 0xF); // grab only the 4 lsb [24-27]
+  uint32_t seq_num = (header >> 16) & 0xFF; // bits [16-23]
+  uint32_t size = header & 0xFFFF; // 16 lsb [0-16]
+  bitdump.str(""); bitdump << std::bitset<4>(version);
+  Log(debug,"Version 0x%X (%u) [%s]",version,version,bitdump.str().c_str());
+  bitdump.str(""); bitdump << std::bitset<4>(version_completement);
+  Log(debug,"Version Complement 0x%X (%u) [%s]",version_completement,version_completement,bitdump.str().c_str());
+  bitdump.str(""); bitdump << std::bitset<8>(seq_num & 0xFF);
+  Log(debug,"Seq number 0x%X (%u) [%s]",seq_num,seq_num,bitdump.str().c_str());
+  bitdump.str(""); bitdump << std::bitset<16>(size & 0xFFFF);
+  Log(debug,"Size 0x%X (%u) [%s]",size,size,bitdump.str().c_str());
+  
+  // First sanity check: the size*sizeof(uint32_t)+sizeof(uint32_t) should be = to tot_size
+  
+  if (tot_size != (size + sizeof(uint32_t))) {
+    Log(warning,"Packet sizes do not match! encoded : %u calculated : %u",((size+1)*sizeof(uint32_t)),tot_size);
+  }
+  // Keep looping until we reach the end of the packet
+  uint32_t counter = 1;
+  // Calculate the number of uint32_t are stored in the array
+  uint32_t num_units = size/sizeof(uint32_t);
+  while (counter < num_units) {
+    // Fetch the header of the frame
+    uint32_t fheader = buffer[counter];
+    counter++;
+    // Extract the 3 msb to determine the frame type
+    uint32_t ftype = (fheader >> 29) & 0x7;
+    uint32_t tstamp= (fheader >> 1) & 0xFFFFFFF; 
+    if (ftype == 0x1) {
+      
+      bitdump.str(""); bitdump << std::bitset<3>(ftype)
+			       << " " << std::bitset<28>(tstamp);
+      Log(debug,"Counter word : Time %u [%s]",(fheader >> 1) & 0xFFFFFFF,bitdump.str().c_str() );
+      bitdump.str(""); bitdump << std::bitset<1>(fheader & 0x1) 
+			       << " " << std::bitset<32>(buffer[counter]) 
+			       << " " << std::bitset<32>(buffer[counter+1])
+			       << " " << std::bitset<32>(buffer[counter+2]);
+      buffer += 3;
+      Log(debug,"Counter word : Body [%s]",bitdump.str().c_str());
+    } else if (ftype == 0x7) {
+      
+      bitdump.str(""); bitdump << std::bitset<3>(ftype) 
+			       << " " << std::bitset<28>(tstamp)
+			       << " " << std::bitset<32>(buffer[counter])
+			       << " " << std::bitset<32>(buffer[counter+1]);
+      uint64_t tmp1 = buffer[counter];
+      uint64_t tmp2 = buffer[counter+1];
+      tmp1 = (tmp1 << 32) | tmp2;
+      Log(debug,"TS word : %X (%u) %X %X %lu",tstamp,tstamp, buffer[counter], buffer[counter+1], tmp1);
+      Log(debug,"TS word : [%s]",bitdump.str().c_str());
+      
+      counter +=2;
+    } else if (ftype == 0x4) {
+      uint32_t checksum = fheader & 0x1FFFFFFF;
+      bitdump.str(""); bitdump << std::bitset<3>(ftype) << " " << std::bitset<29>(checksum); 
+      Log(debug,"Checksum word : %X (%u) [%s]",checksum,checksum,bitdump.str().c_str());
+    } else if (ftype == 0x2) {
+      bitdump.str(""); bitdump << std::bitset<3>(ftype) << " " << std::bitset<28>(tstamp);
+      Log(debug,"Trigger word : Time %X (%u) [%s]", tstamp, tstamp,bitdump.str().c_str() );
+      
+      bitdump.str(""); bitdump << std::bitset<5>((buffer[counter] >> 27) & 0x1F)
+			       << " " << std::bitset<4>((buffer[counter] >> 23) & 0xF); 
+      uint32_t trig_type = (buffer[counter] >> 27) & 0x1F;
+      uint32_t trig_id = (buffer[counter] >> 23) & 0xF;
+      Log(debug,"Trigger word : Body  TrigType : %X TrigId %X [%s]", trig_type,trig_id,bitdump.str().c_str());
+      counter += 1;
+    } else {
+      
+      bitdump.str(""); bitdump << std::bitset<3>(ftype) << " " << std::bitset<28>(tstamp);
+      Log(warning,"Unkown word type: %X  %X (%u) [%s]",ftype,tstamp,tstamp,bitdump.str().c_str());
+    }
+
+  }
+}
+
+
 void PTBReader::ClientTransmiter() {
   Log(verbose, "Starting transmitter\n");
   Log(verbose, "previous : %u roll %u \n",previous_ts_,time_rollover_);
+  std::ostringstream bitdump;
   // FIXME: Finish implementation
   // Fetch a frame from the queue
   seq_num_ = 1;
@@ -185,8 +285,10 @@ void PTBReader::ClientTransmiter() {
     //static const uint32_t max_packet_num = max_packet_size/sizeof(uint32_t);
     uint32_t ipck = 0,iframe = 0;
     bool carry_on = true;
-    eth_buffer[0] = (fw_version << 24 ) | ((seq_num_  << 16) & 0xFF);
-    Log(verbose, "Temp HEADER : %x (%x %x)\n",eth_buffer[0],(uint32_t)fw_version,(uint32_t)seq_num_);
+    eth_buffer[0] = (fw_version << 28 ) | (((~fw_version) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
+    Log(verbose, "Temp HEADER : %x (%x %x)\n",eth_buffer[0],fw_version,seq_num_);
+    // ipck should not include the header
+    // But it also works as an index counter, so the manipulation is done at the end
     ipck += 1;
     // while a packet_sending_condition is not reached
     // keep the loop going...
@@ -204,7 +306,7 @@ void PTBReader::ClientTransmiter() {
       pthread_mutex_unlock(&lock_);
 
       // If we still didn't get the first timestamp just drop the packages
-      Log(verbose, "--> Frame1 %x \n",frame[0]);
+      //Log(verbose, "--> Frame1 %x \n",frame[0]);
 
       /// -- Check if it is a TS frame
       if ((frame[0] >> 29 & 0x7) == 0x7) {
@@ -244,7 +346,7 @@ void PTBReader::ClientTransmiter() {
       /// --  Not a TS packet...just accumulate it
       // Start another index to move in words of 32 bits
       // These can loop all the
-      Log(verbose, "--> Frame2 %x \n",frame[0]);
+      //Log(verbose, "--> Frame2 %x \n",frame[0]);
       eth_buffer[ipck] = frame[0];
       ipck += 1;
       // trim the data depending on the type
@@ -273,9 +375,12 @@ void PTBReader::ClientTransmiter() {
       }
 
     }
-    Log(verbose, "Broke out of the loop.\n");
+    //Log(verbose, "Broke out of the loop.\n");
+    
+    //break;
 
 
+   
 
     //    // Exited the packet loop.
     //    // Check if the first packet is a timestamp word
@@ -288,9 +393,15 @@ void PTBReader::ClientTransmiter() {
     Log(verbose, "Packet completed. Calculating the checksum.\n");
 
     // Write the size (in bytes)
-    uint16_t packet_size = (ipck*sizeof(uint32_t));
+    // keep in mind that ipck is summed 1 for the checksum
+    uint16_t packet_size = ((ipck+1)*sizeof(uint32_t));
     eth_buffer[0] |= packet_size ;
-
+    Log(verbose,"Size was calculated to be %hu",packet_size);
+    bitdump.str(""); bitdump << std::bitset<4>(eth_buffer[0] >> 28) 
+			     << " " << std::bitset<4>(eth_buffer[0] >> 24 & 0xF)
+			     << " " << std::bitset<8>(eth_buffer[0] >> 16 & 0xFF)
+			     << " " << std::bitset<16>(eth_buffer[0] & 0xFFFF);
+    Log(verbose,"Temp header : %X [%s]",eth_buffer[0], bitdump.str().c_str());
     // Calculate the checksum
     //
     // -- Followed the recipe in
@@ -303,16 +414,22 @@ void PTBReader::ClientTransmiter() {
       checksum += ch_buff[i];
       checksum &= 0xFFFF;
     }
+
+    Log(verbose,"Checksum : %hu",checksum);
     // Calculate 16 bit checksum of the packet
     // Add the checksum to the last packet
     eth_buffer[ipck] = (0x4 << 29) | checksum;
 
+    // Include the header in the calculation
+    Log(debug,"Sending packet with %u bytes",sizeof(uint32_t)*(ipck+2));
+    DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+2));
+
     /// -- Send the packet:
     try {
-      socket_->send(eth_buffer,ipck);
+      socket_->send(eth_buffer,sizeof(uint32_t)*(ipck+2));
     }
     catch(SocketException &e) {
-      Log(error,"Cocket exception caught : %s",e.what() );
+      Log(error,"Socket exception caught : %s",e.what() );
       // Retry
       socket_->send(eth_buffer,ipck);
     }
@@ -328,6 +445,13 @@ void PTBReader::ClientTransmiter() {
     }
 
 
+    // if (seq_num_ >= 5) {
+    //   Log(warning,"FIXME: Forcing to stop after the first packet being generated");
+    //   keep_collecting_ = false;
+    //   keep_transmitting_ = false;
+    //   // sleep for a while waiting for the generators to stop
+    //   std::this_thread::sleep_for (std::chrono::seconds(5));
+    // }
   }
   // Exited the  run loop. Return.
   Log(info,"Exited transmission loop. Checking for queued packets." );
@@ -340,32 +464,37 @@ void PTBReader::ClientTransmiter() {
 
 void PTBReader::GenerateFrame(uint32_t **buffer) {
 
-  printf("In GenerateFrame\n");
-  printf("== [%x] \n",buffer[0][0]);
-  printf("== [%x] \n",buffer[0][1]);
+  std::ostringstream bitdump;
+
+  // printf("In GenerateFrame\n");
+  // printf("== [%x] \n",buffer[0][0]);
+  // printf("== [%x] \n",buffer[0][1]);
   uint32_t*lbuf = buffer[0];
-  printf("Getting time\n");
+  //printf("Getting time\n");
   uint64_t now = ClockGetTime();
-  Log(verbose, "Clock %lu",now );
+  //Log(verbose, "Clock %lu",now );
 
   // Here we decide which type of packet I am going to generate
   // It should be dependent on the frequencies that I attach to each type
   // (not using calibrations for now)
 
   evtType nextEvt = evt_queue_.top();
-  Log(verbose, "Got an event.\n");
-  evt_queue_.pop();
+  //Log(verbose, "Got an event.\n");
 
   // If we haven't reached the time for the next event just send a TS packet.
   if (now < nextEvt.next) {
-    Log(verbose, "Creating a TS packet\n");
-    lbuf[0] = (0x7 << 29) | (now & 0xFFFFFFF);
+    //Log(verbose, "Creating a TS packet\n");
+    lbuf[0] = (0x7 << 29) | ((now & 0xFFFFFFF) << 1);
     lbuf[1] = (now >> 32 & 0xFFFFFFF);
     lbuf[2] = (now & 0xFFFFFFF);
-
+    //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]) << " " <<  std::bitset<32>(lbuf[2]);
+    //Log(debug,"FRAME : %X %X %X [%s]",lbuf[0],lbuf[1],lbuf[2],bitdump.str().c_str());
     return;
   }
-  Log(verbose, "Creating something else\n");
+  //Log(verbose, "Creating something else");
+
+  // pop it from the queue now that we know that it is going to be returned
+  evt_queue_.pop();
 
   //  // Wait for the time to be ready
   //  while (now < nextEvt.next) {
@@ -379,13 +508,20 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
   if (nextEvt.type == 0x1) {
     // Generate 3 random numbers and assign them
     uint32_t val = rand();
-    lbuf[0] |= ((val >> 30) & 0x1);
+    lbuf[0] |= ((val >> 31) & 0x1);
     lbuf[1] = val;
     lbuf[2] = rand();
     lbuf[3] = rand();
+    
+    //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]) << " " <<  std::bitset<32>(lbuf[2]) << " " <<  std::bitset<32>(lbuf[3]);
+    //Log(debug,"FRAME : %X %X %X %X [%s]",lbuf[0],lbuf[1],lbuf[2],lbuf[3],bitdump.str().c_str());
+
   } else {
     // The 5 msb are the trigger word mask (10000 for muon counters)
     lbuf[1] = (0x10 << 27) | ((nextEvt.trigger & 0xF) << 23) | 0x0;
+
+    //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]);
+    //Log(debug,"FRAME : %X %X [%s]",lbuf[0],lbuf[1],bitdump.str().c_str());
   }
 
   // Put it back again in the queue
@@ -411,6 +547,8 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
     }
   }
   evt_queue_.push(nextEvt);
+  //Log(verbose,"Pushed event to bottom of the stack again.");
+
 }
 
 
