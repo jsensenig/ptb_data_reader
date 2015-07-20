@@ -109,7 +109,7 @@ void* reader_thread(void *arg) {
   uint32_t checksum;
   uint16_t size;
   uint8_t wtype;
-  uint32_t *buffer = NULL;
+  //  uint32_t *buffer = NULL;  // Comment this out if unused
   for (uint32_t i = 0; i < 10; ++i) {
     // First listen for a header
     sock->recv(&header, sizeof(header));
@@ -185,7 +185,7 @@ int main() {
   // Need to make the acceptance of the client into a separate thread.
 
 
-  ConfigServer*cfg = ConfigServer::get();
+  //  ConfigServer*cfg = ConfigServer::get(); // Comment this out if unused
 
   std::thread::id thread_id = std::this_thread::get_id();
   std::ostringstream stream;

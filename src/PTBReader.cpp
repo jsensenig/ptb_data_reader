@@ -167,6 +167,16 @@ void PTBReader::ClientCollector() {
 
 void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
 
+  // JCF, Jul-20-2015
+
+  // Uncomment the following "for" loop in order to see the entire
+  // contents of the buffer
+
+  //  for (decltype(tot_size) i = 0; i < tot_size/sizeof(uint32_t); ++i) {
+  //    std::ostringstream bitdump;
+  //    bitdump << "Byte " << i*4 << ": " << std::bitset<32>(buffer[i]);
+  //    Log(debug,"%s",bitdump.str().c_str());
+  //  }
 
   // First get the 32 bit header
   uint32_t header = buffer[0];
@@ -420,13 +430,18 @@ void PTBReader::ClientTransmiter() {
     // Add the checksum to the last packet
     eth_buffer[ipck] = (0x4 << 29) | checksum;
 
-    // Include the header in the calculation
-    Log(debug,"Sending packet with %u bytes",sizeof(uint32_t)*(ipck+2));
-    DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+2));
+    // JCF, Jul-18-2015
+
+    // I'm switching "ipck+1" in place of "ipck+2", below - not sure
+    // why there was an extra uint32_t (above and beyond the
+    // microslice header) being sent
+
+    Log(debug,"Sending packet with %u bytes",sizeof(uint32_t)*(ipck+1));
+    DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+1));
 
     /// -- Send the packet:
     try {
-      socket_->send(eth_buffer,sizeof(uint32_t)*(ipck+2));
+      socket_->send(eth_buffer,sizeof(uint32_t)*(ipck+1));
     }
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what() );
