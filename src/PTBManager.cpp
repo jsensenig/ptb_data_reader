@@ -370,7 +370,9 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
         continue;
       } else {
         // -- The operations go into register 5
-        ParseMuonTrigger(mtrigger_node,5,1);
+	//FIXME: Review the parser. Seems to be writing to the wrong registers.
+	// The whole thing is wrong!!!!
+        ParseMuonTrigger(mtrigger_node,4,1);
       }
 
       mtrigger_node = it->find_child_by_attribute("TriggerMask","id","B");
@@ -378,7 +380,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
         Log(warning,"Couldn't find the configuration for trigger B." );
         continue;
       } else {
-        // -- The operations go into register 5
+        // -- The operations go into register 6
         ParseMuonTrigger(mtrigger_node,5,7);
       }
 
@@ -387,7 +389,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
         Log(warning,"Couldn't find the configuration for trigger C." );
         continue;
       } else {
-        // -- The operations go into register 5
+        // -- The operations go into register 19
         ParseMuonTrigger(mtrigger_node,18,1);
       }
 
@@ -396,7 +398,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
         Log(warning,"Couldn't find the configuration for trigger D." );
         continue;
       } else {
-        // -- The operations go into register 5
+        // -- The operations go into register 19
         ParseMuonTrigger(mtrigger_node,18,7);
       }
 
@@ -406,12 +408,22 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
     Log(verbose," Content child : %s",it->child_value() );
   }
 
+  // Set the bit to commit the configuration into the hardware (bit 0 in register 5)
+  Log(verbose,"Committing configuration to the hardware.");
+  *(volatile uint32_t*)(register_map_[4].address) |= 0x1;
+  register_map_[4].value |= 0x1;
+  Log(verbose,"Fourth register after config commit 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
+  
+
   // After parsing everything (and making sure that all the configuration is set)
   // Store the configuration locally
   config_ = config;
+  Log(verbose,"Sleeping for 15s prior to init the connection to DAQ upstream.");
+
+
 
   // Tell the reader to start the connection
-  sleep(10);
+  sleep(15);
   Log(verbose,"Initializing connection to DAQ upstream." );
   //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
   reader_->InitConnection();
@@ -444,9 +456,13 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
   // M_?_EXT_OP - External logic to be applied between the groups
   // ExtLogic : [word_offset+5 - word_offset+6]
   mask = 0x3;
-  bit_offset = 5;
+  bit_offset = 16;
   field_name = "ExtLogic";
 
+  // For trigger A this translates into 
+  // word_offset = 0
+  // bit_offset = 16
+  // (input_word & 0x3) << 16 [16-17]
   input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
   *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
   register_map_[reg].value |= ((input_word & mask) << (word_offset+bit_offset));
@@ -455,10 +471,12 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
   // M_?_PRESC - Prescale of a given trigger
   // Prescale : [word_offset+2 - word_offset+4]
   mask = 0x7;
-  bit_offset = 2;
+  bit_offset = 13;
   field_name = "Prescale";
 
   input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
+  // For trigger A this translates into 
+  // input_word & 0x7 << 13 ==> [13-15]
   *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
   register_map_[reg].value |= ((input_word & mask) << (word_offset+bit_offset));
   Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
@@ -476,9 +494,14 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // Intra-group logic : [word_offset+7 - word_offset+8]
     // M_?_G[i]_OP
     mask = 0x3;
-    bit_offset = 7+i;
+    bit_offset = 7+(i*2);
     field_name = "Logic";
     input_word = strtoul(G.child(field_name.c_str()).child_value(),&pEnd,16);
+    // Trigger A:
+    // i = 0 : 
+    //    input_word & 0x3 << 7 ==> [7-8]
+    // i = 1 : 
+    //    input_word & 0x3 << 9 ==> [9-10]
     *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
     register_map_[reg].value |= ((input_word & mask) << (word_offset+bit_offset));
     Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );

@@ -265,8 +265,12 @@ void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
 
 void PTBReader::ClientTransmiter() {
   Log(verbose, "Starting transmitter\n");
+<<<<<<< Updated upstream
   Log(verbose, "previous : %u roll %u \n",previous_ts_,time_rollover_);
   std::ostringstream bitdump;
+=======
+  Log(verbose, "previous : %lu roll %lu \n",previous_ts_,time_rollover_);
+>>>>>>> Stashed changes
   // FIXME: Finish implementation
   // Fetch a frame from the queue
   seq_num_ = 1;
@@ -286,17 +290,20 @@ void PTBReader::ClientTransmiter() {
 
 
     // The size should *never* go beyond the 64 kb
+    // Actually, the size should never go beyond the rollover size + the header.
+    //uint32_t *eth_buffer = (uint32_t*)calloc(0xFFFF,1);
     uint32_t *eth_buffer = (uint32_t*)calloc(0xFFFF,1);
 
     // Start by generating a header
 
 
     // Primary loop is at 32bit word packets
-    //static const uint32_t max_packet_num = max_packet_size/sizeof(uint32_t);
+    // ipck   : Counter of packets (32 bit units)
+    // iframe : Frame counter.
     uint32_t ipck = 0,iframe = 0;
     bool carry_on = true;
-    eth_buffer[0] = (fw_version << 28 ) | (((~fw_version) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
-    Log(verbose, "Temp HEADER : %x (%x %x)\n",eth_buffer[0],fw_version,seq_num_);
+    eth_buffer[0] = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
+    Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
     // ipck should not include the header
     // But it also works as an index counter, so the manipulation is done at the end
     ipck += 1;
