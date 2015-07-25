@@ -106,7 +106,7 @@ void PTBManager::ExecuteCommand(const char* cmd) throw(std::exception) {
     throw;
   }
   catch(std::string &str) {
-    Log(error,"Caught exception. %s",str.c_str() );
+    Log(error,"Caught string exception. %s",str.c_str() );
     Log(verbose,"Rethrowing" );
     throw;
   }
@@ -136,12 +136,19 @@ void PTBManager::StartRun() {
   }
   reader_->StartDataTaking();
 
-  // The GLB_EN is located in bin 31 of register 4
-  *(volatile uint32_t*)(register_map_[3].address) |= (0x1 << 31);
-  register_map_[3].value |= (0x1 << 31);
-  Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[3].value );
+  // The GLB_EN is located in bin 31 of register 30
+  *(volatile uint32_t*)(register_map_[30].address) |= (0x1 << 31);
+  register_map_[30].value() |= (0x1 << 31);
+  Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[30].value() );
 
-  status_ = RUNNING;
+  // Check back if the ack was set
+  if (register_map_[30].value() >> 30  & 0x1 ) {
+	  status_ = RUNNING;
+  	  Log(info,"Run Start ACK received.");
+  } else {
+	  status_ = IDLE;
+	  Log(error,"Failed to start run. ACK not received.");
+  }
 }
 
 void PTBManager::StopRun() {
@@ -151,28 +158,40 @@ void PTBManager::StopRun() {
   //        Propagate into the PTBReader to stop data collection
   //        Deallocate its streaming connection.
 
+  // First check that it is running
+  if ((status_ != RUNNING) || (((register_map_[30].value() >> 30) & 0x1) != 0x1 )) {
+	  Log(warning,"Stop Run requested, but device isn't running. Ignoring.");
+	  return;
+  }
+
   // The order should be:
   // 1. Set the GLB_EN register to 0 (stop readout in the fabric)
   // 2. Set the status to IDLE
   // 3. Tell the PTB reader to stop streaming
 
-  // The GLB_EN is located in bin 31 of register 4
-  *(volatile uint32_t*)(register_map_[3].address) |= (0x0 << 31);
-  register_map_[3].value |= (0x0 << 31);
-  Log(debug,"GLB_EN set. Register: 0x%08x ",register_map_[3].value );
+  // The GLB_EN is located in bin 31 of register 30
+  *(volatile uint32_t*)(register_map_[30].address) |= (0x0 << 31);
+  register_map_[30].value() |= (0x0 << 31);
+  Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[30].value() );
+
+  // Check the ACK bit
+  if (((register_map_[30].value() >> 30 ) & 0x1)) {
+	  Log(warning,"Stop Run failed. ACK bit still high.");
+	  throw std::string("Stop Run failed. No ACK received.");
+  }
 
   reader_->StopDataTaking();
 
   status_ = IDLE;
 }
 
-void PTBManager::SetupRegisters() throw (std::exception) {
+void PTBManager::SetupRegisters() {
   Log(info,"Setting up the appropriate registers to configure the board." );
   // Are we in emulator mode?
 
   struct LocalRegister tmp_reg;
   tmp_reg.address =NULL;
-  tmp_reg.value = 0;
+  tmp_reg.value() = 0;
   // First set up the local map
   for (uint32_t i =0; i < num_registers_; ++i) {
     register_map_[i] = tmp_reg;
@@ -189,20 +208,22 @@ void PTBManager::SetupRegisters() throw (std::exception) {
     // Allocate the memory for the registers
 
     for (uint32_t i =0; i < num_registers_; ++i) {
-      register_map_[i].address = malloc(sizeof(uint32_t));
+      //register_map_[i].address = malloc(sizeof(uint32_t));
+    	register_map_[i].address = new uint32_t();
     }
   } else {
     Log(warning,"Memory mapped registers are not yet implemented. This is most likely going to fail." );
   }
 }
 
-void PTBManager::FreeRegisters() throw (std::exception) {
+void PTBManager::FreeRegisters() {
   Log(info,"Cleaning up the allocated registers to configure the board." );
   if (emu_mode_) {
     // Simply deallocate the memory of each register
     for (uint32_t i =0; i < num_registers_; ++i) {
-      free(register_map_[i].address);
-      register_map_[i].address = NULL;
+    	delete register_map_[i].address;
+//      free(register_map_[i].address);
+//      register_map_[i].address = NULL;
     }
 
   } else {
@@ -211,7 +232,7 @@ void PTBManager::FreeRegisters() throw (std::exception) {
 
 }
 
-void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
+void PTBManager::ProcessConfig(pugi::xml_node config) {
   // Only accept a new configuration if we are not running.
   if (status_ == RUNNING) {
     Log(warning,"Attempted to pass a new configuration during a run. Ignoring the new configuration." );
@@ -228,6 +249,9 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
   // At this point the registers should already be mapped and things should be flowing
 
   Log(verbose,"Parsing the configuration." );
+
+  // First zero out all registers
+
 
   // Load the childs by parts.
   // Could use a iterator but then
@@ -277,14 +301,14 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       // Make the assignments that I had decided before:
       // Catch the lowest 32 bits of the word
       *(volatile uint32_t*)(register_map_[0].address) = bsu & 0xFFFFFFFF;
-      register_map_[0].value = bsu & 0xFFFFFFFF;
-      Log(verbose,"First register 0x%X", register_map_[0].value );
+      //register_map_[0].value() = bsu & 0xFFFFFFFF;
+      Log(verbose,"First register 0x%X", register_map_[0].value() );
 
       // The remaining 17 bits (49-32) go into the lower 17 bits of the next word
       // [0-16]
       *(volatile uint32_t*)(register_map_[1].address) = (bsu >> 32 ) & 0x1FFFF;
-      register_map_[1].value = (bsu >> 32 ) & 0x1FFFF;
-      Log(verbose,"Second register (tmp) 0x%X",register_map_[1].value );
+      //register_map_[1].value() = (bsu >> 32 ) & 0x1FFFF;
+      Log(verbose,"Second register (tmp) 0x%X",register_map_[1].value() );
 
       // Now grab the TSU part to complete the mask of this register
       uint64_t tsu = strtoull(it->child("TSU").child_value(),&pEnd,16);
@@ -292,17 +316,17 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       // The lowest 15 bits go into the upper bits of the previous register
       // [17-31]
       *(volatile uint32_t*)(register_map_[1].address) |= ((tsu & 0x7FFF) << 17);
-      register_map_[1].value |= ((tsu & 0x7FFF) << 17);
-      Log(verbose,"Second register 0x%X", register_map_[1].value );
+      //register_map_[1].value() |= ((tsu & 0x7FFF) << 17);
+      Log(verbose,"Second register 0x%X", register_map_[1].value() );
 
       // The remaining 33 (48-15) bits go into the next registers
       *(volatile uint32_t*)(register_map_[2].address) = ((tsu >> 15) & 0xFFFFFFFF);
-      register_map_[2].value = ((tsu >> 15) & 0xFFFFFFFF);
+      //register_map_[2].value() = ((tsu >> 15) & 0xFFFFFFFF);
       Log(verbose,"Third register 0x%X",*(volatile uint32_t*)(register_map_[2].address) );
 
       // The final bit goes into the lsb of register 4
       *(volatile uint32_t*)(register_map_[3].address) |= ((tsu >> 47) & 0x1);
-      register_map_[3].value |= ((tsu >> 47) & 0x1);
+      //register_map_[3].value() |= ((tsu >> 47) & 0x1);
       Log(verbose,"Fourth register 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
     }
     if (!strcmp(it->name(),"ExtTriggers")) {
@@ -310,7 +334,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       // to bits [26-30]
       uint32_t TRIGEX = strtoul(it->child("Mask").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[3].address) |= ((TRIGEX & 0x1F) << 26);
-      register_map_[3].value |= ((TRIGEX & 0x1F) << 26);
+      //register_map_[3].value() |= ((TRIGEX & 0x1F) << 26);
       Log(verbose,"Fourth register (TRIGEX) 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
     }
 
@@ -320,13 +344,13 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       // Mask : [22-25]
       uint32_t CAL_PRD = strtoul(it->child("Period").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[3].address) |= ((CAL_PRD & 0xFFFF) << 6);
-      register_map_[3].value |= ((CAL_PRD & 0xFFFF) << 6);
+      //register_map_[3].value() |= ((CAL_PRD & 0xFFFF) << 6);
       Log(verbose,"Fourth register (CAL_PRD) 0x%X",*(volatile uint32_t*)(register_map_[3].address));
 
 
       uint32_t CAL_MSK = strtoul(it->child("ChannelMask").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[3].address) |= ((CAL_MSK & 0xF) << 22);
-      register_map_[3].value |= ((CAL_MSK & 0xF) << 22);
+      //register_map_[3].value() |= ((CAL_MSK & 0xF) << 22);
       Log(verbose,"Fourth register (CAL_MSK) 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
 
     }
@@ -339,7 +363,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       // LockoutWindow : [1-5]
       uint32_t MT_LOCKOUT = strtoul(it->child("LockoutWindow").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[3].address) |= ((MT_LOCKOUT & 0x1F) << 1);
-      register_map_[3].value |= ((MT_LOCKOUT & 0x1F) << 1);
+      //register_map_[3].value() |= ((MT_LOCKOUT & 0x1F) << 1);
       Log(verbose,"Fourth register (MT_LOCKOUT) 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
 
       // The remaining configuration words go into register 5
@@ -349,7 +373,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       // TrigOutWidth : [25-27]
       uint32_t M_TRIGOUT = strtoul(it->child("TrigOutWidth").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[4].address) |= ((M_TRIGOUT & 0x7) << 25);
-      register_map_[4].value |= ((M_TRIGOUT & 0x7) << 25);
+      //register_map_[4].value() |= ((M_TRIGOUT & 0x7) << 25);
       Log(verbose,"Fourth register (M_TRIGOUT) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
 
       // M_LOCKHI - Number of clock cycles to extend the input signal
@@ -357,12 +381,11 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
       // TriggerWindow : [22-24]
       uint32_t M_LOCKHI = strtoul(it->child("TriggerWindow").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[4].address) |= ((M_LOCKHI & 0x7) << 22);
-      register_map_[4].value |= ((M_LOCKHI & 0x7) << 22);
+      //register_map_[4].value() |= ((M_LOCKHI & 0x7) << 22);
       Log(verbose,"Fourth register (M_LOCKHI) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
 
       // Now it is specific trigger codes...
       // Deal with one at a time
-      //pugi::xml_object_range<pugi::xml_named_node_iterator> mtrigger_nodes = it->children("TriggerMask");
 
       pugi::xml_node mtrigger_node = it->find_child_by_attribute("TriggerMask","id","A");
       if (mtrigger_node.empty()){
@@ -370,8 +393,6 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
         continue;
       } else {
         // -- The operations go into register 5
-	//FIXME: Review the parser. Seems to be writing to the wrong registers.
-	// The whole thing is wrong!!!!
         ParseMuonTrigger(mtrigger_node,4,1);
       }
 
@@ -389,8 +410,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
         Log(warning,"Couldn't find the configuration for trigger C." );
         continue;
       } else {
-        // -- The operations go into register 19
-        ParseMuonTrigger(mtrigger_node,18,1);
+        // -- The operations go into register 18
+        ParseMuonTrigger(mtrigger_node,17,1);
       }
 
       mtrigger_node = it->find_child_by_attribute("TriggerMask","id","D");
@@ -399,7 +420,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
         continue;
       } else {
         // -- The operations go into register 19
-        ParseMuonTrigger(mtrigger_node,18,7);
+        ParseMuonTrigger(mtrigger_node,17,7);
       }
 
     }
@@ -408,12 +429,19 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
     Log(verbose," Content child : %s",it->child_value() );
   }
 
-  // Set the bit to commit the configuration into the hardware (bit 0 in register 5)
+  // Set the bit to commit the configuration
+  // into the hardware (bit 29 in register 30)
   Log(verbose,"Committing configuration to the hardware.");
-  *(volatile uint32_t*)(register_map_[4].address) |= 0x1;
-  register_map_[4].value |= 0x1;
-  Log(verbose,"Fourth register after config commit 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
+  register_map_[30].value() |= (0x1 << 29);
+  //register_map_[4].value() |= 0x1;
+  Log(verbose,"Fourth register after config commit 0x%X", *(volatile uint32_t*)(register_map_[30].address) );
   
+  // Check for the ACK of the configuration
+  if ((register_map_[30].value() >> 28 & 0x1) != 0x1) {
+	  Log(error,"Configuration failed to commit. ACK not received.");
+	  throw("Configuration failed to commit. ACK not received.");
+  }
+
 
   // After parsing everything (and making sure that all the configuration is set)
   // Store the configuration locally
@@ -433,7 +461,17 @@ void PTBManager::ProcessConfig(pugi::xml_node config) throw (std::exception) {
 void PTBManager::DumpConfigurationRegisters() {
 
   for (size_t i = 0; i < register_map_.size(); ++i) {
-    Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value, register_map_.at(i).value );
+    Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
+  }
+
+}
+
+void PTBManager::ResetConfigurationRegisters() {
+
+  for (size_t i = 0; i < register_map_.size(); ++i) {
+    Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
+    register_map_.at(i).value() = 0x0;
+    Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
   }
 
 }
@@ -443,7 +481,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
   Log(verbose,"Processing muon trigger with conf reg %u and offset %u",reg,reg_offset );
 
   // First thing to do is identify the offset in the bins of the configuration register
-  uint32_t word_offset = (reg_offset>1)?10:0;
+  uint32_t word_offset = (reg_offset>1)?0:11;
   char *pEnd;
   // == First deal with the global parameters:
   // variables that are used repeatedly below
@@ -456,29 +494,29 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
   // M_?_EXT_OP - External logic to be applied between the groups
   // ExtLogic : [word_offset+5 - word_offset+6]
   mask = 0x3;
-  bit_offset = 16;
+  bit_offset = 5;
   field_name = "ExtLogic";
 
   // For trigger A this translates into 
-  // word_offset = 0
-  // bit_offset = 16
+  // word_offset = 11
+  // bit_offset = 5
   // (input_word & 0x3) << 16 [16-17]
   input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
   *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
-  register_map_[reg].value |= ((input_word & mask) << (word_offset+bit_offset));
+  //register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
   Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
 
   // M_?_PRESC - Prescale of a given trigger
   // Prescale : [word_offset+2 - word_offset+4]
   mask = 0x7;
-  bit_offset = 13;
+  bit_offset = 2;
   field_name = "Prescale";
 
   input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
   // For trigger A this translates into 
   // input_word & 0x7 << 13 ==> [13-15]
   *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
-  register_map_[reg].value |= ((input_word & mask) << (word_offset+bit_offset));
+  //register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
   Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
 //  Log(verbose,"Conf register " << std::dec << reg << " (" << field_name << ")" << std::hex
 //      << *(volatile uint32_t*)(register_map_[reg].address) );
@@ -498,12 +536,12 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     field_name = "Logic";
     input_word = strtoul(G.child(field_name.c_str()).child_value(),&pEnd,16);
     // Trigger A:
-    // i = 0 : 
-    //    input_word & 0x3 << 7 ==> [7-8]
-    // i = 1 : 
-    //    input_word & 0x3 << 9 ==> [9-10]
+    // i = 0 : [18-19]
+    //    input_word & 0x3 << 18 ==> [18-19]
+    // i = 1 : [20-21]
+    //    input_word & 0x3 << 20 ==> [20-21]
     *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
-    register_map_[reg].value |= ((input_word & mask) << (word_offset+bit_offset));
+    //register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
     Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
 
 //    Log(verbose,"Conf register " << std::dec << reg << " (" << field_name << ")" << std::hex
@@ -514,9 +552,14 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // These now go into the offset registers
 
     // -- First contains the first 32 bits of the word
-    mask = 0xFFFF;
-    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) |= (input_longword & mask);
-    register_map_[reg+reg_offset+(i*3)].value |= (input_word & mask);
+    mask = 0xFFFFFFFF;
+    // -- Trigger A:
+    // i = 0: [Reg5 : [0-31]]
+    //       map[5] = input_longword & 0xFFFFFFFF;
+    // i = 1: [Reg8] : [0-31]
+    //       map[8] : input_longword & 0xFFFFFFFF;
+    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) = (input_longword & mask);
+    //register_map_[reg+reg_offset+(i*3)].value() = (input_longword & mask);
     Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) );
 
 //    Log(verbose,"Mask register " << std::dec << reg+reg_offset+(i*3) << " (W1)" << std::hex
@@ -525,8 +568,19 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // The remaining 17 bits (49-32) go into the lower 17 bits of the next word
     // [0-16]
     mask = 0x1FFFF;
-    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) |= (input_longword >> 32 ) & mask;
-    register_map_[reg+reg_offset+(i*3)+1].value |= (input_longword >> 32 ) & mask;
+
+
+    // -- Trigger A:
+    // i = 0: [Reg6 : [0-16]]
+    //       map[6] = input_longword & 0x1FFFF;
+    // i = 1: [Reg9] : [0-16]
+    //       map[9] : input_longword & 0x1FFFF;
+    // Reset the bits to zeros to avoid ghost bits
+    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) = 0x0;
+    //register_map_[reg+reg_offset+(i*3)+1].value() = 0x0;
+    // Now do the assignments
+    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) = (input_longword >> 32 ) & mask;
+    //register_map_[reg+reg_offset+(i*3)+1].value() = (input_longword >> 32 ) & mask;
     Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) );
 
 //    Log(verbose,"Mask register " << std::dec << reg+reg_offset+(i*3)+1 << " (W2)" << std::hex
@@ -536,12 +590,17 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // Now grab the TSU part to complete the mask of this register
     input_longword = strtoull(G.child("TSU").child_value(),&pEnd,16);
 
-    // The lowest 15 bits go into the upper bits of the previous register
+    // The lowest 15 bits (0-14) go into the upper bits of the previous register
     // [17-31]
     mask = 0x7FFF;
     bit_offset = 17;
+    // -- Trigger A:
+    // i = 0: [Reg6 : [17-31]]
+    //       map[6] = input_longword & 0x1FFFF;
+    // i = 1: [Reg9] : [17-31]
+    //       map[9] : input_longword & 0x1FFFF;
     *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) |= (input_longword & mask ) << bit_offset;
-    register_map_[reg+reg_offset+(i*3)+1].value |= (input_longword & mask ) << bit_offset;
+    //register_map_[reg+reg_offset+(i*3)+1].value() |= (input_longword & mask ) << bit_offset;
     Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) );
 
 //    Log(verbose,"Mask register " << std::dec << reg+reg_offset+(i*3)+1 << " (W2)" << std::hex
@@ -550,9 +609,13 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // The next 32 (47-15) bits go into the next register
     mask = 0xFFFFFFFF;
     bit_offset = 15;
-
-    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) |= (input_longword >> bit_offset) & mask;
-    register_map_[reg+reg_offset+(i*3)+2].value |= (input_longword >> bit_offset) & mask;
+    // -- Trigger A:
+    // i = 0: [Reg7 : [0-31]]
+    //       map[7] = input_longword & 0xFFFFFFFF;
+    // i = 1: [Reg10] : [0-31]
+    //       map[10] : input_longword & 0xFFFFFFFF;
+    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) = (input_longword >> bit_offset) & mask;
+    //register_map_[reg+reg_offset+(i*3)+2].value() = (input_longword >> bit_offset) & mask;
     Log(debug,"Mask register %u (W3) %X",reg+reg_offset+(i*3)+2,*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) );
 
 //    Log(verbose,"Mask register " << std::dec << reg+reg_offset+(i*3)+2 << " (W3)" << std::hex
@@ -561,8 +624,14 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // The final bit (48) goes into the lsb of the configuration register
     mask = 0x1;
     bit_offset = i;
+    // -- Trigger A:
+    // i = 0: [Reg4 : [11]]
+    //       map[4] = input_longword >> 47 & 0x1 << 11;
+    // i = 1: [Reg4] : [12]
+    //       map[10] : input_longword >> 47 & 0x1 << 12;
+
     *(volatile uint32_t*)(register_map_[reg].address) |= ((input_longword >> 47) && mask) << bit_offset;
-    register_map_[reg].value |= ((input_longword >> 47) && mask) << bit_offset;
+    //register_map_[reg].value() |= ((input_longword >> 47) && mask) << bit_offset;
     Log(debug,"Mask register %u (MASK) %X",reg,*(volatile uint32_t*)(register_map_[reg].address) );
 //
 //    Log(verbose,"Conf register " << std::dec << reg << " (MASK)" << std::hex

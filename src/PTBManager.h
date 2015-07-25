@@ -9,11 +9,8 @@
 #define PTBMANAGER_H_
 
 #include <map>
+#include <cstdint>
 #include "pugixml.hpp"
-
-extern "C" {
-#include <stdint.h>
-};
 
 // -- Forward declarations
 class PTBReader;
@@ -21,7 +18,9 @@ class ConfigServer;
 
 typedef struct LocalRegister {
   void      *address;
-  uint32_t  value;
+  // Should use this method to access the value held in address
+  // since it shortens the command
+  volatile uint32_t& value () {return *(static_cast<volatile uint32_t*>(address));}
 } LocalRegister;
 
 /**
@@ -74,6 +73,11 @@ public:
    * Loops over the registers and dum their contents, both in decimal and Hex.
    */
   void DumpConfigurationRegisters();
+
+  /**
+   * Zero the configuration registers.
+   */
+  void ResetConfigurationRegisters();
 
   void StartRun();
   void StopRun();
