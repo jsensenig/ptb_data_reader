@@ -9,6 +9,7 @@
 #define MYLIB_LOGGER_H_
 // -- STL includes
 #include <iostream>
+#include <mutex>
 
 //-- A few helpful defines
 #define ERRLINE_SEGMENT_1(line)   #line
@@ -22,7 +23,7 @@
 #ifndef __FILENAME__
 #define __FILENAME__ __FILE__
 #endif
-#define Log(sev) Logger::message(Logger::sev,__FILENAME__ "(" ERRLINE_SEGMENT_2(__LINE__) ")",0)
+#define Log(sev,fmt,...) Logger::message(Logger::sev,__FILENAME__ "(" ERRLINE_SEGMENT_2(__LINE__) ")",fmt,##__VA_ARGS__)
 
 
 class Logger {
@@ -43,9 +44,10 @@ public:
   // -- Members
   static severity GetSeverity() {return _sev;}
   static void SetSeverity(severity sev) {_sev = sev;}
+  static void SetOutputFile(std::ostream &out = std::cout) { _ostream = &out;};
 
   static void endlog(std::ostream& s);
-  static std::ostream& message(Logger::severity sev, const char* where, const char* code);
+  static void message(Logger::severity sev, const char* where, const char* fmt,...);
 
 private:
   Logger();
@@ -53,10 +55,12 @@ private:
 
   /// Severity above which messages are to be printed
   static severity _sev;
+
   /// Output stream
   static std::ostream* _ostream;
-  /// Error stream
-  static std::ostream* _estream;
+  // Error stream
+  //static std::ostream* _estream;
+
   /// NULL stream
   static std::ostream* _nstream;
 
@@ -67,8 +71,12 @@ private:
   ///Private member to aux the conversion of the severity level into a string
   static const char* tostr(severity);
 
+  static std::mutex print_mutex_;
+
+
+
 };
-std::ostream& endlog(std::ostream& s);
+//std::ostream& endlog(std::ostream& s);
 
 
 #endif /* MYLIB_LOGGER_H_ */

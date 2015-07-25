@@ -25,6 +25,7 @@
 #include <stdexcept>
 #include <cstring>
 #include <cstdlib>
+#include <thread>
 
 extern "C" {
 #include <stdio.h>
@@ -44,72 +45,77 @@ bool ConfigServer::shutdown_= false;
 
 ConfigServer::ConfigServer() {
   // Use the practical socket to establish a connection
-  Log(verbose) << "Building object" << endlog;
+  Log(verbose,"Building object");
 
   // Start a new thread to handle the TCP server socket
   // for the control channel
   if (pthread_create(&thread_id_, NULL, &(ConfigServer::listen),(void*)NULL) != 0) {
-    Log(fatal) << "Unable to create master thread." << endlog;
+    Log(error,"Unable to create master thread.");
   }
-  Log(info) << "Master server thread created. [" << thread_id_ << "]" << endlog;
+  printf("Passed\n");
+  Log(info,"Master server thread created. [%p]",thread_id_);
   //Log(verbose) << thread_id_->__sig << endlog;
 
 }
 
 void* ConfigServer::listen(void *arg) {
+  printf("In listen\n");
+  std::thread::id thread_id = std::this_thread::get_id();
+  std::ostringstream stream;
+  stream << std::hex << thread_id << " " << std::dec << thread_id;
+  Log(info,"#### PTB Listen thread: %s",stream.str().c_str());
+
   try {
-    Log(info) << "Creating server listening socket." << endlog;
+    printf("Inside try\n");
+    Log(info,"Creating server listening socket.");
     TCPServerSocket servSock(port_);   // Socket descriptor for server
-    Log(info) << "Entering wait mode for client connection." << endlog;
+    Log(info,"Entering wait mode for client connection.");
     for (;;) {
       // Check if there is a request to terminate the connection.
       if (shutdown_) {
-        Log(info) << "Received a request to shut down. Complying..." << endlog;
+        Log(info,"Received a request to shut down. Complying...");
         return NULL;
       }
 
-      Log(verbose) << "Starting listener for connection." << endlog;
+      Log(verbose,"Starting listener for connection.");
       // Create a separate socket for the client
       // Wait indefinitely until the client kicks in.
       TCPSocket *clntSock = servSock.accept();
-      Log(verbose) << "Received client connection request." << endlog;
+      Log(verbose,"Received client connection request.");
       ThreadMain(clntSock);
     }
   }
   catch(SocketException &e) {
-    Log(error) << "Socket exception caught." << endlog;
-    Log(error) << e.what() << endlog;
+    Log(error,"Socket exception caught : %s",e.what());
     std::abort();
 
   }
   catch(std::exception &e) {
-    Log(error) << "Caught standard exception : " << e.what() << endlog;
+    Log(error,"Caught standard exception : %s",e.what());
   }
   catch(...) {
-    Log(error) << "Failed to establish configuration socket with unknown failure." << endlog;
+    Log(error,"Failed to establish configuration socket with unknown failure.");
   }
-  Log(warning) << "Reaching the end, but not sure why..." << endlog;
+  Log(warning,"Reaching the end, but not sure why...");
   return NULL;
 }
 
 
 // TCP client handling function
 void ConfigServer::HandleTCPClient(TCPSocket *sock) {
-  std::ostringstream msg;
-  msg << "Handling client "  << endlog;
-  Log(debug) << msg;
+  Log(debug,"Handling client ");
   try {
-     msg << "Address : " << sock->getForeignAddress() << endlog;
-     Log(debug) << msg;
+
+     Log(debug,"Address : %s",sock->getForeignAddress().c_str());;
   } catch (SocketException &e) {
-    Log(error) << "Unable to get foreign address" << endlog;
+    Log(error,"Unable to get foreign address");
   }
   try {
-    Log(debug) << "Port : " << sock->getForeignPort() << endlog;;
+    Log(debug,"Port : %hu",sock->getForeignPort());
   } catch (SocketException &e) {
-    Log(error) << "Unable to get foreign port" << endlog;
+    Log(error,"Unable to get foreign port");
   }
-  Log(info) << "Working  with thread " << pthread_self() << endlog;
+  Log(info,"Working  with thread %x",pthread_self());
 
   // Send received string and receive again until the end of transmission
 
@@ -131,66 +137,75 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
   while ((recvMsgSize = sock->recv(instBuffer, RCVBUFSIZE)) > 0) { // Zero means
 
     // Truncate the instantaneous buffer on the number of bytes
-    instBuffer[recvMsgSize+1] = '\0';
+    instBuffer[recvMsgSize] = '\0';
     // end of transmission
-    Log(debug) << "Received " << std::dec << recvMsgSize << " bytes." << endlog;
-    Log(verbose) << "[" << instBuffer << "]" << endlog;
+    Log(debug,"Received %u bytes",recvMsgSize);
+    Log(verbose,"[%s]",instBuffer);
     // Append into the permanent buffer
     //cfg_buffer_ = tmpBuffer;
 
     // Keep accumulating the transmission until one of the closing
     // tokens are passed (</config></command>)
 
-    localBuffer += strdup(instBuffer);
+    Log(verbose,"Duplicating the input");
+    localBuffer += instBuffer;
+    Log(verbose,"Duplicated [%s]",localBuffer.c_str());
     std::size_t pos = 0;
-    if ((pos = localBuffer.find("</config>")) != std::string::npos) {
+    // CHeck if it is a compelte configuration set
+    // Loop until all configurations and commands are processed
+    while (localBuffer.find("</config>")!= std::string::npos  || localBuffer.find("</command>")!= std::string::npos) {
+      Log(verbose,"There is something to be processed");
+    if ((pos = localBuffer.find("</config>")) != std::string::npos && (localBuffer.find("<config>")!= std::string::npos)) {
       // Found the end of a config block.
       // Pass that buffer to process and erase it from the string
       // 9 = strlen("</config>")
-      Log(verbose) << "Found a config block." << endlog;
+      Log(verbose,"Found a config block.");
       try{
         tcp_buffer_ = localBuffer.substr(0,pos+strlen("</config>"));
         // Remove the entry from localBuffer
-        localBuffer = localBuffer.substr(pos+strlen("</config>")+1);
+	Log(verbose,"Shifting buffer");
+        localBuffer = localBuffer.substr(pos+strlen("</config>"));
+	Log(verbose,"new buffer [%s]",localBuffer.c_str());
       }
       catch(std::length_error &e) {
-        Log(error) << "Length error : " << e.what() << endlog;
+        Log(error,"Length error : %s ",e.what());
       }
       catch(std::out_of_range &e) {
-        Log(error) << "Out of range : " << e.what() << endlog;
+        Log(error,"Out of range : %s",e.what());
       }
       catch(std::bad_alloc &e) {
-        Log(error) << "Bad alloc " << e.what() << endlog;
+        Log(error,"Bad alloc %s",e.what());
       }
       catch(std::invalid_argument &e) {
-        Log(error) << "Invalid argument error :" << e.what() << endlog;
+        Log(error,"Invalid argument error : %s",e.what());
       }
       catch(std::domain_error &e) {
-        Log(error) << "Domain error :" << e.what() << endlog;
+        Log(error,"Domain error : %s",e.what());
       }
       catch(std::overflow_error &e) {
-        Log(error) << "Overflow error :" << e.what() << endlog;
+        Log(error,"Overflow error : %s",e.what());
       }
       catch(std::range_error &e) {
-        Log(error) << "Range error :" << e.what() << endlog;
+        Log(error,"Range error : %s",e.what());
       }
 
       // Generic
       catch(std::exception &e) {
-        Log(error) << "Caught std exception : " << e.what() << endlog;
+        Log(error,"Caught std exception : %s",e.what());
       }
       // Process the transmission.
       try {
+	Log(verbose,"Processing buffer [%s]",tcp_buffer_.c_str());
         ProcessTransmission(tcp_buffer_.c_str());
         sprintf(instBuffer,"<success>true</success>");
       }
       catch (std::string &e) {
-        Log(error) << "Config exception caught :" << e << endlog;
+        Log(error,"Config exception caught : %s",e.c_str());
         // Return a failure signal.
         sprintf(instBuffer,"<error>%s</error>",e.c_str());
       }
       catch (std::exception &e) {
-        Log(error) << "STD exception caught :" << e.what() << endlog;
+        Log(error,"STD exception caught : %s",e.what());
         // Return a failure signal.
         sprintf(instBuffer,"<error>%s</error>",e.what());
       }
@@ -200,38 +215,42 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
       sock->send(instBuffer,strlen(instBuffer));
 
     } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
-      Log(verbose) << "Found a command block." << endlog;
-      Log(verbose) << "|" << localBuffer << "|"<<endlog;
+      Log(verbose,"Found a command block.");
+      Log(verbose,"|%s|",localBuffer.c_str());
       // Found the end of a command block.
       // Pass that buffer to process and erase it from the string
       // 9 = strlen("</config>")
-      Log(debug) << "POS " << pos << " LEN " << strlen("</command>") << endlog;
+      Log(debug,"POS %u LEN %u",pos,strlen("</command>"));
 
       tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
-      Log(verbose) << tcp_buffer_ << endlog;
       // Remove the entry from localBuffer
-      localBuffer = localBuffer.substr(pos+strlen("</command>"));
-      try {
+      try{
+	Log(verbose,"Shifting buffer");
+	localBuffer = localBuffer.substr(pos+strlen("</command>"));
+	Log(verbose,"new buffer [%s]",localBuffer.c_str());
+      
+	Log(verbose,"Processing commadn buffer [%s]",tcp_buffer_.c_str() );
         ProcessTransmission(tcp_buffer_.c_str());
         sprintf(instBuffer,"<success>true</success>");
       }
       catch (std::string &e) {
-        Log(error) << "Config exception caught :" << e << endlog;
+        Log(error,"Config exception caught : %s",e.c_str());
         // Return a failure signal.
         sprintf(instBuffer,"<error>%s</error>",e.c_str());
       }
       catch (std::exception &e) {
-        Log(error) << "STD exception caught :" << e.what() << endlog;
+        Log(error,"STD exception caught :", e.what());
         // Return a failure signal.
         sprintf(instBuffer,"<error>%s</error>",e.what());
       }
       catch (...) {
         sprintf(instBuffer,"<error>Unknown error</error>");
       }
-      Log(debug) << "Sending answer" << endlog;
-      Log(debug) << instBuffer << endlog;
+      Log(debug,"Sending answer");
+      Log(debug,"%s",instBuffer);
       sock->send(instBuffer,strlen(instBuffer));
-      Log(debug) << "Answer sent" << endlog;
+      Log(debug,"Answer sent");
+    }
     }
 
     // Process the string
@@ -244,8 +263,8 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
   }
 
   //
-  Log(warning) << "Connection to the client was lost." << endlog;
-  Log(warning) << "Socket will be closed." << endlog;
+  Log(warning,"Connection to the client was lost.");
+  Log(warning,"Socket will be closed.");
   // Destructor closes socket
 }
 
@@ -264,12 +283,12 @@ void* ConfigServer::ThreadMain(void* clntSocket) {
 ConfigServer::~ConfigServer() {
   num_instances_--;
   if (num_instances_ == 0) {
-    Log(info) << "Reached last instance. Destroying myself." << endlog;
+    Log(info,"Reached last instance. Destroying myself.");
   }
 }
 
 void ConfigServer::CheckInstances() const {
-  std::cout << "ConfigServer::CheckInstances : Have currently " << num_instances_ << " in use!" << std::endl;
+  Log(verbose,"Have currently %u in use!",num_instances_ );
 }
 
 /**
@@ -283,15 +302,15 @@ void ConfigServer::ProcessTransmission(const char* buffer) {
   // Careful if the client connection in the meantime is lost, the memory will disappear.
   // Have to copy the string into the queue
   if (data_manager_ == NULL) {
-    Log(warning) << "Attempting to process a transmission without a valid data Manager. Queueing." << endlog;
-    Log(verbose) << "[" << buffer << "]" << endlog;
+    Log(warning,"Attempting to process a transmission without a valid data Manager. Queueing.");
+    Log(verbose,"[%s]",buffer);
 
     queue_.push_back(strdup(buffer));
-    Log(verbose) << "Queue now composed of " << queue_.size() << " elements." << endlog;
+    Log(verbose,"Queue now composed of %u elements.",queue_.size());
     return;
   }
-  Log(verbose) << "Processing a transmission" << endlog;
-  Log(verbose) << "[" << buffer << "]" << endlog;
+  Log(verbose,"Processing a transmission");
+  Log(verbose,"[%s]");
 
   // Instanciate the XML plugin
   pugi::xml_document doc;
@@ -301,7 +320,7 @@ void ConfigServer::ProcessTransmission(const char* buffer) {
   pugi::xml_parse_result result = doc.load(buffer);
   //]
 
-  Log(verbose) << "Load result : " << result.description() << endlog;
+  Log(verbose,"Load result : %s",result.description());
   // Search if there is a command in here
   pugi::xml_node command = doc.child("command");
   pugi::xml_node config = doc.child("config");
@@ -309,26 +328,26 @@ void ConfigServer::ProcessTransmission(const char* buffer) {
   // 1.) There is neither config nor command nodes
   // 2.) There are both config and command nodes
   if (command == NULL &&  config == NULL) {
-    Log(error) << "Neither config nor command blocks were found. Ignoring the data." << endlog;
+    Log(error,"Neither config nor command blocks were found. Ignoring the data.");
   } else if (command != NULL and config != NULL){
-    Log(error) << "Found both a config and a command node. This is not supported yet." << endlog;
+    Log(error,"Found both a config and a command node. This is not supported yet.");
   } else if (config != NULL) {
-    Log(verbose) << "Processing config " << config.name() << " : " << config.child_value() << endlog;
+    Log(verbose,"Processing config %s : %s ",config.name(),config.child_value());
     ProcessConfig(config);
   } else if (command != NULL){
-    Log(verbose) << "Processing command [" << command.name() << "] : [" << command.child_value() << "]" << endlog;
+    Log(verbose,"Processing command [%s] : [%s]",command.name(),command.child_value());
     ProcessCommand(command);
   } else {
-    Log(warning) << "Reached an impossible situation. Pretending nothing happened and carrying on." << endlog;
+    Log(warning,"Reached an impossible situation. Pretending nothing happened and carrying on.");
   }
 
 }
 
 
 void ConfigServer::ProcessConfig(pugi::xml_node &config) {
-  Log(verbose) << "Processing input buffer" << endlog;
-  Log(verbose) << "Name: [" << config.name() << "]"<< endlog;
-  Log(verbose) << "Value: [" << config.child_value() << "]"<< endlog;
+  Log(verbose,"Processing input buffer");
+  Log(verbose,"Name: [%s]",config.name());
+  Log(verbose,"Value: [%s]",config.child_value());
 
   // Store the buffer in the local variable.
   if (Logger::GetSeverity() <= Logger::debug) {
@@ -338,7 +357,7 @@ void ConfigServer::ProcessConfig(pugi::xml_node &config) {
     data_manager_->ProcessConfig(config);
   }
   catch(std::string &e) {
-    Log(error) << "Configuration exception caught: " << e << endlog;
+    Log(error,"Configuration exception caught: %s",e.c_str());
 
   }
 
@@ -347,27 +366,27 @@ void ConfigServer::ProcessConfig(pugi::xml_node &config) {
 
 void ConfigServer::ProcessCommand(pugi::xml_node &command) {
 
-  Log(verbose) << "Processing input buffer" << endlog;
-  Log(verbose) << "Name: [" << command.name() << "]"<< endlog;
-  Log(verbose) << "Value: [" << command.value() << "]"<< endlog;
+  Log(verbose,"Processing input buffer");
+  Log(verbose,"Name: [%s]",command.name());
+  Log(verbose,"Value: [%s]",command.value());
   
-  Log(verbose) << "Value: [" << command.child_value() << "]"<< endlog;
+  Log(verbose,"Value: [%s]",command.child_value());
   try{
     const char* cmd = command.child_value();
-    Log(debug) << "Checking command [" << cmd << "]." << endlog;
+    Log(debug,"Checking command [%s]",cmd);
 
     // Pass the command to the manager and let it handle it properly
     data_manager_->ExecuteCommand(cmd);
   }
   catch (const std::exception &e) {
-    Log(error) << "STL exception caught : " << e.what() << endlog;
+    Log(error,"STL exception caught : %s ",e.what());
   }
   catch (std::string &str) {
-    Log(error) << "Caught STR exception " << str << endlog;
+    Log(error,"Caught STR exception %s ",str.c_str());
     throw;
   }
   catch(...) {
-    Log(error) << "Unknown exception caught." << endlog;
+    Log(error,"Unknown exception caught.");
   }
   // Get the command answer
 
@@ -376,9 +395,9 @@ void ConfigServer::ProcessCommand(pugi::xml_node &command) {
 void ConfigServer::RegisterDataManager(PTBManager *manager)  {
   data_manager_ = manager;
   if (queue_.size() > 0) {
-    Log(debug) << "Processing outstanding transmission queue." << endlog;
+    Log(debug,"Processing outstanding transmission queue.");
     while (queue_.size() > 0) {
-      Log(verbose) << "Processing an entry" << endlog;
+      Log(verbose,"Processing an entry");
       ProcessTransmission(queue_.front());
       queue_.pop_front();
     }
@@ -388,18 +407,18 @@ void ConfigServer::RegisterDataManager(PTBManager *manager)  {
 
 void ConfigServer::Shutdown(bool force) {
   shutdown_ = true;
-  Log(warning) << "Shutdown requested." << endlog;
+  Log(warning,"Shutdown requested.");
   // Check if force is passed
   if (force || queue_.size() == 0) {
     if (force)
-      Log(warning) << "Forcing it into server thread." << endlog;
+      Log(warning,"Forcing it into server thread.");
     // Detach to deallocate resources
     pthread_detach(thread_id_);
     // Send a cancel call.
     pthread_cancel(thread_id_);
   } else if (queue_.size() != 0){
     // Soft shutdown requested. Do nothing and wait for the client to disconnect
-    Log(warning) << "Soft shutdown requested with non-empty queue. Shutdown will occur when queue empties." << endlog;
+    Log(warning,"Soft shutdown requested with non-empty queue. Shutdown will occur when queue empties.");
     // Kill the server.
     // Detach to deallocate resources
     pthread_detach(thread_id_);
@@ -407,7 +426,7 @@ void ConfigServer::Shutdown(bool force) {
     pthread_cancel(thread_id_);
     // Process the queue
     while (queue_.size() > 0) {
-      Log(verbose) << "Processing an entry" << endlog;
+      Log(verbose,"Processing an entry");
       ProcessTransmission(queue_.front());
       queue_.pop_front();
     }

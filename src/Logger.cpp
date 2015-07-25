@@ -10,10 +10,13 @@
 
 #include <sstream>
 #include <cstdlib>
-#include <unistd.h>
+#include <cstdarg>
+
 extern "C" {
 #include <stdio.h>
+#include <unistd.h>
 };
+
 
 static struct nullstream:
     std::ostream {
@@ -25,37 +28,47 @@ static struct nullstream:
 
 Logger::severity Logger::_sev = Logger::info;
 std::ostream* Logger::_ostream (&std::cout);
-std::ostream* Logger::_estream (&std::cerr);
+//std::ostream* Logger::_estream (&std::cerr);
 std::ostream* Logger::_nstream (&devnull);
 bool Logger::_print = true;
 // By default do not allow colored output
 bool Logger::_color = false;
+std::mutex Logger::print_mutex_;
 
 Logger::Logger() { }
 
 Logger::~Logger() { }
 
-std::ostream& Logger::message(Logger::severity sev, const char* where, const char*code){
-  _print = true;
+void Logger::message(Logger::severity sev, const char* where, const char* fmt,...){
+  print_mutex_.lock();
+
   if (sev >= _sev) {
-    *_ostream << tostr(sev) << ":" << where << ":";
-  } else {
-    _print = false;
-    return *_nstream;
+
+
+    char header[250];
+    sprintf(header,"%s:%s:",tostr(sev),where);
+    std::string tmp_fmt = header;
+    tmp_fmt += fmt;
+    char msg[2048];
+    va_list args;
+    va_start(args,fmt);
+    vsprintf(msg,tmp_fmt.c_str(),args);
+    va_end(args);
+
+    //printf("%s\n",msg);
+    *_ostream << msg << std::endl;
   }
 
+  print_mutex_.unlock();
   // This part seems to be failing before the message is actually printed.
   if (sev == fatal) {
-    *_ostream << ::endlog;
-    ::exit(1);
-    //::abort();
+    throw;
   }
-  return *_ostream;
 }
 
-void Logger::endlog(std::ostream&){
-  if(_print)*_ostream << std::endl;
-}
+//void Logger::endlog(std::ostream&){
+//  if(_print)*_ostream << std::endl;
+//}
 
 const char* Logger::tostr(Logger::severity sev) {
   _color=isatty(fileno(stdout))?true:false;
@@ -89,7 +102,7 @@ const char* Logger::tostr(Logger::severity sev) {
 }
 
 
-std::ostream& endlog(std::ostream& os) {
-  Logger::endlog(os);
-  return devnull;
-}
+//std::ostream& endlog(std::ostream& os) {
+//  Logger::endlog(os);
+//  return devnull;
+//}
