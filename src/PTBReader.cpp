@@ -42,6 +42,7 @@ PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     InitEmuSampler();
   } else {
     Log(verbose,"Not filling emulator queue");
+    // Nothing should need to be done here.
   }
 }
 
@@ -145,7 +146,7 @@ void PTBReader::InitConnection() {
 }
 
 void PTBReader::ClientCollector() {
-  Log(verbose, "Starting collector\n" );
+  Log(verbose, "Starting data collector\n" );
   while(keep_collecting_) {
     if (emu_mode_) {
       // Reserve the memory for one frame (128 bits long)
@@ -158,7 +159,9 @@ void PTBReader::ClientCollector() {
       pthread_mutex_unlock(&lock_);
 
     } else {
-      Log(warning,"Real data taking mode is not ready yet. " );
+      Log(warning,"Real data taking mode is not tested yet. " );
+      // Registers should be setup already.
+      // TODO: Implement the DMA data taking code here.
     }
   }
 

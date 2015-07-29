@@ -115,6 +115,7 @@ private:
 
   static const uint8_t num_registers_ = 31;
   static const char *default_config_;
+  void *mapped_base_addr_;
 };
 
 #endif /* PTBMANAGER_H_ */

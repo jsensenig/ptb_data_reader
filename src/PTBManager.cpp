@@ -9,6 +9,7 @@
 #include "PTBReader.h"
 #include "Logger.h"
 #include "ConfigServer.h"
+#include "ptb_registers.h"
 
 // -- PugiXML includes
 #include "pugixml.hpp"
@@ -212,7 +213,17 @@ void PTBManager::SetupRegisters() {
     	register_map_[i].address = new uint32_t();
     }
   } else {
-    Log(warning,"Memory mapped registers are not yet implemented. This is most likely going to fail." );
+    Log(warning,"Memory mapped registers are not yet tested. This might, or might not, fail." );
+    // First get the virtual address for the mapped physical address
+    mapped_base_addr_ = MapPhysMemory(conf_reg.base_addr,conf_reg.high_addr);
+    // Cross check that we have at least as many offsets as registers expected
+    if (conf_reg.n_registers < num_registers_) {
+      Log(warning,"Have less configured registers than the ones required.");
+    }
+    for (uint32_t i = 0; i < num_registers_; ++i) {
+      register_map_[i].address =  static_cast<uint32_t>(mapped_base_addr_) + conf_reg.addr_offset[i];
+      register_map_[i].value() = 0;
+    }
   }
 }
 
@@ -227,7 +238,8 @@ void PTBManager::FreeRegisters() {
     }
 
   } else {
-    Log(warning,"Nothing to unmap as the registers are not yet implemented." );
+    Log(warning,"Still haven't tested the unmap. Might or might not fail miserably..." );
+    munmap(mapped_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
   }
 
 }
