@@ -416,10 +416,11 @@ void PTBReader::ClientTransmiter() {
     //
     // -- Followed the recipe in
     //    https://en.wikipedia.org/wiki/BSD_checksum
-    uint16_t checksum;
+
+    uint16_t checksum = 0;
     uint8_t*ch_buff = reinterpret_cast<uint8_t*>(eth_buffer);
     for (uint32_t i = 0; i < ipck*4; ++i) {
-      // Recast as uint8_t
+
       checksum = (checksum >> 1) + ((checksum & 0x1) << 15) ;
       checksum += ch_buff[i];
       checksum &= 0xFFFF;
