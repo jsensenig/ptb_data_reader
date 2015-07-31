@@ -147,8 +147,8 @@ void PTBReader::InitConnection() {
 
 void PTBReader::ClientCollector() {
   Log(verbose, "Starting data collector\n" );
-  while(keep_collecting_) {
     if (emu_mode_) {
+      while(keep_collecting_) {
       // Reserve the memory for one frame (128 bits long)
       uint32_t* frame = (uint32_t*)calloc(4,sizeof(uint32_t));
       Log(verbose, "Generating the frame\n");
@@ -159,12 +159,50 @@ void PTBReader::ClientCollector() {
       pthread_mutex_lock(&lock_);
       buffer_queue_.push(frame);
       pthread_mutex_unlock(&lock_);
-
+      }
     } else {
       Log(warning,"Real data taking mode is not tested yet. " );
       // Registers should be setup already.
       // TODO: Implement the DMA data taking code here.
-    }
+      // First setup the DMA:
+      int status = xdma_init();
+      if (status < 0) {
+        Log(error,"Failed to initialize the DMA engine for data collection.");
+        return;
+      }
+      Log(verbose,"Allocating the DMA buffer.");
+
+      uint32_t *frame = NULL;
+      const uint32_t nbytes_to_collect = 16; //128 bit frame
+
+      while (keep_collecting_) {
+        // Allocate the memory necessary for a packet.
+        //uint32_t *frame = static_cast<uint32_t*>(new uint32_t[32]);
+        frame = xdma_alloc(4,sizeof(unit32_t));
+        for (size_t i = 0; i < 32; ++i) {
+          frame[i] = 0;
+        }
+        //FIXME: Verify that the numbers are correct
+        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&frame,nbytes_to_collect);
+        if (status == -1) {
+          Log(warning,"Reached a timeout in the DMA transfer.");
+          timeout_cnt_++;
+          if (timeout_cnt_ > timeout_cnt_threshold_) {
+            Log(error,"Received too many timeouts. Failing the run.");
+            throw std::string("Reached timeout counter limit.");
+          }
+        } else {
+          if (timeout_cnt_ > 0){
+            timeout_cnt_ = 0;
+          }
+        }
+        // DMA transaction was successful.
+        // -- add the data to the queue;
+        pthread_mutex_lock(&lock_);
+        buffer_queue_.push(frame);
+        pthread_mutex_unlock(&lock_);
+      }
+      xdma_exit();
   }
 
 }
@@ -525,16 +563,10 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
   // pop it from the queue now that we know that it is going to be returned
   evt_queue_.pop();
 
-  //  // Wait for the time to be ready
-  //  while (now < nextEvt.next) {
-  //    now = ClockGetTime();
-  //  }
-
-  // Time for an event
-
-  // Write the frame
+  // Write the header of the frame
   lbuf[0] = ((nextEvt.type & 0x7) << 29) | ((now & 0xFFFFFFF) << 1) | 0x0;
   if (nextEvt.type == 0x1) {
+    // This is a counter word
     // Generate 3 random numbers and assign them
     uint32_t val = rand();
     lbuf[0] |= ((val >> 31) & 0x1);

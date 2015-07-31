@@ -35,7 +35,7 @@ class evtType {
 class closer {
 public:
   bool operator() (const evtType &a, const evtType &b) {
-    return (a.next<b.next);
+    return (a.next>b.next);
   };
 };
 
@@ -175,6 +175,10 @@ private:
   uint32_t freq_trigC;
   uint32_t freq_trigD;
 //  uint32_t freq_extTig;
+
+  // Debugging and control variables
+  uint32_t timeout_cnt_;
+  const uint32_t timeout_cnt_threshold_ = 1000;
 
   std::priority_queue<evtType,std::vector<evtType>,closer> evt_queue_;
 };
