@@ -153,6 +153,8 @@ void PTBReader::ClientCollector() {
       uint32_t* frame = (uint32_t*)calloc(4,sizeof(uint32_t));
       Log(verbose, "Generating the frame\n");
       GenerateFrame(&frame);
+      // If the header is something else do nothing.
+      if (((frame[0] >> 29) & 0x7) == 0x0) continue;
       Log(verbose, "Frame generated\n");
       pthread_mutex_lock(&lock_);
       buffer_queue_.push(frame);
@@ -486,6 +488,7 @@ void PTBReader::ClientTransmiter() {
 void PTBReader::GenerateFrame(uint32_t **buffer) {
 
   std::ostringstream bitdump;
+  static uint64_t prev = 0;
 
   // printf("In GenerateFrame\n");
   // printf("== [%x] \n",buffer[0][0]);
@@ -494,23 +497,28 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
   //printf("Getting time\n");
   uint64_t now = ClockGetTime();
   //Log(verbose, "Clock %lu",now );
-
   // Here we decide which type of packet I am going to generate
   // It should be dependent on the frequencies that I attach to each type
   // (not using calibrations for now)
+
+  // When should the next event occur
 
   evtType nextEvt = evt_queue_.top();
   //Log(verbose, "Got an event.\n");
 
   // If we haven't reached the time for the next event just send a TS packet.
   if (now < nextEvt.next) {
-    //Log(verbose, "Creating a TS packet\n");
-    lbuf[0] = (0x7 << 29) | ((now & 0xFFFFFFF) << 1);
-    lbuf[1] = (now >> 32 & 0xFFFFFFF);
-    lbuf[2] = (now & 0xFFFFFFF);
-    //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]) << " " <<  std::bitset<32>(lbuf[2]);
-    //Log(debug,"FRAME : %X %X %X [%s]",lbuf[0],lbuf[1],lbuf[2],bitdump.str().c_str());
-    return;
+      // If we are past the time rollover issue a TS packet.
+      // Otherwise just do nothing
+      if (now >= (prev+time_rollover_)) {
+        //Log(verbose, "Creating a TS packet\n");
+        lbuf[0] = (0x7 << 29) | ((now & 0xFFFFFFF) << 1);
+        lbuf[1] = (now >> 32 & 0xFFFFFFF);
+        lbuf[2] = (now & 0xFFFFFFF);
+        //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]) << " " <<  std::bitset<32>(lbuf[2]);
+        //Log(debug,"FRAME : %X %X %X [%s]",lbuf[0],lbuf[1],lbuf[2],bitdump.str().c_str());
+      }
+      return;
   }
   //Log(verbose, "Creating something else");
 
@@ -577,11 +585,11 @@ void PTBReader::InitEmuSampler() {
   // Attach the evt frequencies -- in Hz
   Log(verbose, "Starting the Sampler\n");
 
-  freq_counter = 1000;
-  freq_trigA = 100;
-  freq_trigB = 20;
-  freq_trigC = 30;
-  freq_trigD = 10;
+  freq_counter = 100000;
+  freq_trigA = 10000;
+  freq_trigB = 2000;
+  freq_trigC = 3000;
+  freq_trigD = 1000;
 
   uint64_t now = ClockGetTime();
   evtType evt;
