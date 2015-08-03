@@ -64,10 +64,10 @@ public:
     this->status_ = status;
   }
 
-  void ExecuteCommand(const char* cmd) throw(std::exception);
+  void ExecuteCommand(const char* cmd);
   // Receive the configuration as
   // Passed by copy to keep locally
-  void ProcessConfig(pugi::xml_node config) throw(std::exception);
+  void ProcessConfig(pugi::xml_node config);
 
   /**
    * Loops over the registers and dum their contents, both in decimal and Hex.
@@ -84,8 +84,8 @@ public:
 
 protected:
   // Commands that need to be implemented
-  void SetupRegisters() throw(std::exception);
-  void FreeRegisters() throw(std::exception);
+  void SetupRegisters();
+  void FreeRegisters();
   void LoadDefaultConfig();
   // This is a rather messy function
   /**

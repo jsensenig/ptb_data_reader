@@ -16,6 +16,8 @@
 #include <thread>
 #include <chrono>
 
+#include "libxdma.h"
+
 // Completely auxiliary clock function
 uint64_t ClockGetTime() {
 
@@ -178,12 +180,12 @@ void PTBReader::ClientCollector() {
       while (keep_collecting_) {
         // Allocate the memory necessary for a packet.
         //uint32_t *frame = static_cast<uint32_t*>(new uint32_t[32]);
-        frame = xdma_alloc(4,sizeof(unit32_t));
+        frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
         for (size_t i = 0; i < 32; ++i) {
           frame[i] = 0;
         }
-        //FIXME: Verify that the numbers are correct
-        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&frame,nbytes_to_collect);
+        //FIXME: Verify that the numbers are correct&(dst[pos])
+        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[0]),nbytes_to_collect);
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
           timeout_cnt_++;

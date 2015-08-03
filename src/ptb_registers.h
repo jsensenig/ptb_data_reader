@@ -38,6 +38,27 @@ uint32_t g_n_registers_;
 
 mapped_register conf_reg;
 
+
+void SetupConfRegisters() {
+	conf_reg.dev_id = 0;
+	conf_reg.base_addr = 0x43C00000;
+	conf_reg.high_addr = 0x43C0FFFF;
+	conf_reg.n_registers = 32;
+	conf_reg.addr_offset = new uint32_t[conf_reg.n_registers];
+	unsigned int i = 0;
+	for (i = 0; i < conf_reg.n_registers; ++i) {
+	 conf_reg.addr_offset[i] = i*4;
+		Log(debug,
+				"Setting configuration register to address 0x%08X + 0x%08X =  [0x%08X].",
+				conf_reg.base_addr,
+				conf_reg.addr_offset[i],
+				conf_reg.base_addr+conf_reg.addr_offset[i]);
+	}
+	Log(debug,"Configuration registers set.");
+}
+
+
+
 /**
  * MapPhysMemory
  */
@@ -53,7 +74,7 @@ void *MapPhysMemory(uint32_t base_addr, uint32_t high_addr) {
   }
   // Map into user space the area of memory containing the device
   mapped_addr = mmap(0, (high_addr-base_addr), PROT_READ | PROT_WRITE, MAP_SHARED, memfd, dev_base & ~(high_addr-base_addr-1));
-  if (static_cast<int>(mapped_addr) == -1) {
+  if ( reinterpret_cast<int32_t>(mapped_addr) == -1) {
     Log(error,"Failed to map register [0x%08X 0x%08X] into virtual address.",base_addr,high_addr);
     return NULL;
   }

@@ -19,6 +19,10 @@ extern "C" {
 #include <unistd.h>
 };
 
+// XDMA includes
+//#include "libxdma.h"
+
+
 const char* PTBManager::default_config_ = "./config/config_default.xml";
 
 // Init with a new reader attached
@@ -55,7 +59,7 @@ PTBManager::~PTBManager() {
 }
 
 
-void PTBManager::ExecuteCommand(const char* cmd) throw(std::exception) {
+void PTBManager::ExecuteCommand(const char* cmd) {
   try{
 
     Log(debug,"Received [%s]", cmd);
@@ -221,7 +225,7 @@ void PTBManager::SetupRegisters() {
       Log(warning,"Have less configured registers than the ones required.");
     }
     for (uint32_t i = 0; i < num_registers_; ++i) {
-      register_map_[i].address =  static_cast<uint32_t>(mapped_base_addr_) + conf_reg.addr_offset[i];
+      register_map_[i].address =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_base_addr_) + conf_reg.addr_offset[i]);
       register_map_[i].value() = 0;
     }
   }
