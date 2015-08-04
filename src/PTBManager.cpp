@@ -197,11 +197,14 @@ void PTBManager::SetupRegisters() {
 
   struct LocalRegister tmp_reg;
   tmp_reg.address =NULL;
-  tmp_reg.value() = 0;
+  //tmp_reg.value() = 0;
   // First set up the local map
   for (uint32_t i =0; i < num_registers_; ++i) {
+    Log(verbose,"Cleaning register %u.",i);
     register_map_[i] = tmp_reg;
   }
+  Log(debug,"Registers set up.");
+
 
   // Map the memory for each of the addresses.
   // This is different if we are emulating (use malloc), or
