@@ -249,8 +249,8 @@ void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
   
   // First sanity check: the size*sizeof(uint32_t)+sizeof(uint32_t) should be = to tot_size
   
-  if (tot_size != (size + sizeof(uint32_t))) {
-    Log(warning,"Packet sizes do not match! encoded : %u calculated : %u",((size+1)*sizeof(uint32_t)),tot_size);
+  if (tot_size != size) {
+    Log(warning,"Packet sizes do not match! encoded : %u calculated : %u",size,tot_size);
   }
   // Keep looping until we reach the end of the packet
   uint32_t counter = 1;
@@ -272,7 +272,7 @@ void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
 			       << " " << std::bitset<32>(buffer[counter]) 
 			       << " " << std::bitset<32>(buffer[counter+1])
 			       << " " << std::bitset<32>(buffer[counter+2]);
-      buffer += 3;
+      counter += 3;
       Log(debug,"Counter word : Body [%s]",bitdump.str().c_str());
     } else if (ftype == 0x7) {
       
@@ -420,7 +420,7 @@ void PTBReader::ClientTransmiter() {
       } else if ((frame[0] >> 29 & 0x7) == 0x2) {
         // trigger word: Only the first 32 bits of the payload
         // are actually needed
-        eth_buffer[ipck+1] = frame[1];
+        eth_buffer[ipck] = frame[1];
         // The rest of the buffer is crap
         ipck += 1;
       }
@@ -489,6 +489,7 @@ void PTBReader::ClientTransmiter() {
 
     Log(debug,"Sending packet with %u bytes",sizeof(uint32_t)*(ipck+1));
     DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+1));
+
 
     /// -- Send the packet:
     try {
