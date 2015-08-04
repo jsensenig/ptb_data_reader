@@ -4,8 +4,12 @@ CC         := g++
 BIN        := $(PWD)/bin
 DEF_CFLAGS := -std=c++11 -m32 -Wall -I$(PWD)/contrib/PracticalSocket 
 DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src 
-DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/zynq-xdma/dev
-DEF_CFLAGS += -I$(PWD)/src -I$(PWD)/contrib/linux_dma/zynq-xdma/lib 
+ifeq (($MACHINE),armv7l)
+   $(info Adding extra flags for uZed compilation...)
+   DEF_CFLAGS += -DDATA_READER
+   DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/zynq-xdma/dev
+   DEF_CFLAGS += -I$(PWD)/src -I$(PWD)/contrib/linux_dma/zynq-xdma/lib 
+endif
 DEF_LFLAGS := -lpthread 
 #-lrt
 #DEF_LFLAGS := -lpthread -lrt -lbz2 

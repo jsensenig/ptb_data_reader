@@ -16,7 +16,9 @@
 #include <thread>
 #include <chrono>
 
+#ifdef DATA_READER
 #include "libxdma.h"
+#endif
 
 // Completely auxiliary clock function
 uint64_t ClockGetTime() {
@@ -167,6 +169,7 @@ void PTBReader::ClientCollector() {
       // Registers should be setup already.
       // TODO: Implement the DMA data taking code here.
       // First setup the DMA:
+#ifdef DATA_READER
       int status = xdma_init();
       if (status < 0) {
         Log(error,"Failed to initialize the DMA engine for data collection.");
@@ -205,8 +208,8 @@ void PTBReader::ClientCollector() {
         pthread_mutex_unlock(&lock_);
       }
       xdma_exit();
-  }
-
+#endif /*DATA_READER*/
+    }
 }
 
 

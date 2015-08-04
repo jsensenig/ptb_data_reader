@@ -9,8 +9,9 @@
 #include "PTBReader.h"
 #include "Logger.h"
 #include "ConfigServer.h"
+#ifdef DATA_READER
 #include "ptb_registers.h"
-
+#endif /*DATA_READER*/
 // -- PugiXML includes
 #include "pugixml.hpp"
 #include <iomanip>
@@ -218,6 +219,7 @@ void PTBManager::SetupRegisters() {
     }
   } else {
     Log(warning,"Memory mapped registers are not yet tested. This might, or might not, fail." );
+#ifdef DATA_READER
     // First get the virtual address for the mapped physical address
     mapped_base_addr_ = MapPhysMemory(conf_reg.base_addr,conf_reg.high_addr);
     // Cross check that we have at least as many offsets as registers expected
@@ -228,6 +230,7 @@ void PTBManager::SetupRegisters() {
       register_map_[i].address =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_base_addr_) + conf_reg.addr_offset[i]);
       register_map_[i].value() = 0;
     }
+#endif /*DATA_READER*/
   }
 }
 
@@ -243,7 +246,9 @@ void PTBManager::FreeRegisters() {
 
   } else {
     Log(warning,"Still haven't tested the unmap. Might or might not fail miserably..." );
+#ifdef DATA_READER
     munmap(mapped_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
+#endif /*DATA_READER*/
   }
 
 }
