@@ -8,10 +8,6 @@
     <RollOver>80</RollOver>
     <MicroSliceDuration>7</MicroSliceDuration>
   </DataBuffer>
-  <debug>
-    <enable>true</enable>
-    <CmdTime>true</CmdTime>
-  </debug>
   <ChannelMask>
     <BSU>0x1FFFFFFFFFFFF</BSU>
     <TSU>0xFFFFFFFFFFFF</TSU>
