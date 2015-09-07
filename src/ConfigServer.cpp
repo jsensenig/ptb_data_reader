@@ -121,7 +121,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
 
   // Receive 1kB at a time.
   // Loop into the permanent buffer so that we know have all the configuration
-  const int RCVBUFSIZE = 20480; //20 kB. Really hope will not overdo this.
+  const int RCVBUFSIZE = 40480; //20 kB. Really hope will not overdo this.
 
   static char instBuffer[RCVBUFSIZE];
   int recvMsgSize;
@@ -132,7 +132,9 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
   // Keep accepting until the </system> token comes in.
   // THis signals the end of the message
 
-  std::string localBuffer = "";
+  std::string localBuffer;
+  localBuffer.resize(RCVBUFSIZE);
+  localBuffer = "";
   // What if the string sent is bigger than the one being read?
   while ((recvMsgSize = sock->recv(instBuffer, RCVBUFSIZE-1)) > 0) { // Zero means
 
@@ -148,11 +150,13 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     // tokens are passed (</config></command>)
 
     Log(verbose,"Duplicating the input");
-    localBuffer += instBuffer;
+    localBuffer += strdup(instBuffer);
     Log(verbose,"Duplicated [%s] \n Length [%u]",localBuffer.c_str(),localBuffer.length());
+    printf("!!!! Initializing pos!\n");
     std::size_t pos = 0;
     // CHeck if it is a compelte configuration set
     // Loop until all configurations and commands are processed
+    printf("!!!! Looking for find!\n");
     while (localBuffer.find("</config>")!= std::string::npos  || localBuffer.find("</command>")!= std::string::npos) {
       Log(verbose,"There is something to be processed");
       if ((pos = localBuffer.find("</config>")) != std::string::npos && (localBuffer.find("<config>")!= std::string::npos)) {
@@ -250,6 +254,8 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
         Log(debug,"%s",instBuffer);
         sock->send(instBuffer,strlen(instBuffer));
         Log(debug,"Answer sent");
+      } else {
+        Log(verbose,"Found nothing");
       }
     }
 
