@@ -121,7 +121,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
 
   // Receive 1kB at a time.
   // Loop into the permanent buffer so that we know have all the configuration
-  const int RCVBUFSIZE = 40480; //20 kB. Really hope will not overdo this.
+  const int RCVBUFSIZE = 20480; //20 kB. Really hope will not overdo this.
 
   static char instBuffer[RCVBUFSIZE];
   int recvMsgSize;
@@ -136,7 +136,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
   localBuffer.resize(RCVBUFSIZE);
   localBuffer = "";
   // What if the string sent is bigger than the one being read?
-  while ((recvMsgSize = sock->recv(instBuffer, RCVBUFSIZE-1)) > 0) { // Zero means
+  while ((recvMsgSize = sock->recv(instBuffer, RCVBUFSIZE-2)) > 0) { // Zero means
 
     // Truncate the instantaneous buffer on the number of bytes
     instBuffer[recvMsgSize] = '\0';
@@ -150,7 +150,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     // tokens are passed (</config></command>)
 
     Log(verbose,"Duplicating the input");
-    localBuffer += strdup(instBuffer);
+    localBuffer += instBuffer;
     Log(verbose,"Duplicated [%s] \n Length [%u]",localBuffer.c_str(),localBuffer.length());
     printf("!!!! Initializing pos!\n");
     std::size_t pos = 0;
