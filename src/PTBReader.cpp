@@ -467,13 +467,14 @@ void PTBReader::ClientTransmiter() {
     //
     // -- Followed the recipe in
     //    https://en.wikipedia.org/wiki/BSD_checksum
-    uint16_t checksum;
+    uint16_t checksum = 0x0;
     uint8_t*ch_buff = reinterpret_cast<uint8_t*>(eth_buffer);
     for (uint32_t i = 0; i < ipck*4; ++i) {
       // Recast as uint8_t
       checksum = (checksum >> 1) + ((checksum & 0x1) << 15) ;
       checksum += ch_buff[i];
       checksum &= 0xFFFF;
+      //Log(debug," Byte %u : %08X Chksum %08X (%hu)",i,ch_buff[i],checksum,checksum);
     }
 
     Log(verbose,"Checksum : %hu",checksum);
@@ -550,20 +551,29 @@ void PTBReader::GenerateFrame(uint32_t **buffer) {
   evtType nextEvt = evt_queue_.top();
   //Log(verbose, "Got an event.\n");
 
-  // If we haven't reached the time for the next event just send a TS packet.
-  if (now < nextEvt.next) {
+    Log(verbose,"Checking time %lu against %lu (%lu+%lu)",now,prev+time_rollover_,prev,time_rollover_);
+
+    if (now >= (prev+time_rollover_)) {
+      
+      Log(verbose, "Creating a TS packet\n");
+      lbuf[0] = (0x7 << 29) | ((now & 0xFFFFFFF) << 1);
+      lbuf[1] = (now >> 32 & 0xFFFFFFF);
+      lbuf[2] = (now & 0xFFFFFFF);
+      //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]) << " " <<  std::bitset<32>(lbuf[2]);
+      //Log(debug,"FRAME : %X %X %X [%s]",lbuf[0],lbuf[1],lbuf[2],bitdump.str().c_str());
+      prev = now + time_rollover_;
+      return;
+    }
+    
+    // If we haven't reached the time for the next event just send a TS packet.
+    if (now < nextEvt.next) {
       // If we are past the time rollover issue a TS packet.
       // Otherwise just do nothing
-      if (now >= (prev+time_rollover_)) {
-        //Log(verbose, "Creating a TS packet\n");
-        lbuf[0] = (0x7 << 29) | ((now & 0xFFFFFFF) << 1);
-        lbuf[1] = (now >> 32 & 0xFFFFFFF);
-        lbuf[2] = (now & 0xFFFFFFF);
-        //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]) << " " <<  std::bitset<32>(lbuf[2]);
-        //Log(debug,"FRAME : %X %X %X [%s]",lbuf[0],lbuf[1],lbuf[2],bitdump.str().c_str());
-      }
+      
       return;
-  }
+      
+    }
+
   //Log(verbose, "Creating something else");
 
   // pop it from the queue now that we know that it is going to be returned
