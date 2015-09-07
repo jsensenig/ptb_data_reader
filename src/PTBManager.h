@@ -78,6 +78,11 @@ public:
    * Zero the configuration registers.
    */
   void ResetConfigurationRegisters();
+  /**
+   * Restores the configuration registers form the local cache. The only exception is register 0
+   * that is the commands register
+   */
+  void RestoreConfigurationRegisters();
 
   void StartRun();
   void StopRun();
@@ -100,6 +105,59 @@ private:
   PTBManager(const PTBManager &other);
   void operator=(const PTBManager &other);
 
+  /**
+   * Returns the status of a specific bit in a register
+   * @param reg
+   * @param bit
+   * @return
+   */
+  bool GetBit(uint32_t reg, uint32_t bit);
+
+  /**
+   * Generic bit setter.
+   * @param reg register number
+   * @param idx Bit index
+   * @param status status to set
+   */
+  void SetBit(uint32_t reg, uint32_t bit, bool status);
+
+
+    ///!
+    ///! The methods below are just shorthands for certain commands.
+    ///! There is no integrity check so they should be wrapped on other commands.
+    ///!
+  /**
+   * Disables the board. Sets the enable register to status (true: on; false:off)
+   * @param status
+   */
+  void SetEnableBit(bool status);
+
+  /**
+   * Resets the board. Sets the reset register to status (true: on; false:off)
+   * @warning Keep in mind that the reset is active low, so enable the bit means effectively setting it to 0.
+   * This method does not have a getter as the reset status does not matter
+   * @param status
+   */
+  void SetResetBit(bool status);
+
+  /**
+   * Commits the configuration. Sets the config register to status (true: on; false:off)
+   * @param status
+   */
+  void SetConfigBit(bool status);
+
+  /**
+   * Get the configuration commit status (true: committed; false:uncommited)
+   * @return status of the configuration register
+   */
+  bool GetConfigBitACK();
+
+  /**
+   * Return the enable ack (true: enabled; false: disabled)
+   * @return status of the enable bit command.
+   */
+  bool GetEnableBitACK();
+
   // The class responsible for the data reading.
   PTBReader *reader_;
   ConfigServer *cfg_srv_;
@@ -107,13 +165,16 @@ private:
 
   // This is a cache of what is in each register now
   std::map<uint32_t,LocalRegister> register_map_;
+  // Use a second that is just a clone of the first (except for register 0, which is the status registers
+  // When a reset is called, it is the contents of these registers that are sent to the board
+  std::map<uint32_t,LocalRegister> register_cache_;
 
   std::map<std::string, Command> commands_;
 
   Status status_;
   bool emu_mode_;
 
-  static const uint8_t num_registers_ = 31;
+  static const uint8_t num_registers_ = 40;
   static const char *default_config_;
   void *mapped_base_addr_;
 };

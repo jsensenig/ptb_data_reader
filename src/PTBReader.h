@@ -96,6 +96,11 @@ public:
   /** Starts a new thread that is continuously polling the memory **/
   void StartDataTaking();
 
+  /**
+   * Resets the buffers. The run should already be stopped.
+   */
+  void ResetBuffers();
+
   void InitConnection();
 
   bool isEmuMode() const {
@@ -160,7 +165,7 @@ private:
   bool emu_mode_;
   bool fragmented_;
   bool keep_transmitting_;
-  bool ready_to_send_;
+  //bool ready_to_send_;
   bool first_ts_;
   bool keep_collecting_;
   // Previous timestamp
@@ -177,8 +182,8 @@ private:
 //  uint32_t freq_extTig;
 
   // Debugging and control variables
-  uint32_t timeout_cnt_;
-  const uint32_t timeout_cnt_threshold_ = 1000;
+  //uint32_t timeout_cnt_;
+  //const uint32_t timeout_cnt_threshold_ = 1000;
 
   std::priority_queue<evtType,std::vector<evtType>,closer> evt_queue_;
 };

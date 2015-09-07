@@ -16,9 +16,9 @@
 #include <thread>
 #include <chrono>
 
-#ifdef DATA_READER
+#ifdef ARM
 #include "libxdma.h"
-#endif
+#endif /*ARM*/
 
 // Completely auxiliary clock function
 uint64_t ClockGetTime() {
@@ -35,7 +35,7 @@ uint64_t ClockGetTime() {
 PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     packet_rollover_(0),socket_(0),
     client_thread_collector_(0),client_thread_transmitor_(0),ready_(false), emu_mode_(emu),
-				 fragmented_(false),keep_transmitting_(true),ready_to_send_(false),first_ts_(true),keep_collecting_(true),previous_ts_(0)
+				 fragmented_(false),keep_transmitting_(true),/*ready_to_send_(false),*/first_ts_(true),keep_collecting_(true),previous_ts_(0)
 
 {
   printf("Here\n");
@@ -100,6 +100,17 @@ void PTBReader::StartDataTaking() {
     Log(error,"Calling to start taking data connection is not ready yet." );
 
   }
+}
+
+void PTBReader::ResetBuffers() {
+  Log(warning,"Resetting the software buffers.");
+  pthread_mutex_lock(&lock_);
+  while (!buffer_queue_.empty()) {
+    uint32_t*frame = buffer_queue_.front();
+    buffer_queue_.pop();
+    delete [] frame;
+  }
+  pthread_mutex_unlock(&lock_);
 }
 
 void PTBReader::InitConnection() {
@@ -318,6 +329,13 @@ void PTBReader::ClientTransmiter() {
   // FIXME: Finish implementation
   // Fetch a frame from the queue
   seq_num_ = 1;
+  uint32_t header = 0;
+  // Allocate the maximum memory that a eth packet can have.
+  //FIXME: Change this to zero memory copy. Need to check this for memory leaks.
+  // Ideally one would want to not allocate the eth packet and simply use the
+  // allocated RAM directly. Doable, but must be careful.
+  // For the moment copy the contents and see if performance is enough.
+  uint32_t *eth_buffer = (uint32_t*)calloc(0xFFFF,1);
 
   // The whole methd runs on an infinite loop with a control variable
   // That is set from the main thread.
@@ -336,7 +354,10 @@ void PTBReader::ClientTransmiter() {
     // The size should *never* go beyond the 64 kb
     // Actually, the size should never go beyond the rollover size + the header.
     //uint32_t *eth_buffer = (uint32_t*)calloc(0xFFFF,1);
-    uint32_t *eth_buffer = (uint32_t*)calloc(0xFFFF,1);
+
+    // zero the memory in. Use memset as it is should be pretty fast
+    memset(eth_buffer,0,0xFFFF);
+
 
     // Start by generating a header
 
@@ -346,7 +367,8 @@ void PTBReader::ClientTransmiter() {
     // iframe : Frame counter.
     uint32_t ipck = 0,iframe = 0;
     bool carry_on = true;
-    eth_buffer[0] = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
+    header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
+    eth_buffer[0] = header;
     Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
     // ipck should not include the header
     // But it also works as an index counter, so the manipulation is done at the end
@@ -383,6 +405,7 @@ void PTBReader::ClientTransmiter() {
           // First TS after Run start
           previous_ts_ = (frame[1] << 31) | frame[2];
           first_ts_ = false;
+          delete [] frame;
           continue;
         } else if (current_ts_ >= (previous_ts_ + time_rollover_)) {
           Log(verbose, "Sending the packet\n");
@@ -395,11 +418,13 @@ void PTBReader::ClientTransmiter() {
           carry_on = false;
           fragmented_ = false;
           // break out of the cycle
+          delete [] frame;
           break;
           // FIXME: Add the situation in which we arrive to the time rollover.
 
         } else {
           // Not ready to send yet. Drop this frame and get another
+          delete [] frame;
           continue;
         }
       }
@@ -425,6 +450,7 @@ void PTBReader::ClientTransmiter() {
         ipck += 1;
       }
 
+      delete [] frame;
       // Frame completed. check if we can wait for another or keep collecting
       iframe += 1;
 
@@ -499,10 +525,10 @@ void PTBReader::ClientTransmiter() {
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what() );
       // Retry
-      socket_->send(eth_buffer,ipck);
+      socket_->send(eth_buffer,sizeof(uint32_t)*(ipck+1));
     }
     // Clear out the memory
-    free(eth_buffer);
+    //free(eth_buffer);
 
     // if we didn't have a fragmented block, update the sequence number
     // and update the timestamp to the latest one
@@ -523,10 +549,15 @@ void PTBReader::ClientTransmiter() {
   }
   // Exited the  run loop. Return.
   Log(info,"Exited transmission loop. Checking for queued packets." );
+  // Deallocate the memory
+  free(eth_buffer);
+
 }
-
-/// Everything that is under this part is mostly for simulation
-
+///////////////////////////////////////////////////////////////
+///
+/// Everything that is under this part is for simulation
+///
+///////////////////////////////////////////////////////////////
 
 
 

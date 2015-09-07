@@ -1,4 +1,8 @@
   <config>
+    <Hardware>
+      <!-- Number of clock cycles that any outgoing pulse is high -->
+      <PulseWidth>2</PulseWidth>
+    </Hardware>
     <DataBuffer>
       <DaqHost>localhost</DaqHost>
       <DaqPort>8992</DaqPort>
@@ -30,7 +34,7 @@
     </ChannelMask>
     <MuonTriggers num_triggers="4">
       <!-- Number of clock cycles that the trigger out pulse is high -->
-      <TrigOutWidth>0x2</TrigOutWidth>
+      <!-- <TrigOutWidth>0x2</TrigOutWidth> -->
       <!-- Number of clock cycles that each pulse should be extended to validate triggers -->
       <TriggerWindow>0x3</TriggerWindow>
       <!-- Number of clock cycles, after the trigger window, to lock the channel off -->
@@ -122,16 +126,30 @@
     </MuonTriggers>
     <ExtTriggers>
       <!-- Mask of the external triggers. There are 4 independent and 8 ored, so 5 bits. Defaults to all on -->
-      <Mask>0x1F</Mask>
+      <Mask>0xF</Mask>
       <!-- Echo triggers indicates if a TrigOut should be sent to the other systems -->
-      <EchoTriggers>true</EchoTriggers>
-      <EchoWidth>2</EchoWidth>
+      <EchoTriggers>false</EchoTriggers>
     </ExtTriggers>
-    <Calibration>
+    <Calibrations>
+      <CalibrationMask id="C1" mask="1000">
+      <enabled>false</enabled>
       <!-- Number of clock ticks between calibration pulses -->
-      <Period>0xA</Period>
-      <!-- There are 4 independent channels. Mask for which are to be enabled. Default: all -->
-      <ChannelMask>0xF</ChannelMask>
-      <PulseWidth>2</PulseWidth>
-    </Calibration>
+      <period>0xA</period>
+      </CalibrationMask>
+      <CalibrationMask id="C2" mask="0100">
+      <enabled>false</enabled>
+      <!-- Number of clock ticks between calibration pulses -->
+      <period>0xA</period>
+      </CalibrationMask>
+      <CalibrationMask id="C3" mask="0010">
+      <enabled>false</enabled>
+      <!-- Number of clock ticks between calibration pulses -->
+      <period>0xA</period>
+      </CalibrationMask>
+      <CalibrationMask id="C4" mask="0001">
+      <enabled>false</enabled>
+      <!-- Number of clock ticks between calibration pulses -->
+      <period>0xA</period>
+      </CalibrationMask>
+    </Calibrations>
   </config>

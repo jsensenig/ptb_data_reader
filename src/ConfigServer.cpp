@@ -69,7 +69,7 @@ void* ConfigServer::listen(void *arg) {
     printf("Inside try\n");
     Log(info,"Creating server listening socket.");
     TCPServerSocket servSock(port_);   // Socket descriptor for server
-    Log(info,"Entering wait mode for client connection.");
+    Log(info,"Entering wait mode for client connection at port %u",port_);
     for (;;) {
       // Check if there is a request to terminate the connection.
       if (shutdown_) {
@@ -106,7 +106,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
   Log(debug,"Handling client ");
   try {
 
-     Log(debug,"Address : %s",sock->getForeignAddress().c_str());;
+    Log(debug,"Address : %s",sock->getForeignAddress().c_str());;
   } catch (SocketException &e) {
     Log(error,"Unable to get foreign address");
   }
@@ -134,13 +134,13 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
 
   std::string localBuffer = "";
   // What if the string sent is bigger than the one being read?
-  while ((recvMsgSize = sock->recv(instBuffer, RCVBUFSIZE)) > 0) { // Zero means
+  while ((recvMsgSize = sock->recv(instBuffer, RCVBUFSIZE-1)) > 0) { // Zero means
 
     // Truncate the instantaneous buffer on the number of bytes
     instBuffer[recvMsgSize] = '\0';
     // end of transmission
     Log(debug,"Received %u bytes",recvMsgSize);
-    Log(verbose,"[%s]",instBuffer);
+    Log(verbose," Inst buffer [%s]",instBuffer);
     // Append into the permanent buffer
     //cfg_buffer_ = tmpBuffer;
 
@@ -149,108 +149,108 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
 
     Log(verbose,"Duplicating the input");
     localBuffer += instBuffer;
-    Log(verbose,"Duplicated [%s]",localBuffer.c_str());
+    Log(verbose,"Duplicated [%s] \n Length [%u]",localBuffer.c_str(),localBuffer.length());
     std::size_t pos = 0;
     // CHeck if it is a compelte configuration set
     // Loop until all configurations and commands are processed
     while (localBuffer.find("</config>")!= std::string::npos  || localBuffer.find("</command>")!= std::string::npos) {
       Log(verbose,"There is something to be processed");
-    if ((pos = localBuffer.find("</config>")) != std::string::npos && (localBuffer.find("<config>")!= std::string::npos)) {
-      // Found the end of a config block.
-      // Pass that buffer to process and erase it from the string
-      // 9 = strlen("</config>")
-      Log(verbose,"Found a config block.");
-      try{
-        tcp_buffer_ = localBuffer.substr(0,pos+strlen("</config>"));
+      if ((pos = localBuffer.find("</config>")) != std::string::npos && (localBuffer.find("<config>")!= std::string::npos)) {
+        // Found the end of a config block.
+        // Pass that buffer to process and erase it from the string
+        // 9 = strlen("</config>")
+        Log(verbose,"Found a config block.");
+        try{
+          tcp_buffer_ = localBuffer.substr(0,pos+strlen("</config>"));
+          // Remove the entry from localBuffer
+          Log(verbose,"Shifting buffer");
+          localBuffer = localBuffer.substr(pos+strlen("</config>"));
+          Log(verbose,"new buffer [%s]",localBuffer.c_str());
+        }
+        catch(std::length_error &e) {
+          Log(error,"Length error : %s ",e.what());
+        }
+        catch(std::out_of_range &e) {
+          Log(error,"Out of range : %s",e.what());
+        }
+        catch(std::bad_alloc &e) {
+          Log(error,"Bad alloc %s",e.what());
+        }
+        catch(std::invalid_argument &e) {
+          Log(error,"Invalid argument error : %s",e.what());
+        }
+        catch(std::domain_error &e) {
+          Log(error,"Domain error : %s",e.what());
+        }
+        catch(std::overflow_error &e) {
+          Log(error,"Overflow error : %s",e.what());
+        }
+        catch(std::range_error &e) {
+          Log(error,"Range error : %s",e.what());
+        }
+
+        // Generic
+        catch(std::exception &e) {
+          Log(error,"Caught std exception : %s",e.what());
+        }
+        // Process the transmission.
+        try {
+          Log(verbose,"Processing buffer [%s]",tcp_buffer_.c_str());
+          ProcessTransmission(tcp_buffer_.c_str());
+          sprintf(instBuffer,"<success>true</success>");
+        }
+        catch (std::string &e) {
+          Log(error,"Config exception caught : %s",e.c_str());
+          // Return a failure signal.
+          sprintf(instBuffer,"<error>%s</error>",e.c_str());
+        }
+        catch (std::exception &e) {
+          Log(error,"STD exception caught : %s",e.what());
+          // Return a failure signal.
+          sprintf(instBuffer,"<error>%s</error>",e.what());
+        }
+        catch (...) {
+          sprintf(instBuffer,"<error>Unknown</error>");
+        }
+        sock->send(instBuffer,strlen(instBuffer));
+
+      } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
+        Log(verbose,"Found a command block.");
+        Log(verbose,"|%s|",localBuffer.c_str());
+        // Found the end of a command block.
+        // Pass that buffer to process and erase it from the string
+        // 9 = strlen("</config>")
+        Log(debug,"POS %u LEN %u",pos,strlen("</command>"));
+
+        tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
         // Remove the entry from localBuffer
-	Log(verbose,"Shifting buffer");
-        localBuffer = localBuffer.substr(pos+strlen("</config>"));
-	Log(verbose,"new buffer [%s]",localBuffer.c_str());
-      }
-      catch(std::length_error &e) {
-        Log(error,"Length error : %s ",e.what());
-      }
-      catch(std::out_of_range &e) {
-        Log(error,"Out of range : %s",e.what());
-      }
-      catch(std::bad_alloc &e) {
-        Log(error,"Bad alloc %s",e.what());
-      }
-      catch(std::invalid_argument &e) {
-        Log(error,"Invalid argument error : %s",e.what());
-      }
-      catch(std::domain_error &e) {
-        Log(error,"Domain error : %s",e.what());
-      }
-      catch(std::overflow_error &e) {
-        Log(error,"Overflow error : %s",e.what());
-      }
-      catch(std::range_error &e) {
-        Log(error,"Range error : %s",e.what());
-      }
+        try{
+          Log(verbose,"Shifting buffer");
+          localBuffer = localBuffer.substr(pos+strlen("</command>"));
+          Log(verbose,"new buffer [%s]",localBuffer.c_str());
 
-      // Generic
-      catch(std::exception &e) {
-        Log(error,"Caught std exception : %s",e.what());
+          Log(verbose,"Processing commadn buffer [%s]",tcp_buffer_.c_str() );
+          ProcessTransmission(tcp_buffer_.c_str());
+          sprintf(instBuffer,"<success>true</success>");
+        }
+        catch (std::string &e) {
+          Log(error,"Config exception caught : %s",e.c_str());
+          // Return a failure signal.
+          sprintf(instBuffer,"<error>%s</error>",e.c_str());
+        }
+        catch (std::exception &e) {
+          Log(error,"STD exception caught :", e.what());
+          // Return a failure signal.
+          sprintf(instBuffer,"<error>%s</error>",e.what());
+        }
+        catch (...) {
+          sprintf(instBuffer,"<error>Unknown error</error>");
+        }
+        Log(debug,"Sending answer");
+        Log(debug,"%s",instBuffer);
+        sock->send(instBuffer,strlen(instBuffer));
+        Log(debug,"Answer sent");
       }
-      // Process the transmission.
-      try {
-	Log(verbose,"Processing buffer [%s]",tcp_buffer_.c_str());
-        ProcessTransmission(tcp_buffer_.c_str());
-        sprintf(instBuffer,"<success>true</success>");
-      }
-      catch (std::string &e) {
-        Log(error,"Config exception caught : %s",e.c_str());
-        // Return a failure signal.
-        sprintf(instBuffer,"<error>%s</error>",e.c_str());
-      }
-      catch (std::exception &e) {
-        Log(error,"STD exception caught : %s",e.what());
-        // Return a failure signal.
-        sprintf(instBuffer,"<error>%s</error>",e.what());
-      }
-      catch (...) {
-        sprintf(instBuffer,"<error>Unknown</error>");
-      }
-      sock->send(instBuffer,strlen(instBuffer));
-
-    } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
-      Log(verbose,"Found a command block.");
-      Log(verbose,"|%s|",localBuffer.c_str());
-      // Found the end of a command block.
-      // Pass that buffer to process and erase it from the string
-      // 9 = strlen("</config>")
-      Log(debug,"POS %u LEN %u",pos,strlen("</command>"));
-
-      tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
-      // Remove the entry from localBuffer
-      try{
-	Log(verbose,"Shifting buffer");
-	localBuffer = localBuffer.substr(pos+strlen("</command>"));
-	Log(verbose,"new buffer [%s]",localBuffer.c_str());
-      
-	Log(verbose,"Processing commadn buffer [%s]",tcp_buffer_.c_str() );
-        ProcessTransmission(tcp_buffer_.c_str());
-        sprintf(instBuffer,"<success>true</success>");
-      }
-      catch (std::string &e) {
-        Log(error,"Config exception caught : %s",e.c_str());
-        // Return a failure signal.
-        sprintf(instBuffer,"<error>%s</error>",e.c_str());
-      }
-      catch (std::exception &e) {
-        Log(error,"STD exception caught :", e.what());
-        // Return a failure signal.
-        sprintf(instBuffer,"<error>%s</error>",e.what());
-      }
-      catch (...) {
-        sprintf(instBuffer,"<error>Unknown error</error>");
-      }
-      Log(debug,"Sending answer");
-      Log(debug,"%s",instBuffer);
-      sock->send(instBuffer,strlen(instBuffer));
-      Log(debug,"Answer sent");
-    }
     }
 
     // Process the string
@@ -369,7 +369,7 @@ void ConfigServer::ProcessCommand(pugi::xml_node &command) {
   Log(verbose,"Processing input buffer");
   Log(verbose,"Name: [%s]",command.name());
   Log(verbose,"Value: [%s]",command.value());
-  
+
   Log(verbose,"Value: [%s]",command.child_value());
   try{
     const char* cmd = command.child_value();
@@ -380,6 +380,7 @@ void ConfigServer::ProcessCommand(pugi::xml_node &command) {
   }
   catch (const std::exception &e) {
     Log(error,"STL exception caught : %s ",e.what());
+    throw;
   }
   catch (std::string &str) {
     Log(error,"Caught STR exception %s ",str.c_str());
@@ -387,6 +388,7 @@ void ConfigServer::ProcessCommand(pugi::xml_node &command) {
   }
   catch(...) {
     Log(error,"Unknown exception caught.");
+    throw;
   }
   // Get the command answer
 
