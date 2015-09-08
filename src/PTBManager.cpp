@@ -27,7 +27,8 @@ extern "C" {
 const char* PTBManager::default_config_ = "./config/config_default.xml";
 
 // Init with a new reader attached
-PTBManager::PTBManager(bool emu_mode) : reader_(new PTBReader(emu_mode)), cfg_srv_(0),status_(IDLE),emu_mode_(emu_mode) {
+PTBManager::PTBManager(bool emu_mode) : reader_(0), cfg_srv_(0),status_(IDLE),emu_mode_(emu_mode) {
+  reader_ =	new PTBReader(emu_mode);
   Log(debug,"Setting up pointers." );
 
   // Register the available commands
@@ -57,7 +58,13 @@ PTBManager::~PTBManager() {
   Log(debug,"Destroying object." );
   //FIXME: Implement memory deallocations to free the microZed.
   FreeRegisters();
+  // Clear the map
+  commands_.clear();
+  Log(debug,"Killing the reader");
   delete reader_;
+  cfg_srv_ = NULL;
+  reader_ = NULL;
+  Log(debug,"Reader destroyed");
 }
 
 
@@ -157,11 +164,13 @@ void PTBManager::StartRun() {
   // Tell the PTBReader to start taking data (it won't receive anything but it will be ready)
   // Set the GLB_EN register to 1 (start readout in the fabric)
   // Set status flag to RUNNING
-  if (!reader_ || !reader_->isReady()) {
+  if (!reader_) reader_ = new PTBReader(emu_mode_);
+
+  if (!reader_->isReady()) {
     reader_->InitConnection();
   }
 
-  if (!reader_ || !reader_->isReady()) {
+  if (!reader_->isReady()) {
     Log(warning,"Received call to start transmitting but reader is not ready. Refusing to run." );
     throw std::string("Data reader not ready...");
     return;
@@ -335,7 +344,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
     // The reader should take care of this by itself.
     if (!strcmp(it->name(),"DataBuffer")) {
       if (!reader_) {
-        Log(error,"Don't have a valid PTBReader instance. Things are going to break." );
+        Log(warning,"Don't have a valid PTBReader instance. Attempting to create a new one." );
+        reader_ = new PTBReader(emu_mode_);
       }
       //-- Get the host
       std::string host = it->child("DaqHost").child_value();

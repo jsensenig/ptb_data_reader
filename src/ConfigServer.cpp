@@ -13,6 +13,7 @@
 // -- Local classes
 #include "ConfigServer.h"
 #include "PTBManager.h"
+#include "PTBReader.h"
 #include "Logger.h"
 
 // -- Contrib classes
@@ -29,6 +30,7 @@
 
 extern "C" {
 #include <stdio.h>
+#include <signal.h>
 };
 using std::string;
 
@@ -52,21 +54,18 @@ ConfigServer::ConfigServer() {
   if (pthread_create(&thread_id_, NULL, &(ConfigServer::listen),(void*)NULL) != 0) {
     Log(error,"Unable to create master thread.");
   }
-  printf("Passed\n");
   Log(info,"Master server thread created. [%p]",thread_id_);
-  //Log(verbose) << thread_id_->__sig << endlog;
 
 }
 
 void* ConfigServer::listen(void *arg) {
-  printf("In listen\n");
+  //printf("In listen\n");
   std::thread::id thread_id = std::this_thread::get_id();
   std::ostringstream stream;
   stream << std::hex << thread_id << " " << std::dec << thread_id;
   Log(info,"#### PTB Listen thread: %s",stream.str().c_str());
 
   try {
-    printf("Inside try\n");
     Log(info,"Creating server listening socket.");
     TCPServerSocket servSock(port_);   // Socket descriptor for server
     Log(info,"Entering wait mode for client connection at port %u",port_);
@@ -93,9 +92,11 @@ void* ConfigServer::listen(void *arg) {
   catch(std::exception &e) {
     Log(error,"Caught standard exception : %s",e.what());
   }
+  /**
   catch(...) {
     Log(error,"Failed to establish configuration socket with unknown failure.");
   }
+  */
   Log(warning,"Reaching the end, but not sure why...");
   return NULL;
 }
@@ -288,7 +289,7 @@ void* ConfigServer::ThreadMain(void* clntSocket) {
 
 ConfigServer::~ConfigServer() {
   num_instances_--;
-  if (num_instances_ == 0) {
+  if (num_instances_ <= 0) {
     Log(info,"Reached last instance. Destroying myself.");
   }
 }
@@ -417,9 +418,8 @@ void ConfigServer::Shutdown(bool force) {
   shutdown_ = true;
   Log(warning,"Shutdown requested.");
   // Check if force is passed
-  if (force || queue_.size() == 0) {
-    if (force)
-      Log(warning,"Forcing it into server thread.");
+  if (force) {
+	Log(warning,"Forcing it into server thread.");
     // Detach to deallocate resources
     pthread_detach(thread_id_);
     // Send a cancel call.
@@ -438,6 +438,29 @@ void ConfigServer::Shutdown(bool force) {
       ProcessTransmission(queue_.front());
       queue_.pop_front();
     }
+  } else {
+	  Log(debug,"Performing a soft shutdown");
+	  // First kill the thread that is waiting for a connection
+	    //pthread_detach(thread_id_);
+	    // Send a cancel call.
+	    pthread_cancel(thread_id_);
+	  	//pthread_kill(thread_id_,SIGINT);
+
+	    thread_id_ = 0;
+
+	  // Try to do a soft exit
+	  // If there is a manager tell it to stop
+	  if (data_manager_) {
+		  // Get the reader
+		  PTBReader *reader = data_manager_->getReader();
+		  reader->ClearThreads();
+		  delete reader;
+		  data_manager_->FreeRegisters();
+		  data_manager_->ClearCommands();
+		  Log(verbose,"Destroying the manager");
+		  //delete data_manager_;
+		  Log(verbose,"Manager destroyed");
+	  }
   }
 }
 

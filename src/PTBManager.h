@@ -87,10 +87,14 @@ public:
   void StartRun();
   void StopRun();
 
+  void FreeRegisters();
+  void ClearCommands() {
+	  commands_.clear();
+  }
+
 protected:
   // Commands that need to be implemented
   void SetupRegisters();
-  void FreeRegisters();
   void LoadDefaultConfig();
   // This is a rather messy function
   /**

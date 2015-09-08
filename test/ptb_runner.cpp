@@ -14,14 +14,31 @@
 extern "C" {
 #include <pthread.h>         // For POSIX threads
 };
+#include <csignal>
 
 using namespace std;
 
+//FIXME: Add a manager for all the threads that are running
 
+void handler(int signal) {
+	if (signal == SIGINT) {
+		Log(warning,"Found a SIGINT request. Attempting a clean stop.");
+		ConfigServer*cfg = ConfigServer::get();
+		cfg->Shutdown(false);
+		cfg->CheckInstances();
+		Log(info,"Cleaning the config server itself");
+		//pthread_join(cfg->getThreadId(),NULL);
+		cfg = NULL;
+		//delete cfg;
+		exit(0);
+	}
+}
 
 int main() {
   Logger::SetSeverity(Logger::verbose);
 
+  // Register a signal handler
+  std::signal(SIGINT,handler);
   // This doesn't work since the thread gets stuck in the constructor of ConfigServer
   // Need to make the acceptance of the client into a separate thread.
 
@@ -41,8 +58,10 @@ int main() {
   //manager.StartRun();
 
 
-
-  pthread_join(cfg->getThreadId(),NULL);
+  if (cfg->getThreadId()) {
+	  Log(info,"Waiting for thread %d",cfg->getThreadId());
+	  pthread_join(cfg->getThreadId(),NULL);
+  }
   return 0;
 }
 

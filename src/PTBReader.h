@@ -88,6 +88,11 @@ public:
     packet_rollover_ = packetRollover;
   }
 
+  /**
+   * Stop the client threads without touching the mutex.
+   * Important in the case that one wants to delete the object without having start a run.
+   */
+  void ClearThreads();
   /** Function called by the manager to cleanly stop the data transmission and connection
    *
    */

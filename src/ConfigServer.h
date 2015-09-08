@@ -80,6 +80,7 @@ public:
 	static void *listen(void *arg);
 
 	void RegisterDataManager(PTBManager*manager);
+	PTBManager* GetDataManager() {return data_manager_;};
 
   pthread_t getThreadId() const {
     return thread_id_;

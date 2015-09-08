@@ -54,20 +54,23 @@ PTBReader::~PTBReader() {
   Log(debug,"Destroying the reader." );
 
 }
+void PTBReader::ClearThreads() {
+	Log(verbose,"Killing the daughter threads.\n");
+	// First stop the loops
+	keep_collecting_ = false;
+	std::this_thread::sleep_for (std::chrono::seconds(2));
+	// Kill the collector thread first
+	pthread_cancel(client_thread_collector_);
+	// Kill the transmittor thread.
+	keep_transmitting_ = false;
+	std::this_thread::sleep_for (std::chrono::seconds(2));
+	pthread_cancel(client_thread_transmitor_);
+
+}
 
 void PTBReader::StopDataTaking() {
 
-  Log(verbose,"Killing the daughter threads.\n");
-  // First stop the loops
-  keep_collecting_ = false;
-  std::this_thread::sleep_for (std::chrono::seconds(2));
-  // Kill the collector thread first
-  pthread_cancel(client_thread_collector_);
-  // Kill the transmittor thread.
-  keep_transmitting_ = false;
-  std::this_thread::sleep_for (std::chrono::seconds(2));
-  pthread_cancel(client_thread_transmitor_);
-
+  ClearThreads();
   pthread_mutex_destroy(&lock_);
 
 }
