@@ -223,7 +223,7 @@ void PTBManager::StopRun() {
 
   // Check the ACK bit
   //  if (((register_map_[30].value() >> 30 ) & 0x1)) {
-  if (GetEnableBitACK() != false || emu_mode_) {
+  if (GetEnableBitACK() != false && !emu_mode_) {
     Log(warning,"Stop Run failed. ACK bit still high.");
     throw std::string("Stop Run failed. No ACK received.");
   }
