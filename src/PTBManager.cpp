@@ -327,7 +327,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   // This is the workhorse of the configuration.
   // At this point the registers should already be mapped and things should be flowing
 
-  Log(verbose,"Parsing the configuration." );
+  Log(info,"Parsing the configuration." );
 
   // First zero out all registers
 
@@ -627,7 +627,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
 
   // Set the bit to commit the configuration
   // into the hardware (bit 29 in register 30)
-  Log(verbose,"Committing configuration to the hardware.");
+  Log(debug,"Committing configuration to the hardware.");
   //  register_map_[34].value() |= (0x1 << 29);
   SetConfigBit(true);
   //  Log(verbose,"Thirty Fourth register after config commit 0x%X", *(volatile uint32_t*)(register_map_[30].address) );
@@ -637,6 +637,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
     throw("Configuration failed to commit. ACK not received.");
   }
 
+  Log(debug,"Registered committed configuration to the local cache.");
   // Store the cache in the mirror map
   // Register cache 0 is set to 0 (unsurprisingly)
   register_cache_.at(0).value() = 0;
@@ -654,7 +655,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   // After parsing everything (and making sure that all the configuration is set)
   // Store the configuration locally
   config_ = config;
-  Log(verbose,"Sleeping for 15s prior to init the connection to DAQ upstream.");
+  Log(debug,"Sleeping for 15s prior to init the connection to DAQ upstream.");
 
 
 

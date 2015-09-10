@@ -136,7 +136,7 @@ void PTBReader::InitConnection() {
     }
 
     try{
-      Log(verbose, "Opening socket connection : %s : %hu",tcp_host_.c_str(),tcp_port_ );
+      Log(debug, "Opening socket connection : %s : %hu",tcp_host_.c_str(),tcp_port_ );
       socket_ = new TCPSocket(tcp_host_.c_str(),tcp_port_);
 
       if (socket_ == NULL) {
