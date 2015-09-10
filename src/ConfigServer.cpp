@@ -452,7 +452,7 @@ void ConfigServer::Shutdown(bool force) {
 	  // If there is a manager tell it to stop
 	  if (data_manager_) {
 		  // Get the reader
-		  PTBReader *reader = data_manager_->getReader();
+		  PTBReader *reader = const_cast<PTBReader*>(data_manager_->getReader());
 		  reader->ClearThreads();
 		  delete reader;
 		  data_manager_->FreeRegisters();
