@@ -182,7 +182,7 @@ void PTBManager::StartRun() {
   //register_map_[30].value() |= (0x1 << 31);
   SetEnableBit(true);
 
-  Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[34].value() );
+  Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
 
   // Check back if the ack was set
   // if (register_map_[30].value() >> 30  & 0x1 ) {
@@ -219,7 +219,7 @@ void PTBManager::StopRun() {
   //  *(volatile uint32_t*)(register_map_[34].address) |= (0x0 << 31);
   //  register_map_[30].value() |= (0x0 << 31);
   SetEnableBit(false);
-  Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[34].value() );
+  Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
 
   // Check the ACK bit
   //  if (((register_map_[30].value() >> 30 ) & 0x1)) {
@@ -554,10 +554,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         }
         if (!enable.compare("true")) {
           register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         } else {
           register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         }
       }
 
@@ -575,10 +575,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         }
         if (!enable.compare("true")) {
           register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         } else {
           register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         }
       }
 
@@ -596,10 +596,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         }
         if (!enable.compare("true")) {
           register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         } else {
           register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         }
       }
 
@@ -617,10 +617,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         }
         if (!enable.compare("true")) {
           register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         } else {
           register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         }
       }
 
@@ -638,7 +638,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   //  register_map_[34].value() |= (0x1 << 29);
   SetConfigBit(true);
   //  Log(verbose,"Thirty Fourth register after config commit 0x%X", *(volatile uint32_t*)(register_map_[30].address) );
-  Log(verbose,"Thirty Fourth register after config commit 0x%X", register_map_[34].value() );
+  Log(debug,"Control register after config commit 0x%X", register_map_[0].value() );
   if (!GetConfigBitACK()) {
     Log(error,"Failed set to set the configuration bit. ACK not received");
     throw("Configuration failed to commit. ACK not received.");
@@ -876,23 +876,23 @@ void PTBManager::SetBit(uint32_t reg, uint32_t bit, bool status) {
 //
 
 void PTBManager::SetEnableBit(bool status) {
-  SetBit(34,31,status);
+  SetBit(0,31,status);
 }
 
 void PTBManager::SetResetBit(bool status) {
   // here true defines the reset enable...the firmware inverts this
-  SetBit(34,27,status);
+  SetBit(0,27,status);
 }
 
 void PTBManager::SetConfigBit(bool status) {
-  SetBit(34,29,status);
+  SetBit(0,29,status);
 }
 
 bool PTBManager::GetConfigBitACK() {
-  return GetBit(34,28);
+  return GetBit(0,28);
 }
 bool PTBManager::GetEnableBitACK() {
-  return GetBit(34,30);
+  return GetBit(0,30);
 }
 
 /// -- Other old and outdated methods.
