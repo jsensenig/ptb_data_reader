@@ -49,7 +49,8 @@ void SetupConfRegisters() {
 	for (i = 0; i < conf_reg.n_registers; ++i) {
 	 conf_reg.addr_offset[i] = i*4;
 		Log(debug,
-				"Setting configuration register to address 0x%08X + 0x%08X =  [0x%08X].",
+				"Setting configuration register (%u) to address 0x%08X + 0x%08X =  [0x%08X].",
+				i,
 				conf_reg.base_addr,
 				conf_reg.addr_offset[i],
 				conf_reg.base_addr+conf_reg.addr_offset[i]);

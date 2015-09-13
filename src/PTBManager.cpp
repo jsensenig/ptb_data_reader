@@ -269,6 +269,7 @@ void PTBManager::SetupRegisters() {
     SetupConfRegisters();
     // First get the virtual address for the mapped physical address
     mapped_base_addr_ = MapPhysMemory(conf_reg.base_addr,conf_reg.high_addr);
+    Log(debug,"Received virtual address for configuration : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_base_addr_));
     // Cross check that we have at least as many offsets as registers expected
     if (conf_reg.n_registers < num_registers_) {
       Log(warning,"Have less configured registers than the ones required. (%u != %u)",conf_reg.n_registers,num_registers_);
@@ -320,10 +321,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   }
 
   Log(info,"Applying a reset prior to the configuration.");
-      SetResetBit(true);
-      std::this_thread::sleep_for (std::chrono::microseconds(1));
-      SetResetBit(false);
-      Log(info,"Reset applied");
+//      SetResetBit(true);
+//      std::this_thread::sleep_for (std::chrono::microseconds(1));
+//      SetResetBit(false);
+//      Log(info,"Reset applied");
 
   // // Check if the reader is ready. If it is ignore the change
   // if (reader_->isReady()) {
@@ -632,14 +633,16 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
 
   //}
 
+  DumpConfigurationRegisters();
+
   // Set the bit to commit the configuration
   // into the hardware (bit 29 in register 30)
   Log(debug,"Committing configuration to the hardware.");
   //  register_map_[34].value() |= (0x1 << 29);
+  Log(verbose,"Control register before config commit 0x%X", register_map_[0].value() );
   SetConfigBit(true);
-  //  Log(verbose,"Thirty Fourth register after config commit 0x%X", *(volatile uint32_t*)(register_map_[30].address) );
   Log(debug,"Control register after config commit 0x%X", register_map_[0].value() );
-  if (!GetConfigBitACK()) {
+  if (!GetConfigBitACK() || emu_mode_) {
     Log(error,"Failed set to set the configuration bit. ACK not received");
     throw("Configuration failed to commit. ACK not received.");
   }
@@ -675,10 +678,12 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
 }
 
 void PTBManager::DumpConfigurationRegisters() {
-
+  Log(info,"Dumping configuration registers.");
+  Log(info,"===========================================================");
   for (size_t i = 0; i < register_map_.size(); ++i) {
-    Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
+    Log(info,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
   }
+  Log(info,"===========================================================");
 
 }
 
