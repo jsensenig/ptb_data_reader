@@ -83,6 +83,24 @@ void *MapPhysMemory(uint32_t base_addr, uint32_t high_addr) {
   return mapped_addr;
 
 }
+uint32_t Xil_In32(uint32_t Addr)
+{
+	return *(volatile uint32_t *) Addr;
+}
+
+
+void Xil_Out32(uint32_t OutAddress, uint32_t Value)
+{
+	*(volatile uint32_t *) OutAddress = Value;
+}
+
+#define WriteReg(BaseAddress, RegOffset, Data) \
+  	Xil_Out32((BaseAddress) + (RegOffset), (uint32_t)(Data))
+
+#define ReadReg(BaseAddress, RegOffset) \
+    Xil_In32((BaseAddress) + (RegOffset))
+
+
 
 //void WriteRegister()
 

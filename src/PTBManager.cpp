@@ -872,8 +872,14 @@ bool PTBManager::GetBit(uint32_t reg, uint32_t bit) {
 }
 void PTBManager::SetBit(uint32_t reg, uint32_t bit, bool status) {
   // Things are more complicated than this. We want to set a single bit, regardless of what is around
-  register_map_[reg].value() ^= ((status?0x1:0x0) ^ register_map_[reg].value()) & ( 1 << bit);
+  //register_map_[reg].value() ^= ((status?0x1:0x0) ^ register_map_[reg].value()) & ( 1 << bit);
+	Log(debug,"Reading the bit %u from reg %u",bit,reg);
+	uint32_t value = Xil_In32((uint32_t)register_map_[reg].address);
+	uint32_t new_value = (value^(-(status?1:0) ^ value) & ( 1 << bit));
 
+	Log(debug,"Got %08X -> %08X",value,new_value);
+	Xil_Out32((uint32_t)register_map_[reg].address,new_value);
+	Log(debug,"Final register value %u",register_map_[reg].value());
   //  uint32_t tmp_reg = register_map_[reg].value();
 //  (tmp_reg >> bit) = status?0x1:0x0;
 //  register_map_[reg].value() = tmp_reg;
