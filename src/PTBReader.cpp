@@ -55,15 +55,17 @@ PTBReader::~PTBReader() {
 
 }
 void PTBReader::ClearThreads() {
-	Log(verbose,"Killing the daughter threads.\n");
+	Log(debug,"Killing the daughter threads.\n");
 	// First stop the loops
 	keep_collecting_ = false;
 	std::this_thread::sleep_for (std::chrono::seconds(2));
+	Log(info,"Killing collector thread.");
 	// Kill the collector thread first
 	pthread_cancel(client_thread_collector_);
 	// Kill the transmittor thread.
 	keep_transmitting_ = false;
 	std::this_thread::sleep_for (std::chrono::seconds(2));
+	Log(info,"Killing transmiter thread.");
 	pthread_cancel(client_thread_transmitor_);
 
 }
@@ -207,7 +209,7 @@ void PTBReader::ClientCollector() {
       while (keep_collecting_) {
         Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
         status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[pos]),4);
-	printf("Transaction done with return %d\n",status);
+	//printf("Transaction done with return %d\n",status);
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
           timeout_cnt_++;
@@ -234,7 +236,10 @@ void PTBReader::ClientCollector() {
         	pos = 0;
         }
       }
-      xdma_exit();
+      Log(debug,"Stopped collecting data.");
+      // Log(debug,"Shutting down the DMA engine.");
+      // xdma_exit();
+      // Log(debug,"DMA engine done.");
 #endif /*ARM*/
     }
 }
@@ -476,7 +481,7 @@ void PTBReader::ClientTransmiter() {
         ipck += 1;
       }
 
-      delete [] frame;
+      //delete [] frame;
       // Frame completed. check if we can wait for another or keep collecting
       iframe += 1;
 
@@ -541,7 +546,7 @@ void PTBReader::ClientTransmiter() {
     // microslice header) being sent
 
     Log(debug,"Sending packet with %u bytes",sizeof(uint32_t)*(ipck+1));
-    DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+1));
+    //DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+1));
 
 
     /// -- Send the packet:
@@ -572,11 +577,15 @@ void PTBReader::ClientTransmiter() {
     //   // sleep for a while waiting for the generators to stop
     //   std::this_thread::sleep_for (std::chrono::seconds(5));
     // }
-  }
+  } // -- while(keep_transmitting_)
   // Exited the  run loop. Return.
   Log(info,"Exited transmission loop. Checking for queued packets." );
   // Deallocate the memory
   free(eth_buffer);
+  Log(debug,"Shutting down the DMA engine.");
+  xdma_exit();
+  Log(debug,"DMA engine done.");
+
 
 }
 ///////////////////////////////////////////////////////////////

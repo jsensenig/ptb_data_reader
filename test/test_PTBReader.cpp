@@ -55,7 +55,7 @@ void control_thread() {
 
 
   // Sleep for 15 s and then stop the run
-  std::this_thread::sleep_for(std::chrono::seconds(55));
+  std::this_thread::sleep_for(std::chrono::seconds(5));
 
   Log(warning,"Sending STOP RUN\n");
   const char *stop_run = "<command>StopRun</command>";
@@ -132,30 +132,30 @@ void* reader_thread(void *arg) {
     while (i_size < size) {
       sock->recv(&header, sizeof(header));
       i_size += (uint16_t)sizeof(header);
-      Log(info,"PHEADER : %x \n",header);
-      //std::cout << "Header : " << std::hex << header << std::dec << std::bitset<32>(header) << std::endl;
+      //Log(info,"PHEADER : %x \n",header);
+
       wtype = ((header >> 29) & 0x7);
-      Log(info,"WTYPE %x %u\n",(uint32_t)wtype,(uint32_t)wtype);
+      //Log(info,"WTYPE %x %u\n",(uint32_t)wtype,(uint32_t)wtype);
       if (wtype == 0x1) { // counter word
         //pick up a counter word
         sock->recv(body_counter, sizeof(body_counter));
-        Log(info,"COUNTER   : %x %x %x \n",body_counter[0],body_counter[1],body_counter[2]);
+        //Log(info,"COUNTER   : %x %x %x \n",body_counter[0],body_counter[1],body_counter[2]);
         i_size += sizeof(body_counter);
       } else if (wtype == 0x2) { // parse a trigger word
         sock->recv(&body_trigger, sizeof(body_trigger));
-        Log(info,"TRIGGER   : %x \n",body_trigger);
+        //Log(info,"TRIGGER   : %x \n",body_trigger);
         i_size += sizeof(body_trigger);
       } else if (wtype == 0x7) { // It is a timestamp
         sock->recv(timestamp, sizeof(timestamp));
-        Log(info,"TIMESTAMP : %x %x \n",timestamp[0],timestamp[1]);
+        //Log(info,"TIMESTAMP : %x %x \n",timestamp[0],timestamp[1]);
         i_size += sizeof(timestamp);
       } else if (wtype == 0x4) { // checksum
         sock->recv(&checksum, sizeof(checksum));
-        Log(info,"CHECKSUM : %x \n",checksum);
+        //Log(info,"CHECKSUM : %x \n",checksum);
         i_size += sizeof(checksum);
       }
     }
-    std::cout << "== Packet printed." << endl;
+    //std::cout << "== Packet printed." << endl;
   }
   }
   catch(SocketException &e) {

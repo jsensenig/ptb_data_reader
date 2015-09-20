@@ -880,7 +880,7 @@ void PTBManager::SetBit(uint32_t reg, uint32_t bit, bool status) {
 
 	Log(debug,"Got %08X -> %08X",value,new_value);
 	Xil_Out32((uint32_t)register_map_[reg].address,new_value);
-	Log(debug,"Final register value %u",register_map_[reg].value());
+	Log(debug,"Final register value %08X",register_map_[reg].value());
   //  uint32_t tmp_reg = register_map_[reg].value();
 //  (tmp_reg >> bit) = status?0x1:0x0;
 //  register_map_[reg].value() = tmp_reg;
