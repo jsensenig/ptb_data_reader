@@ -384,6 +384,7 @@ void PTBReader::ClientTransmiter() {
     // iframe : Frame counter.
     uint32_t ipck = 0,iframe = 0;
     bool carry_on = true;
+    uint32_t frame[4];
     header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
     eth_buffer[0] = header;
     Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
@@ -403,7 +404,6 @@ void PTBReader::ClientTransmiter() {
       Log(verbose, "Transmitting data...\n");
       pthread_mutex_lock(&lock_);
       uint32_t *frametmp = buffer_queue_.front();
-      uint32_t frame[4];
       frame[0] = frametmp[3];
       frame[1] = frametmp[2];
       frame[2] = frametmp[1];
