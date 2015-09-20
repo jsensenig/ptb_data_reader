@@ -665,12 +665,13 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   // After parsing everything (and making sure that all the configuration is set)
   // Store the configuration locally
   config_ = config;
-  Log(debug,"Sleeping for 15s prior to init the connection to DAQ upstream.");
+  Log(debug,"Sleeping for 5s prior to init the connection to DAQ upstream.");
 
 
 
   // Tell the reader to start the connection
-  sleep(15);
+  std::this_thread::sleep_for (std::chrono::seconds(5));
+  //sleep(15);
   Log(verbose,"Initializing connection to DAQ upstream." );
   //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
   reader_->InitConnection();

@@ -111,7 +111,7 @@ void PTBReader::ResetBuffers() {
   while (!buffer_queue_.empty()) {
     uint32_t*frame = buffer_queue_.front();
     buffer_queue_.pop();
-    delete [] frame;
+    //delete [] frame;
   }
   pthread_mutex_unlock(&lock_);
 }
@@ -192,21 +192,22 @@ void PTBReader::ClientCollector() {
       Log(debug,"Allocating the DMA buffer.");
 
       uint32_t *frame = NULL;
-      const uint32_t nbytes_to_collect = 16; //128 bit frame
-      const uint32_t buffer_size = 4096;
+      //      const uint32_t nbytes_to_collect = 16; //128 bit frame
+      const uint32_t buffer_size = 1024;//4096;
       uint32_t pos = 0;
       timeout_cnt_ = 0;
       // Allocate the memory necessary for a packet.
       //frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
       // This should build a 1000 value circular buffer
-      frame = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,sizeof(uint32_t)));
-      for (size_t i = 0; i < buffer_size; ++i) {
+      frame = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,4*sizeof(uint32_t)));
+      for (size_t i = 0; i < 4*buffer_size; ++i) {
     	  frame[i] = 0;
         }
         //FIXME: Verify that the numbers are correct&(dst[pos])
       while (keep_collecting_) {
-        Log(debug,"Calling for a transaction");
-        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[pos]),nbytes_to_collect/sizeof(uint32_t));
+        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
+        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[pos]),4);
+	printf("Transaction done with return %d\n",status);
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
           timeout_cnt_++;
@@ -356,6 +357,7 @@ void PTBReader::ClientTransmiter() {
   // That is set from the main thread.
   while(keep_transmitting_) {
 
+    //continue;
     // Logic was dramatically changed.
     // FW decides when the packet is ready.
     // When DMA brings the TS word it is sign that packet has to be sent
@@ -397,12 +399,21 @@ void PTBReader::ClientTransmiter() {
       if (buffer_queue_.size() == 0) {
         continue;
       }
+      Log(debug,"Collecting data");
       Log(verbose, "Transmitting data...\n");
       pthread_mutex_lock(&lock_);
-      uint32_t *frame = buffer_queue_.front();
+      uint32_t *frametmp = buffer_queue_.front();
+      uint32_t frame[4];
+      frame[0] = frametmp[3];
+      frame[1] = frametmp[2];
+      frame[2] = frametmp[1];
+      frame[3] = frametmp[0];
+      //Log(debug,"Collect the data %08X",frame);
       buffer_queue_.pop();
       pthread_mutex_unlock(&lock_);
+      Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[0],frame[1],frame[2],frame[3]);
 
+      
       // If we still didn't get the first timestamp just drop the packages
       //Log(verbose, "--> Frame1 %x \n",frame[0]);
 
@@ -420,7 +431,7 @@ void PTBReader::ClientTransmiter() {
           // First TS after Run start
           previous_ts_ = (frame[1] << 31) | frame[2];
           first_ts_ = false;
-          delete [] frame;
+          //delete [] frame;
           continue;
         } else if (current_ts_ >= (previous_ts_ + time_rollover_)) {
           Log(verbose, "Sending the packet\n");
@@ -433,13 +444,13 @@ void PTBReader::ClientTransmiter() {
           carry_on = false;
           fragmented_ = false;
           // break out of the cycle
-          delete [] frame;
+          //delete [] frame;
           break;
           // FIXME: Add the situation in which we arrive to the time rollover.
 
         } else {
           // Not ready to send yet. Drop this frame and get another
-          delete [] frame;
+          //delete [] frame;
           continue;
         }
       }
