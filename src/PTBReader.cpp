@@ -193,17 +193,20 @@ void PTBReader::ClientCollector() {
 
       uint32_t *frame = NULL;
       const uint32_t nbytes_to_collect = 16; //128 bit frame
+      const uint32_t buffer_size = 4096;
+      uint32_t pos = 0;
       timeout_cnt_ = 0;
-      while (keep_collecting_) {
-        // Allocate the memory necessary for a packet.
-        //uint32_t *frame = static_cast<uint32_t*>(new uint32_t[32]);
-        frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
-        for (size_t i = 0; i < 32; ++i) {
-          frame[i] = 0;
+      // Allocate the memory necessary for a packet.
+      //frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
+      // This should build a 1000 value circular buffer
+      frame = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,sizeof(uint32_t)));
+      for (size_t i = 0; i < buffer_size; ++i) {
+    	  frame[i] = 0;
         }
         //FIXME: Verify that the numbers are correct&(dst[pos])
-	Log(debug,"Calling for a transaction");
-        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[0]),nbytes_to_collect);
+      while (keep_collecting_) {
+        Log(debug,"Calling for a transaction");
+        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[pos]),nbytes_to_collect/sizeof(uint32_t));
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
           timeout_cnt_++;
@@ -215,12 +218,20 @@ void PTBReader::ClientCollector() {
           if (timeout_cnt_ > 0){
             timeout_cnt_ = 0;
           }
+          Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3]);
         }
         // DMA transaction was successful.
         // -- add the data to the queue;
+        Log(debug,"Storing the buffer");
         pthread_mutex_lock(&lock_);
-        buffer_queue_.push(frame);
+        buffer_queue_.push(&frame[pos]);
         pthread_mutex_unlock(&lock_);
+        Log(debug,"Done storing the buffer");
+        pos += 4;
+        if (pos+4 >= buffer_size) {
+        	Log(warning,"Reached buffer size.Resetting to start.\n");
+        	pos = 0;
+        }
       }
       xdma_exit();
 #endif /*ARM*/
