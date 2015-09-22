@@ -103,7 +103,7 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(10));
-        SetResetBit(false);
+        //SetResetBit(false);
         // -- Re-commit the configuration
         RestoreConfigurationRegisters();
         SetConfigBit(true);
@@ -116,7 +116,7 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(10));
-        SetResetBit(false);
+        //SetResetBit(false);
         reader_->ResetBuffers();
         RestoreConfigurationRegisters();
         // Reset the configuration buggers to an enable state
@@ -321,10 +321,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   }
 
   Log(info,"Applying a reset prior to the configuration.");
-//      SetResetBit(true);
-//      std::this_thread::sleep_for (std::chrono::microseconds(1));
+  SetResetBit(true);
+  std::this_thread::sleep_for (std::chrono::microseconds(10));
 //      SetResetBit(false);
-//      Log(info,"Reset applied");
+  Log(info,"Reset applied");
 
   // // Check if the reader is ready. If it is ignore the change
   // if (reader_->isReady()) {
