@@ -75,6 +75,7 @@ void PTBReader::StopDataTaking() {
   ClearThreads();
   pthread_mutex_destroy(&lock_);
 
+  ready_ = false;
 }
 
 void PTBReader::StartDataTaking() {
