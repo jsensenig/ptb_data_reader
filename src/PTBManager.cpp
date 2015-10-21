@@ -104,7 +104,7 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(10));
-        SetResetBit(false);
+        //SetResetBit(false);
         // -- Re-commit the configuration
         // Not sure if this is going to work as intended
         RestoreConfigurationRegisters();
@@ -118,7 +118,7 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(10));
-        SetResetBit(false);
+        //SetResetBit(false);
         reader_->ResetBuffers();
         RestoreConfigurationRegisters();
         // Reset the configuration buggers to an enable state
@@ -185,7 +185,7 @@ void PTBManager::StartRun() {
   //register_map_[30].value() |= (0x1 << 31);
   SetEnableBit(true);
 
-  Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[34].value() );
+  Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
 
   // Check back if the ack was set
   // if (register_map_[30].value() >> 30  & 0x1 ) {
@@ -223,7 +223,7 @@ void PTBManager::StopRun() {
   //  *(volatile uint32_t*)(register_map_[34].address) |= (0x0 << 31);
   //  register_map_[30].value() |= (0x0 << 31);
   SetEnableBit(false);
-  Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[34].value() );
+  Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
 
   // Check the ACK bit
   //  if (((register_map_[30].value() >> 30 ) & 0x1)) {
@@ -270,11 +270,13 @@ void PTBManager::SetupRegisters() {
   } else {
     Log(warning,"Memory mapped registers are not yet tested. This might, or might not, fail." );
 #ifdef ARM
+    SetupConfRegisters();
     // First get the virtual address for the mapped physical address
     mapped_base_addr_ = MapPhysMemory(conf_reg.base_addr,conf_reg.high_addr);
+    Log(debug,"Received virtual address for configuration : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_base_addr_));
     // Cross check that we have at least as many offsets as registers expected
     if (conf_reg.n_registers < num_registers_) {
-      Log(warning,"Have less configured registers than the ones required.");
+      Log(warning,"Have less configured registers than the ones required. (%u != %u)",conf_reg.n_registers,num_registers_);
     }
     for (uint32_t i = 0; i < num_registers_; ++i) {
       register_map_[i].address =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_base_addr_) + conf_reg.addr_offset[i]);
@@ -322,6 +324,12 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
     Log(warning,"Attempted to pass a new configuration during a run. Ignoring the new configuration." );
     return;
   }
+
+  Log(info,"Applying a reset prior to the configuration.");
+  SetResetBit(true);
+  std::this_thread::sleep_for (std::chrono::microseconds(10));
+//      SetResetBit(false);
+  Log(info,"Reset applied");
 
   // // Check if the reader is ready. If it is ignore the change
   // if (reader_->isReady()) {
@@ -599,10 +607,10 @@ IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
         }
         if (!enable.compare("true")) {
           register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         } else {
           register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         }
       }
 
@@ -620,10 +628,10 @@ IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
         }
         if (!enable.compare("true")) {
           register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         } else {
           register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         }
       }
 
@@ -641,10 +649,10 @@ IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
         }
         if (!enable.compare("true")) {
           register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         } else {
           register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         }
       }
 
@@ -662,10 +670,10 @@ IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
         }
         if (!enable.compare("true")) {
           register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         } else {
           register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period;
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
         }
       }
 */
@@ -676,22 +684,25 @@ IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
   } // for
 
 
+  DumpConfigurationRegisters();
+
   // Set the bit to commit the configuration
   // into the hardware (bit 29 in register 30)
   Log(debug,"Committing configuration to the hardware.");
   //  register_map_[34].value() |= (0x1 << 29);
+  Log(verbose,"Control register before config commit 0x%X", register_map_[0].value() );
   SetConfigBit(true);
-  //  Log(verbose,"Thirty Fourth register after config commit 0x%X", *(volatile uint32_t*)(register_map_[30].address) );
-  Log(verbose,"Register 0 after config commit 0x%08X", register_map_[0].value() );
-  if (!GetConfigBitACK()) {
+  Log(debug,"Control register after config commit 0x%08X", register_map_[0].value() );
+  if (!GetConfigBitACK() && emu_mode_ == false) {
     Log(error,"Failed set to set the configuration bit. ACK not received");
     throw("Configuration failed to commit. ACK not received.");
   }
 
   Log(debug,"Registered committed configuration to the local cache.");
   // Store the cache in the mirror map
-  // Register cache 0 is set to 0 (unsurprisingly)
-  register_cache_.at(0).value() = 0;
+  // Register cache 0 is set to (0x08000000).
+  // This means everything off, but reset kept high
+  register_cache_.at(0).value() = 0x08000000;
   for (uint32_t i = 1; i < num_registers_; ++i) {
     register_cache_.at(i).value() = register_map_.at(i).value();
   }
@@ -706,23 +717,27 @@ IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
   // After parsing everything (and making sure that all the configuration is set)
   // Store the configuration locally
   config_ = config;
-  Log(debug,"Sleeping for 15s prior to init the connection to DAQ upstream.");
+  Log(debug,"Sleeping for 5s prior to init the connection to DAQ upstream.");
 
 
 
   // Tell the reader to start the connection
-  sleep(15);
+  std::this_thread::sleep_for (std::chrono::seconds(5));
+  //sleep(15);
   Log(verbose,"Initializing connection to DAQ upstream." );
   //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
   reader_->InitConnection();
 
+  // Most likely the connection will fail at this point. Not a big problem.
 }
 
 void PTBManager::DumpConfigurationRegisters() {
-
+  Log(info,"Dumping configuration registers.");
+  Log(info,"===========================================================");
   for (size_t i = 0; i < register_map_.size(); ++i) {
-    Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
+    Log(info,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
   }
+  Log(info,"===========================================================");
 
 }
 
@@ -929,14 +944,30 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
 
 
 /// -- Short hand methods to be used on the higher level above
+///
+/// NOTE: The value has to be shifted to the right bit positions
+/// Position is in bit number. If position is set to 16, the new value starts being inserted in the
+/// 17th bit (bit 16, since bits start at 0).
+void PTBManager::SetBitRange(uint32_t reg, uint32_t value, uint32_t pos, uint32_t len) {
+  // Create a mask based on pos and len
+  uint32_t mask = (((uint32_t)1 << len)-1) << pos;
+  register_map_[reg].value() = (register_map_[reg].value() & ~mask) | (value & mask);
+}
+
 
 bool PTBManager::GetBit(uint32_t reg, uint32_t bit) {
   return (((register_map_[reg].value() >> bit) & 0x1) == 0x1)?true:false;
 }
 void PTBManager::SetBit(uint32_t reg, uint32_t bit, bool status) {
   // Things are more complicated than this. We want to set a single bit, regardless of what is around
-  register_map_[reg].value() ^= ((status?0x1:0x0) ^ register_map_[reg].value()) & ( 1 << bit);
+  //register_map_[reg].value() ^= ((status?0x1:0x0) ^ register_map_[reg].value()) & ( 1 << bit);
+	Log(debug,"Reading the bit %u from reg %u",bit,reg);
+	uint32_t value = Xil_In32((uint32_t)register_map_[reg].address);
+	uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
 
+	Log(debug,"Got %08X -> %08X",value,new_value);
+	Xil_Out32((uint32_t)register_map_[reg].address,new_value);
+	Log(debug,"Final register value %08X",register_map_[reg].value());
   //  uint32_t tmp_reg = register_map_[reg].value();
   //  (tmp_reg >> bit) = status?0x1:0x0;
   //  register_map_[reg].value() = tmp_reg;
@@ -944,23 +975,23 @@ void PTBManager::SetBit(uint32_t reg, uint32_t bit, bool status) {
 //
 
 void PTBManager::SetEnableBit(bool status) {
-  SetBit(34,31,status);
+  SetBit(0,31,status);
 }
 
 void PTBManager::SetResetBit(bool status) {
   // here true defines the reset enable...the firmware inverts this
-  SetBit(34,27,status);
+  SetBit(0,27,status);
 }
 
 void PTBManager::SetConfigBit(bool status) {
-  SetBit(34,29,status);
+  SetBit(0,29,status);
 }
 
 bool PTBManager::GetConfigBitACK() {
-  return GetBit(34,28);
+  return GetBit(0,28);
 }
 bool PTBManager::GetEnableBitACK() {
-  return GetBit(34,30);
+  return GetBit(0,30);
 }
 
 /// -- Other old and outdated methods.

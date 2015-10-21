@@ -162,6 +162,15 @@ private:
    */
   bool GetEnableBitACK();
 
+  /**
+   * Overwrites a range of bits in a register with the contents of another variable.
+   * @param reg The register to be modified
+   * @param pos The edge of the range to be modified (LSB)
+   * @param len The size of the mask to be created in number of bits.
+   * @param value The contents to be overwritten
+   */
+  void SetBitRange(uint32_t reg, uint32_t pos, uint32_t len, uint32_t value);
+
   // The class responsible for the data reading.
   PTBReader *reader_;
   ConfigServer *cfg_srv_;

@@ -43,13 +43,14 @@ void SetupConfRegisters() {
 	conf_reg.dev_id = 0;
 	conf_reg.base_addr = 0x43C00000;
 	conf_reg.high_addr = 0x43C0FFFF;
-	conf_reg.n_registers = 32;
+	conf_reg.n_registers = 40;
 	conf_reg.addr_offset = new uint32_t[conf_reg.n_registers];
 	unsigned int i = 0;
 	for (i = 0; i < conf_reg.n_registers; ++i) {
 	 conf_reg.addr_offset[i] = i*4;
 		Log(debug,
-				"Setting configuration register to address 0x%08X + 0x%08X =  [0x%08X].",
+				"Setting configuration register (%u) to address 0x%08X + 0x%08X =  [0x%08X].",
+				i,
 				conf_reg.base_addr,
 				conf_reg.addr_offset[i],
 				conf_reg.base_addr+conf_reg.addr_offset[i]);
@@ -82,6 +83,24 @@ void *MapPhysMemory(uint32_t base_addr, uint32_t high_addr) {
   return mapped_addr;
 
 }
+uint32_t Xil_In32(uint32_t Addr)
+{
+	return *(volatile uint32_t *) Addr;
+}
+
+
+void Xil_Out32(uint32_t OutAddress, uint32_t Value)
+{
+	*(volatile uint32_t *) OutAddress = Value;
+}
+
+#define WriteReg(BaseAddress, RegOffset, Data) \
+  	Xil_Out32((BaseAddress) + (RegOffset), (uint32_t)(Data))
+
+#define ReadReg(BaseAddress, RegOffset) \
+    Xil_In32((BaseAddress) + (RegOffset))
+
+
 
 //void WriteRegister()
 

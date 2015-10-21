@@ -35,7 +35,7 @@ uint64_t ClockGetTime() {
 PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     packet_rollover_(0),socket_(0),
     client_thread_collector_(0),client_thread_transmitor_(0),ready_(false), emu_mode_(emu),
-				 fragmented_(false),keep_transmitting_(true),/*ready_to_send_(false),*/first_ts_(true),keep_collecting_(true),previous_ts_(0)
+				 fragmented_(false),keep_transmitting_(true),/*ready_to_send_(false),*/first_ts_(true),keep_collecting_(true),previous_ts_(0),timeout_cnt_(0)
 
 {
   printf("Here\n");
@@ -48,22 +48,33 @@ PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     Log(verbose,"Not filling emulator queue");
     // Nothing should need to be done here.
   }
+
+  // Init the mutex for the queue
+  if (pthread_mutex_init(&lock_, NULL) != 0)
+  {
+    Log(error,"\n Failed to create the mutex for the data queue\n" );
+    return;
+  }
+
 }
 
 PTBReader::~PTBReader() {
   Log(debug,"Destroying the reader." );
+  ready_ = false;
 
 }
 void PTBReader::ClearThreads() {
-	Log(verbose,"Killing the daughter threads.\n");
+	Log(debug,"Killing the daughter threads.\n");
 	// First stop the loops
 	keep_collecting_ = false;
 	std::this_thread::sleep_for (std::chrono::seconds(2));
+	Log(info,"Killing collector thread.");
 	// Kill the collector thread first
 	pthread_cancel(client_thread_collector_);
 	// Kill the transmittor thread.
 	keep_transmitting_ = false;
 	std::this_thread::sleep_for (std::chrono::seconds(2));
+	Log(info,"Killing transmiter thread.");
 	pthread_cancel(client_thread_transmitor_);
 
 }
@@ -73,16 +84,11 @@ void PTBReader::StopDataTaking() {
   ClearThreads();
   pthread_mutex_destroy(&lock_);
 
+  ready_ = false;
 }
 
 void PTBReader::StartDataTaking() {
   if (ready_) {
-    // Init the mutex for the queue
-    if (pthread_mutex_init(&lock_, NULL) != 0)
-    {
-      Log(error,"\n Failed to create the mutex for the data queue\n" );
-      return;
-    }
 
     // We are ready to do business. Start reading the DMA into the queue.
     Log(verbose, "==> Creating collector\n" );
@@ -111,7 +117,7 @@ void PTBReader::ResetBuffers() {
   while (!buffer_queue_.empty()) {
     uint32_t*frame = buffer_queue_.front();
     buffer_queue_.pop();
-    delete [] frame;
+    //delete [] frame;
   }
   pthread_mutex_unlock(&lock_);
 }
@@ -183,26 +189,31 @@ void PTBReader::ClientCollector() {
       // Registers should be setup already.
       // TODO: Implement the DMA data taking code here.
       // First setup the DMA:
-#ifdef DATA_READER
+#ifdef ARM
       int status = xdma_init();
       if (status < 0) {
         Log(error,"Failed to initialize the DMA engine for data collection.");
         return;
       }
-      Log(verbose,"Allocating the DMA buffer.");
+      Log(debug,"Allocating the DMA buffer.");
 
       uint32_t *frame = NULL;
-      const uint32_t nbytes_to_collect = 16; //128 bit frame
-
-      while (keep_collecting_) {
-        // Allocate the memory necessary for a packet.
-        //uint32_t *frame = static_cast<uint32_t*>(new uint32_t[32]);
-        frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
-        for (size_t i = 0; i < 32; ++i) {
-          frame[i] = 0;
+      //      const uint32_t nbytes_to_collect = 16; //128 bit frame
+      const uint32_t buffer_size = 1024;//4096;
+      uint32_t pos = 0;
+      timeout_cnt_ = 0;
+      // Allocate the memory necessary for a packet.
+      //frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
+      // This should build a 1000 value circular buffer
+      frame = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,4*sizeof(uint32_t)));
+      for (size_t i = 0; i < 4*buffer_size; ++i) {
+    	  frame[i] = 0;
         }
         //FIXME: Verify that the numbers are correct&(dst[pos])
-        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[0]),nbytes_to_collect);
+      while (keep_collecting_) {
+        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
+        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[pos]),4);
+	//printf("Transaction done with return %d\n",status);
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
           timeout_cnt_++;
@@ -214,15 +225,26 @@ void PTBReader::ClientCollector() {
           if (timeout_cnt_ > 0){
             timeout_cnt_ = 0;
           }
+          Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3]);
         }
         // DMA transaction was successful.
         // -- add the data to the queue;
+        Log(debug,"Storing the buffer");
         pthread_mutex_lock(&lock_);
-        buffer_queue_.push(frame);
+        buffer_queue_.push(&frame[pos]);
         pthread_mutex_unlock(&lock_);
+        Log(debug,"Done storing the buffer");
+        pos += 4;
+        if (pos+4 >= buffer_size) {
+        	Log(warning,"Reached buffer size.Resetting to start.\n");
+        	pos = 0;
+        }
       }
-      xdma_exit();
-#endif /*DATA_READER*/
+      Log(debug,"Stopped collecting data.");
+      // Log(debug,"Shutting down the DMA engine.");
+      // xdma_exit();
+      // Log(debug,"DMA engine done.");
+#endif /*ARM*/
     }
 }
 
@@ -344,6 +366,7 @@ void PTBReader::ClientTransmiter() {
   // That is set from the main thread.
   while(keep_transmitting_) {
 
+    //continue;
     // Logic was dramatically changed.
     // FW decides when the packet is ready.
     // When DMA brings the TS word it is sign that packet has to be sent
@@ -370,6 +393,7 @@ void PTBReader::ClientTransmiter() {
     // iframe : Frame counter.
     uint32_t ipck = 0,iframe = 0;
     bool carry_on = true;
+    uint32_t frame[4];
     header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
     eth_buffer[0] = header;
     Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
@@ -385,12 +409,20 @@ void PTBReader::ClientTransmiter() {
       if (buffer_queue_.size() == 0) {
         continue;
       }
+      Log(debug,"Collecting data");
       Log(verbose, "Transmitting data...\n");
       pthread_mutex_lock(&lock_);
-      uint32_t *frame = buffer_queue_.front();
+      uint32_t *frametmp = buffer_queue_.front();
+      frame[0] = frametmp[3];
+      frame[1] = frametmp[2];
+      frame[2] = frametmp[1];
+      frame[3] = frametmp[0];
+      //Log(debug,"Collect the data %08X",frame);
       buffer_queue_.pop();
       pthread_mutex_unlock(&lock_);
+      Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[0],frame[1],frame[2],frame[3]);
 
+      
       // If we still didn't get the first timestamp just drop the packages
       //Log(verbose, "--> Frame1 %x \n",frame[0]);
 
@@ -408,7 +440,7 @@ void PTBReader::ClientTransmiter() {
           // First TS after Run start
           previous_ts_ = (frame[1] << 31) | frame[2];
           first_ts_ = false;
-          delete [] frame;
+          //delete [] frame;
           continue;
         } else if (current_ts_ >= (previous_ts_ + time_rollover_)) {
           Log(verbose, "Sending the packet\n");
@@ -421,13 +453,13 @@ void PTBReader::ClientTransmiter() {
           carry_on = false;
           fragmented_ = false;
           // break out of the cycle
-          delete [] frame;
+          //delete [] frame;
           break;
           // FIXME: Add the situation in which we arrive to the time rollover.
 
         } else {
           // Not ready to send yet. Drop this frame and get another
-          delete [] frame;
+          //delete [] frame;
           continue;
         }
       }
@@ -453,7 +485,7 @@ void PTBReader::ClientTransmiter() {
         ipck += 1;
       }
 
-      delete [] frame;
+      //delete [] frame;
       // Frame completed. check if we can wait for another or keep collecting
       iframe += 1;
 
@@ -518,7 +550,7 @@ void PTBReader::ClientTransmiter() {
     // microslice header) being sent
 
     Log(debug,"Sending packet with %u bytes",sizeof(uint32_t)*(ipck+1));
-    DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+1));
+    //DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+1));
 
 
     /// -- Send the packet:
@@ -549,11 +581,15 @@ void PTBReader::ClientTransmiter() {
     //   // sleep for a while waiting for the generators to stop
     //   std::this_thread::sleep_for (std::chrono::seconds(5));
     // }
-  }
+  } // -- while(keep_transmitting_)
   // Exited the  run loop. Return.
   Log(info,"Exited transmission loop. Checking for queued packets." );
   // Deallocate the memory
   free(eth_buffer);
+  Log(debug,"Shutting down the DMA engine.");
+  xdma_exit();
+  Log(debug,"DMA engine done.");
+
 
 }
 ///////////////////////////////////////////////////////////////
