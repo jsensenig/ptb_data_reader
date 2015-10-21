@@ -86,7 +86,8 @@ void* ConfigServer::listen(void *arg) {
   }
   catch(SocketException &e) {
     Log(error,"Socket exception caught : %s",e.what());
-    std::abort();
+    throw;
+    //std::abort();
 
   }
   catch(std::exception &e) {
@@ -158,7 +159,6 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     std::size_t pos = 0;
     // CHeck if it is a compelte configuration set
     // Loop until all configurations and commands are processed
-    printf("!!!! Looking for find!\n");
     while (localBuffer.find("</config>")!= std::string::npos  || localBuffer.find("</command>")!= std::string::npos) {
       Log(verbose,"There is something to be processed");
       if ((pos = localBuffer.find("</config>")) != std::string::npos && (localBuffer.find("<config>")!= std::string::npos)) {
@@ -228,7 +228,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
         // Found the end of a command block.
         // Pass that buffer to process and erase it from the string
         // 9 = strlen("</config>")
-        Log(debug,"POS %u LEN %u",pos,strlen("</command>"));
+        //Log(debug,"POS %u LEN %u",pos,strlen("</command>"));
 
         tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
         // Remove the entry from localBuffer
@@ -320,8 +320,6 @@ void ConfigServer::ProcessTransmission(const char* buffer) {
     Log(verbose,"Queue now composed of %u elements.",queue_.size());
     return;
   }
-  printf("Going to start processing\n");
-  printf("The string [%s]\n",buffer);
   Log(verbose,"Processing a transmission");
   Log(verbose,"[%s]",buffer);
 

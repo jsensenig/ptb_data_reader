@@ -100,11 +100,13 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         // Essencially it clears the hardware, recommits the configuration and restart the run
         //
       case SOFTRESET:
+        // A reset is also supposed to stop the connections
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(10));
         SetResetBit(false);
         // -- Re-commit the configuration
+        // Not sure if this is going to work as intended
         RestoreConfigurationRegisters();
         SetConfigBit(true);
         SetEnableBit(true);
@@ -166,6 +168,7 @@ void PTBManager::StartRun() {
   // Set status flag to RUNNING
   if (!reader_) reader_ = new PTBReader(emu_mode_);
 
+  // -- Reopen the connection if not yet open
   if (!reader_->isReady()) {
     reader_->InitConnection();
   }
@@ -204,10 +207,11 @@ void PTBManager::StopRun() {
   //        Deallocate its streaming connection.
 
   // First check that it is running
-  if ((status_ != RUNNING) || GetEnableBitACK() == false ) {//(((register_map_[30].value() >> 30) & 0x1) != 0x1 )) {
-    Log(warning,"Stop Run requested, but device isn't running. Ignoring.");
-    return;
-  }
+  // We should be able to ignore this!!!
+  //  if ((status_ != RUNNING) || GetEnableBitACK() == false ) {//(((register_map_[30].value() >> 30) & 0x1) != 0x1 )) {
+  //    Log(warning,"Stop Run requested, but device isn't running. Ignoring.");
+  //    return;
+  //  }
 
   // The order should be:
   // 1. Set the GLB_EN register to 0 (stop readout in the fabric)
@@ -313,6 +317,7 @@ void PTBManager::FreeRegisters() {
 
 void PTBManager::ProcessConfig(pugi::xml_node config) {
   // Only accept a new configuration if we are not running.
+  // NFB: Not sure if I shouldn't always accept a config but simply place it in the cache.
   if (status_ == RUNNING) {
     Log(warning,"Attempted to pass a new configuration during a run. Ignoring the new configuration." );
     return;
@@ -330,10 +335,30 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   Log(info,"Parsing the configuration." );
 
   // First zero out all registers
-
-
-  // Load the childs by parts.
+  // Load the children nodes by parts.
   // Could use a iterator but then
+
+  ///! FIXME: Perhaps a default configuration should be hardcoded here
+  /**
+   *
+template<typename IntType>
+IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
+// If:
+// dst    = 0xAAAA; // 0b1010101010101010
+// src    = 0x0C30; // 0b0000110000110000
+// pos    = 4                       ^
+// len    = 8                ^-------
+// Then:
+// result = 0xAC3A; // 0b1010110000111010
+}
+
+template<typename IntType>
+IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
+    IntType mask = (((IntType)1 << len) - 1) << pos;
+    return (dst & ~mask) | (src & mask);
+}
+
+   */
   ///!
   ///! DataBuffer
   ///!
@@ -382,20 +407,22 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // Catch the lowest 32 bits of the word
       ////// ------
       ////// REG 34 (LSB OF CHANNEL MASK)
+      ////// BSU[31-0]
       ////// ------
 
       *(volatile uint32_t*)(register_map_[34].address) = bsu & 0xFFFFFFFF;
-      //register_map_[0].value() = bsu & 0xFFFFFFFF;
-      Log(verbose,"First register 0x%X", register_map_[0].value() );
+      //register_map_[34].value() = bsu & 0xFFFFFFFF;
+      Log(verbose,"Register 34 : [0x%X]", register_map_[34].value() );
 
       ////// ------
-      ////// REG 1
+      ////// REG 1 (MSB of BSU channel mask + LSB of TSU channel mask)
+      ////// TSU[14-0] + BSU[48-32]
       ////// ------
       // The remaining 17 bits (49-32) go into the lower 17 bits of the next word
       // [0-16]
       *(volatile uint32_t*)(register_map_[1].address) = (bsu >> 32 ) & 0x1FFFF;
       //register_map_[1].value() = (bsu >> 32 ) & 0x1FFFF;
-      Log(verbose,"Second register (tmp) 0x%X",register_map_[1].value() );
+      Log(verbose,"Register 1 (tmp) : [0x%X]",register_map_[1].value() );
 
       // Now grab the TSU part to complete the mask of this register
       uint64_t tsu = strtoull(it->child("TSU").child_value(),&pEnd,16);
@@ -404,53 +431,40 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // [17-31]
       *(volatile uint32_t*)(register_map_[1].address) |= ((tsu & 0x7FFF) << 17);
       //register_map_[1].value() |= ((tsu & 0x7FFF) << 17);
-      Log(verbose,"Second register 0x%X", register_map_[1].value() );
+      Log(verbose,"Register 1 : [0x%X]", register_map_[1].value() );
 
       ////// ------
-      ////// REG 2
+      ////// REG 2   (MSB of channel mask)
+      ////// TSU[46-15]
       ////// ------
 
-      // The remaining 33 (48-15) bits go into the next registers
+      // The remaining 33 (47-15) bits go into the next registers
       *(volatile uint32_t*)(register_map_[2].address) = ((tsu >> 15) & 0xFFFFFFFF);
       //register_map_[2].value() = ((tsu >> 15) & 0xFFFFFFFF);
-      Log(verbose,"Third register 0x%X",*(volatile uint32_t*)(register_map_[2].address) );
+      Log(verbose,"Register 2 : [0x%X]",*(volatile uint32_t*)(register_map_[2].address) );
 
       ////// ------
       ////// REG 3
+      ////// TSU[47] (LSB)
       ////// ------
 
       // The final bit goes into the lsb of register 4
       *(volatile uint32_t*)(register_map_[3].address) |= ((tsu >> 47) & 0x1);
-      Log(verbose,"Fourth register 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
+      Log(verbose,"Register 3 (CHMASK): [0x%X]",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((tsu >> 47) & 0x1);
       //      Log(verbose,"Fourth register 0x%X",register_map_[3].value() );
     }
+
+
     if (!strcmp(it->name(),"ExtTriggers")) {
       // External triggers go into register 4
       // to bits [26-30]
       uint32_t TRIGEX = strtoul(it->child("Mask").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[3].address) |= ((TRIGEX & 0x1F) << 26);
-      Log(verbose,"Fourth register (TRIGEX) 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
+      Log(verbose,"Register 3 (TRIGEX) : 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((TRIGEX & 0x1F) << 26);
       //      Log(verbose,"Fourth register (TRIGEX) 0x%X",register_map_[3].value() );
     }
-    // -- The calibrations now have their own registers
-    //    if (!strcmp(it->name(),"Calibration")) {
-    //      // Calibrations go also into register 4
-    //      // Period : [6-21]
-    //      // Mask : [22-25]
-    //      uint32_t CAL_PRD = strtoul(it->child("Period").child_value(),&pEnd,16);
-    //      *(volatile uint32_t*)(register_map_[3].address) |= ((CAL_PRD & 0xFFFF) << 6);
-    //      //register_map_[3].value() |= ((CAL_PRD & 0xFFFF) << 6);
-    //      Log(verbose,"Fourth register (CAL_PRD) 0x%X",*(volatile uint32_t*)(register_map_[3].address));
-    //
-    //
-    //      uint32_t CAL_MSK = strtoul(it->child("ChannelMask").child_value(),&pEnd,16);
-    //      *(volatile uint32_t*)(register_map_[3].address) |= ((CAL_MSK & 0xF) << 22);
-    //      //register_map_[3].value() |= ((CAL_MSK & 0xF) << 22);
-    //      Log(verbose,"Fourth register (CAL_MSK) 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
-    //
-    //    }
 
     if (!strcmp(it->name(),"Hardware")) {
       // M_PULSEWIDTH - Number of clock cycles to keep the any outgoing pulse (out high)
@@ -458,7 +472,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // TrigOutWidth : [25-27]
       uint32_t M_PULSEWIDTH = strtoul(it->child("PulseWidth").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[4].address) |= ((M_PULSEWIDTH & 0x7) << 25);
-      Log(verbose,"Fourth register (M_PULSEWIDTH) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
+      Log(verbose,"Register 4 (M_PULSEWIDTH) : [0x%X]", *(volatile uint32_t*)(register_map_[4].address) );
       //      register_map_[4].value() |= ((M_TRIGOUT & 0x7) << 25);
       //      Log(verbose,"Fourth register (M_PULSEWIDTH) 0x%X", register_map_[4].value() );
 
@@ -468,11 +482,11 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // This one is quite complicated to parse.
       // For the moment let's deal with it statically...
 
-      // The lockout window goes into register 4
+      // The lockout window goes into register 3
       // LockoutWindow : [1-5]
       uint32_t MT_LOCKOUT = strtoul(it->child("LockdownWindow").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[3].address) |= ((MT_LOCKOUT & 0x1F) << 1);
-      Log(verbose,"Fourth register (MT_LOCKDOWN) 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
+      Log(verbose,"Register 3 (MT_LOCKDOWN) 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((MT_LOCKDOWN & 0x1F) << 1);
       //      Log(verbose,"Fourth register (MT_LOCKDOWN) 0x%X",register_map_[3].value() );
 
@@ -483,17 +497,22 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // TriggerWindow : [22-24]
       uint32_t M_LOCKHI = strtoul(it->child("TriggerWindow").child_value(),&pEnd,16);
       *(volatile uint32_t*)(register_map_[4].address) |= ((M_LOCKHI & 0x7) << 22);
-      Log(verbose,"Fourth register (M_LOCKHI) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
+      Log(verbose,"Register 4 (M_LOCKHI) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
       //      register_map_[4].value() |= ((M_LOCKHI & 0x7) << 22);
       //      Log(verbose,"Fourth register (M_LOCKHI) 0x%X", register_map_[4].value() );
 
       // Now it is specific trigger codes...
       // Deal with one at a time
 
+      ///! Create an empty node to define disabled triggers
+      pugi::xml_node empty_node;
+
       pugi::xml_node mtrigger_node = it->find_child_by_attribute("TriggerMask","id","A");
       if (mtrigger_node.empty()){
         Log(warning,"Couldn't find the configuration for trigger A.");
-        continue;
+        // If it doesn't find, disable this trigger
+        ParseMuonTrigger(empty_node,4,1);
+        //continue;
       } else {
         // -- The operations go into register 5
         ParseMuonTrigger(mtrigger_node,4,1);
@@ -502,7 +521,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       mtrigger_node = it->find_child_by_attribute("TriggerMask","id","B");
       if (mtrigger_node.empty()){
         Log(warning,"Couldn't find the configuration for trigger B." );
-        continue;
+        ParseMuonTrigger(empty_node,4,1);
       } else {
         // -- The operations go into register 6
         ParseMuonTrigger(mtrigger_node,5,7);
@@ -511,7 +530,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       mtrigger_node = it->find_child_by_attribute("TriggerMask","id","C");
       if (mtrigger_node.empty()){
         Log(warning,"Couldn't find the configuration for trigger C." );
-        continue;
+        ParseMuonTrigger(empty_node,4,1);
       } else {
         // -- The operations go into register 18
         ParseMuonTrigger(mtrigger_node,17,1);
@@ -520,7 +539,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       mtrigger_node = it->find_child_by_attribute("TriggerMask","id","D");
       if (mtrigger_node.empty()){
         Log(warning,"Couldn't find the configuration for trigger D." );
-        continue;
+        ParseMuonTrigger(empty_node,4,1);
       } else {
         // -- The operations go into register 19
         ParseMuonTrigger(mtrigger_node,17,7);
@@ -532,8 +551,41 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
     if (!strcmp(it->name(),"Calibrations")) {
       std::string enable;
       uint32_t period  = 0;
-      uint32_t reg = 30;
-      pugi::xml_node node = it->find_child_by_attribute("CalibrationMask","id","C1");
+      uint32_t reg = 0;
+      uint32_t reg_init = 30;
+      char *channel_id[] = {"C1","C2","C3","C4"};
+      // this can be hardcoded since we don't have any more than that.
+      for (uint32_t i = 0; i < 4; ++i) {
+        pugi::xml_node node = it->find_child_by_attribute("CalibrationMask","id",channel_id[i]);
+        if (node.empty()){
+          Log(warning,"Couldn't find the configuration for calibration channel %s. Disabling it.",channel_id[i]);
+          enable = "false";
+          period = 0x0;
+        } else {
+          enable = node.child("enabled").child_value();
+          Log(debug,"Calibration channel %u enable : %s (%s)",i+1,enable.c_str(),node.child("enable").child_value());
+          period = strtoul(node.child("period").child_value(),&pEnd,16);
+        }
+
+        reg = reg_init + i;
+        if (period > 0x7FFFFFFF) {
+          Log(warning,"Period larger than maximum allowable size. Truncating to max value ( 2147483647 : 0x7FFFFFFF)");
+          period = 0x7FFFFFFF;
+        }
+        if (!enable.compare("true")) {
+          register_map_[reg].value() = (0x1 << 31);
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
+        } else if (!enable.compare("false")) {
+          register_map_[reg].value() = (0x0 << 31);
+          register_map_[reg].value() |= period & 0x7FFFFFFF;
+        } else {
+          Log(error,"Unknown status of enable flag : [%s]. Possible values : (true|false)",enable.c_str());
+          throw std::string("Unknown status of enable flag in calib module.");
+        }
+      }
+/*
+
+       pugi::xml_node node = it->find_child_by_attribute("CalibrationMask","id","C1");
       if (node.empty()){
         Log(warning,"Couldn't find the configuration for calibration channel C1.");
         continue;
@@ -616,14 +668,13 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
           register_map_[reg].value() |= period;
         }
       }
-
+*/
     } // -- strcmp calibrations
 
     Log(verbose," Content val : %s",it->value());
     Log(verbose," Content child : %s",it->child_value() );
   } // for
 
-  //}
 
   // Set the bit to commit the configuration
   // into the hardware (bit 29 in register 30)
@@ -631,7 +682,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   //  register_map_[34].value() |= (0x1 << 29);
   SetConfigBit(true);
   //  Log(verbose,"Thirty Fourth register after config commit 0x%X", *(volatile uint32_t*)(register_map_[30].address) );
-  Log(verbose,"Thirty Fourth register after config commit 0x%X", register_map_[34].value() );
+  Log(verbose,"Register 0 after config commit 0x%08X", register_map_[0].value() );
   if (!GetConfigBitACK()) {
     Log(error,"Failed set to set the configuration bit. ACK not received");
     throw("Configuration failed to commit. ACK not received.");
@@ -712,17 +763,22 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
   uint32_t input_word;
   uint64_t input_longword;
 
+
   // M_?_EXT_OP - External logic to be applied between the groups
   // ExtLogic : [word_offset+5 - word_offset+6]
   mask = 0x3;
   bit_offset = 5;
   field_name = "ExtLogic";
 
-  // For trigger A this translates into 
+  // For trigger A this translates into
   // word_offset = 11
   // bit_offset = 5
   // (input_word & 0x3) << 16 [16-17]
-  input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
+  if (T.empty()) {
+    input_word = 0x0;
+  } else {
+    input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
+  }
   *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
   Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
   //  register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
@@ -734,8 +790,12 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
   bit_offset = 2;
   field_name = "Prescale";
 
-  input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
-  // For trigger A this translates into 
+  if (T.empty()) {
+    input_word = 0x0;
+  } else {
+    input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
+  }
+  // For trigger A this translates into
   // input_word & 0x7 << 13 ==> [13-15]
   *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
   Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
@@ -744,10 +804,14 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
 
 
   // Loop over the groups
+  const int ngroups = 2;
   const char *groups[] = {"group1","group2"};
 
-  for (uint32_t i =0; i < 2; ++i) {
-    pugi::xml_node G = T.child(groups[i]);
+  for (uint32_t i =0; i < ngroups; ++i) {
+    pugi::xml_node G;
+    if (!T.empty()) {
+      G = T.child(groups[i]);
+    }
     // Now the more messy part of using a long register
     Log(verbose,"Processing group [%s]",groups[i]);
     // Intra-group logic : [word_offset+7 - word_offset+8]
@@ -755,7 +819,11 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     mask = 0x3;
     bit_offset = 7+(i*2);
     field_name = "Logic";
-    input_word = strtoul(G.child(field_name.c_str()).child_value(),&pEnd,16);
+    if (T.empty()) {
+      input_word = 0x0;
+    } else {
+      input_word = strtoul(G.child(field_name.c_str()).child_value(),&pEnd,16);
+    }
     // Trigger A:
     // i = 0 : [18-19]
     //    input_word & 0x3 << 18 ==> [18-19]
@@ -767,7 +835,11 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     //    Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),register_map_[reg].value() );
 
     // Now get the mask into a 64 bit word
-    input_longword = strtoull(G.child("BSU").child_value(),&pEnd,16);
+    if (T.empty()) {
+      input_longword = 0x0;
+    } else {
+      input_longword = strtoull(G.child("BSU").child_value(),&pEnd,16);
+    }
     // These now go into the offset registers
 
     // -- First contains the first 32 bits of the word
@@ -805,8 +877,11 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
 
 
     // Now grab the TSU part to complete the mask of this register
-    input_longword = strtoull(G.child("TSU").child_value(),&pEnd,16);
-
+    if (T.empty()) {
+      input_word = 0x0;
+    } else {
+      input_longword = strtoull(G.child("TSU").child_value(),&pEnd,16);
+    }
     // The lowest 15 bits (0-14) go into the upper bits of the previous register
     // [17-31]
     mask = 0x7FFF;
@@ -863,8 +938,8 @@ void PTBManager::SetBit(uint32_t reg, uint32_t bit, bool status) {
   register_map_[reg].value() ^= ((status?0x1:0x0) ^ register_map_[reg].value()) & ( 1 << bit);
 
   //  uint32_t tmp_reg = register_map_[reg].value();
-//  (tmp_reg >> bit) = status?0x1:0x0;
-//  register_map_[reg].value() = tmp_reg;
+  //  (tmp_reg >> bit) = status?0x1:0x0;
+  //  register_map_[reg].value() = tmp_reg;
 }
 //
 
