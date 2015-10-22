@@ -165,6 +165,8 @@ void* reader_thread(void *arg) {
   catch(...) {
     Log(error,"Caught some nasty exception.");
   }
+
+  return nullptr;
 }
 
 // void* shutdown(void *arg) {
