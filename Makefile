@@ -2,7 +2,7 @@
 MACHINE    := $(shell uname -m)
 CC         := g++
 BIN        := $(PWD)/bin
-DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket 
+DEF_CFLAGS := -std=c++11 -m32 -Wall -I$(PWD)/contrib/PracticalSocket 
 DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src 
 ifeq (($MACHINE),armv7l)
    $(info Adding extra flags for uZed compilation...)

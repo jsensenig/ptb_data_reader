@@ -24,6 +24,8 @@ extern "C" {
 };
 
 
+#define CTL_BASE_REG_VAL 0x08000000
+
 const char* PTBManager::default_config_ = "./config/config_default.xml";
 
 // Init with a new reader attached
@@ -104,27 +106,30 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(10));
-        //SetResetBit(false);
+        SetResetBit(false);
         // -- Re-commit the configuration
         // Not sure if this is going to work as intended
         RestoreConfigurationRegisters();
         SetConfigBit(true);
-        SetEnableBit(true);
+        //SetEnableBit(true);
         break;
       case HARDRESET:
+        // A hard reset should sent the whole thing to zeros
         SetEnableBit(false);
         SetConfigBit(false);
         // the hard reset also includes a complete reset of the local buffers
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(10));
-        //SetResetBit(false);
+        SetResetBit(false);
         reader_->ResetBuffers();
-        RestoreConfigurationRegisters();
+
+        //RestoreConfigurationRegisters();
         // Reset the configuration buggers to an enable state
         // Reassign the configuration (was kept in memory before)
-        SetConfigBit(true);
-        SetEnableBit(true);
+        //SetConfigBit(true);
+        // -- After a reset do not enable data taking! A new run start should come
+        //SetEnableBit(true);
         break;
       case STOPRUN:
         if (getStatus() != PTBManager::RUNNING) {
@@ -278,10 +283,16 @@ void PTBManager::SetupRegisters() {
     if (conf_reg.n_registers < num_registers_) {
       Log(warning,"Have less configured registers than the ones required. (%u != %u)",conf_reg.n_registers,num_registers_);
     }
-    for (uint32_t i = 0; i < num_registers_; ++i) {
+    // This is wrong since the first register is special.
+    // Setting it to 0 makes the board to be in a permanent reset state
+    register_map_[0].address =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_base_addr_) + conf_reg.addr_offset[0]);
+    register_map_[0].value() = CTL_BASE_REG_VAL;
+    for (uint32_t i = 1; i < num_registers_; ++i) {
       register_map_[i].address =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_base_addr_) + conf_reg.addr_offset[i]);
       register_map_[i].value() = 0;
     }
+
+
 #endif /*ARM*/
   }
   // Allocate the memory for the register cache
@@ -327,8 +338,9 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
 
   Log(info,"Applying a reset prior to the configuration.");
   SetResetBit(true);
+
   std::this_thread::sleep_for (std::chrono::microseconds(10));
-//      SetResetBit(false);
+  SetResetBit(false);
   Log(info,"Reset applied");
 
   // // Check if the reader is ready. If it is ignore the change
@@ -347,26 +359,6 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   // Could use a iterator but then
 
   ///! FIXME: Perhaps a default configuration should be hardcoded here
-  /**
-   *
-template<typename IntType>
-IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
-// If:
-// dst    = 0xAAAA; // 0b1010101010101010
-// src    = 0x0C30; // 0b0000110000110000
-// pos    = 4                       ^
-// len    = 8                ^-------
-// Then:
-// result = 0xAC3A; // 0b1010110000111010
-}
-
-template<typename IntType>
-IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
-    IntType mask = (((IntType)1 << len) - 1) << pos;
-    return (dst & ~mask) | (src & mask);
-}
-
-   */
   ///!
   ///! DataBuffer
   ///!
@@ -561,7 +553,7 @@ IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
       uint32_t period  = 0;
       uint32_t reg = 0;
       uint32_t reg_init = 30;
-      char *channel_id[] = {"C1","C2","C3","C4"};
+      const char *channel_id[] = {"C1","C2","C3","C4"};
       // this can be hardcoded since we don't have any more than that.
       for (uint32_t i = 0; i < 4; ++i) {
         pugi::xml_node node = it->find_child_by_attribute("CalibrationMask","id",channel_id[i]);
@@ -591,92 +583,6 @@ IntType OverwriteBits(IntType dst, IntType src, int pos, int len) {
           throw std::string("Unknown status of enable flag in calib module.");
         }
       }
-/*
-
-       pugi::xml_node node = it->find_child_by_attribute("CalibrationMask","id","C1");
-      if (node.empty()){
-        Log(warning,"Couldn't find the configuration for calibration channel C1.");
-        continue;
-      } else {
-        enable = node.child("enable").child_value();
-        period = strtoul(node.child("period").child_value(),&pEnd,16);
-        reg = 30;
-        if (period > 0x7FFFFFFF) {
-          Log(warning,"Period larger than maximum allowable size. Truncating to max value ( 2147483647 : 0x7FFFFFFF)");
-          period = 0x7FFFFFFF;
-        }
-        if (!enable.compare("true")) {
-          register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period & 0x7FFFFFFF;
-        } else {
-          register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period & 0x7FFFFFFF;
-        }
-      }
-
-      node = it->find_child_by_attribute("CalibrationMask","id","C2");
-      if (node.empty()){
-        Log(warning,"Couldn't find the configuration for calibration channel C2.");
-        continue;
-      } else {
-        enable = node.child("enable").child_value();
-        period = strtoul(node.child("period").child_value(),&pEnd,16);
-        reg = 31;
-        if (period > 0x7FFFFFFF) {
-          Log(warning,"Period larger than maximum allowable size. Truncating to max value ( 2147483647 : 0x7FFFFFFF)");
-          period = 0x7FFFFFFF;
-        }
-        if (!enable.compare("true")) {
-          register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period & 0x7FFFFFFF;
-        } else {
-          register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period & 0x7FFFFFFF;
-        }
-      }
-
-      node = it->find_child_by_attribute("CalibrationMask","id","C3");
-      if (node.empty()){
-        Log(warning,"Couldn't find the configuration for calibration channel C3.");
-        continue;
-      } else {
-        enable = node.child("enable").child_value();
-        period = strtoul(node.child("period").child_value(),&pEnd,16);
-        reg = 32;
-        if (period > 0x7FFFFFFF) {
-          Log(warning,"Period larger than maximum allowable size. Truncating to max value ( 2147483647 : 0x7FFFFFFF)");
-          period = 0x7FFFFFFF;
-        }
-        if (!enable.compare("true")) {
-          register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period & 0x7FFFFFFF;
-        } else {
-          register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period & 0x7FFFFFFF;
-        }
-      }
-
-      node = it->find_child_by_attribute("CalibrationMask","id","C4");
-      if (node.empty()){
-        Log(warning,"Couldn't find the configuration for calibration channel C4.");
-        continue;
-      } else {
-        enable = node.child("enable").child_value();
-        period = strtoul(node.child("period").child_value(),&pEnd,16);
-        reg = 33;
-        if (period > 0x7FFFFFFF) {
-          Log(warning,"Period larger than maximum allowable size. Truncating to max value ( 2147483647 : 0x7FFFFFFF)");
-          period = 0x7FFFFFFF;
-        }
-        if (!enable.compare("true")) {
-          register_map_[reg].value() = (0x1 << 31);
-          register_map_[reg].value() |= period & 0x7FFFFFFF;
-        } else {
-          register_map_[reg].value() = (0x0 << 31);
-          register_map_[reg].value() |= period & 0x7FFFFFFF;
-        }
-      }
-*/
     } // -- strcmp calibrations
 
     Log(verbose," Content val : %s",it->value());
@@ -743,17 +649,20 @@ void PTBManager::DumpConfigurationRegisters() {
 
 void PTBManager::ResetConfigurationRegisters() {
   Log(debug,"Resetting configuration registers");
-  for (size_t i = 0; i < register_map_.size(); ++i) {
+  SetEnableBit(false);
+  SetConfigBit(false);
+  for (size_t i = 1; i < register_map_.size(); ++i) {
     Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
     register_map_.at(i).value() = 0x0;
     Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
   }
-
+  register_map_.at(0).value() = CTL_BASE_REG_VAL;
+  // Reset the control registers in steps as well
 }
 
 void PTBManager::RestoreConfigurationRegisters() {
   Log(debug,"Restoring configuration registers to local cache");
-  for (size_t i = 0; i < register_map_.size(); ++i) {
+  for (size_t i = 1; i < register_map_.size(); ++i) {
     Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
     register_map_.at(i).value() = register_cache_.at(i).value();
     Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
@@ -962,11 +871,19 @@ void PTBManager::SetBit(uint32_t reg, uint32_t bit, bool status) {
   // Things are more complicated than this. We want to set a single bit, regardless of what is around
   //register_map_[reg].value() ^= ((status?0x1:0x0) ^ register_map_[reg].value()) & ( 1 << bit);
 	Log(debug,"Reading the bit %u from reg %u",bit,reg);
+#ifdef ARM
 	uint32_t value = Xil_In32((uint32_t)register_map_[reg].address);
 	uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
 
 	Log(debug,"Got %08X -> %08X",value,new_value);
 	Xil_Out32((uint32_t)register_map_[reg].address,new_value);
+#else
+	// -- force making a copy
+	uint32_t value = register_map_[reg].value();
+	uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
+  Log(debug,"Got %08X -> %08X",value,new_value);
+  register_map_[reg].value() = new_value;
+#endif
 	Log(debug,"Final register value %08X",register_map_[reg].value());
   //  uint32_t tmp_reg = register_map_[reg].value();
   //  (tmp_reg >> bit) = status?0x1:0x0;

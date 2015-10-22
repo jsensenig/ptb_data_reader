@@ -60,6 +60,8 @@ PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
 
 PTBReader::~PTBReader() {
   Log(debug,"Destroying the reader." );
+  pthread_mutex_destroy(&lock_);
+
   ready_ = false;
 
 }
@@ -82,8 +84,6 @@ void PTBReader::ClearThreads() {
 void PTBReader::StopDataTaking() {
 
   ClearThreads();
-  pthread_mutex_destroy(&lock_);
-
   ready_ = false;
 }
 
@@ -115,7 +115,7 @@ void PTBReader::ResetBuffers() {
   Log(warning,"Resetting the software buffers.");
   pthread_mutex_lock(&lock_);
   while (!buffer_queue_.empty()) {
-    uint32_t*frame = buffer_queue_.front();
+    //uint32_t*frame = buffer_queue_.front();
     buffer_queue_.pop();
     //delete [] frame;
   }
@@ -183,6 +183,8 @@ void PTBReader::ClientCollector() {
       pthread_mutex_lock(&lock_);
       buffer_queue_.push(frame);
       pthread_mutex_unlock(&lock_);
+      (void)timeout_cnt_;
+      (void)timeout_cnt_threshold_;
       }
     } else {
       Log(warning,"Real data taking mode is not tested yet. " );
@@ -222,9 +224,7 @@ void PTBReader::ClientCollector() {
             throw std::string("Reached timeout counter limit.");
           }
         } else {
-          if (timeout_cnt_ > 0){
-            timeout_cnt_ = 0;
-          }
+          timeout_cnt_ = 0;
           Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3]);
         }
         // DMA transaction was successful.
@@ -241,6 +241,7 @@ void PTBReader::ClientCollector() {
         }
       }
       Log(debug,"Stopped collecting data.");
+      /// We can't exit the engine here otherwise the memory mapped registers disappear and the queue vanishes causing a crash
       // Log(debug,"Shutting down the DMA engine.");
       // xdma_exit();
       // Log(debug,"DMA engine done.");
@@ -586,10 +587,11 @@ void PTBReader::ClientTransmiter() {
   Log(info,"Exited transmission loop. Checking for queued packets." );
   // Deallocate the memory
   free(eth_buffer);
+#ifdef ARM
   Log(debug,"Shutting down the DMA engine.");
   xdma_exit();
   Log(debug,"DMA engine done.");
-
+#endif
 
 }
 ///////////////////////////////////////////////////////////////
