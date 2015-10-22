@@ -55,7 +55,7 @@ void control_thread() {
 
 
   // Sleep for 15 s and then stop the run
-  std::this_thread::sleep_for(std::chrono::seconds(5));
+  std::this_thread::sleep_for(std::chrono::seconds(10));
 
   Log(warning,"Sending STOP RUN\n");
   const char *stop_run = "<command>StopRun</command>";
