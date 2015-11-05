@@ -17,7 +17,7 @@
     
     <!-- Size of the time slice that each packet should represent. Make sure to be smaller than the rollover of 28 bits. -->
     <!-- 28 bit rollover of a 64 MHz clock is about 8s. The packet size should never get that big.-->  
-    <MicroSliceDuration>7</MicroSliceDuration>
+    <MicroSliceDuration>1024</MicroSliceDuration>
   </DataBuffer>
     <debug>
       <!-- enable creation of a log file/DEBUG mode -->

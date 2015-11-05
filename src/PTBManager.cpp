@@ -18,6 +18,8 @@
 #include <iomanip>
 #include <thread>
 #include <chrono>
+#include <bitset>
+#include <cmath>
 
 extern "C" {
 #include <unistd.h>
@@ -379,30 +381,37 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       unsigned short port = atoi(it->child("DaqPort").child_value());
       Log(debug,"Received port %hu",port );
       reader_->setTcpPort(port);
+      Log(debug,"Setting data transmission channel to [%s:%hu]",host.c_str(),port);
+
       //uint32_t rollOver = strtoul(it->child("RollOver").child_value(),&pEnd,10);
       uint32_t rollOver = atoi(it->child("RollOver").child_value());
-      Log(debug,"Packet Rollover %u",rollOver );
+      Log(debug,"Packet Rollover %u",rollOver);
       reader_->setPacketRollover(rollOver);
       // uint32_t duration = strtoul(it->child("MicroSliceDuration").child_value(),&pEnd,10);
       uint32_t duration = atoi(it->child("MicroSliceDuration").child_value());
-      Log(debug,"MicroSlice Duration %u",duration );
-      if (duration > 28) {
+      // Microslice duration is now a full number...check if it fits into 28 bits
+      Log(debug,"MicroSlice Duration %u [%X][%s]",duration,duration, std::bitset<28>(duration).to_string().c_str());
+      if (duration > pow(2,28)) {
         Log(warning,"Input value of [%u] above maximum rollover [28]. Truncating to maximum.",duration);
-        duration = 28;
+        duration = pow(2,28)-1;
       }
-      uint64_t timeRollOver = (1 << duration);
-      Log(debug,"MicroSlice time rollover : [%u] --> %lu clock ticks.",duration,timeRollOver);
+      uint64_t timeRollOver = (uint64_t)duration;//(1 << duration);
+      printf("bla\n");
+      //Log(debug,"MicroSlice time rollover : [%u] --> %lu clock ticks. [%X][%s]",duration,timeRollOver,duration,std::bitset<28>(duration).to_string().c_str());
       reader_->setTimeRollover(timeRollOver);
+      printf("bla\n");
+      SetBitRange(35,duration,0,28);
+      printf("bla\n");
+      Log(debug,"Register 35 : [0x%X]", register_map_[35].value() );
 
-      Log(verbose,"Setting data transmission channel to [%s:%hu]",host.c_str(),port);
-      //Log(verbose,"Packet rollover set to %u ",rollOver );
     }
     if (!strcmp(it->name(),"ChannelMask")) {
       // Deal directly with the childs.
 
       uint64_t bsu = strtoull(it->child("BSU").child_value(),&pEnd,16);
       // Now I want to get the first 32 bits into a register
-      Log(verbose,"Started with 0x%lX",bsu );
+      Log(debug,"BSU mask [0x%lX]",bsu );
+      Log(debug,"BSU mask [%s]",std::bitset<49>(bsu).to_string().c_str());
       // Make the assignments that I had decided before:
       // Catch the lowest 32 bits of the word
       ////// ------
@@ -412,7 +421,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
 
       *(volatile uint32_t*)(register_map_[34].address) = bsu & 0xFFFFFFFF;
       //register_map_[34].value() = bsu & 0xFFFFFFFF;
-      Log(verbose,"Register 34 : [0x%X]", register_map_[34].value() );
+      Log(debug,"Register 34 : [0x%X]", register_map_[34].value() );
 
       ////// ------
       ////// REG 1 (MSB of BSU channel mask + LSB of TSU channel mask)
@@ -422,16 +431,19 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // [0-16]
       *(volatile uint32_t*)(register_map_[1].address) = (bsu >> 32 ) & 0x1FFFF;
       //register_map_[1].value() = (bsu >> 32 ) & 0x1FFFF;
-      Log(verbose,"Register 1 (tmp) : [0x%X]",register_map_[1].value() );
+      Log(debug,"Register 1 (tmp) : [0x%X]",register_map_[1].value() );
 
       // Now grab the TSU part to complete the mask of this register
       uint64_t tsu = strtoull(it->child("TSU").child_value(),&pEnd,16);
+      Log(debug,"TSU mask [0x%lX]",tsu );
+      Log(debug,"TSU mask [%s]",std::bitset<48>(tsu).to_string().c_str());
+
 
       // The lowest 15 bits go into the upper bits of the previous register
       // [17-31]
       *(volatile uint32_t*)(register_map_[1].address) |= ((tsu & 0x7FFF) << 17);
       //register_map_[1].value() |= ((tsu & 0x7FFF) << 17);
-      Log(verbose,"Register 1 : [0x%X]", register_map_[1].value() );
+      Log(debug,"Register 1 : [0x%X]", register_map_[1].value() );
 
       ////// ------
       ////// REG 2   (MSB of channel mask)
@@ -441,7 +453,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // The remaining 33 (47-15) bits go into the next registers
       *(volatile uint32_t*)(register_map_[2].address) = ((tsu >> 15) & 0xFFFFFFFF);
       //register_map_[2].value() = ((tsu >> 15) & 0xFFFFFFFF);
-      Log(verbose,"Register 2 : [0x%X]",*(volatile uint32_t*)(register_map_[2].address) );
+      Log(debug,"Register 2 : [0x%X]",*(volatile uint32_t*)(register_map_[2].address) );
 
       ////// ------
       ////// REG 3
@@ -450,9 +462,9 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
 
       // The final bit goes into the lsb of register 4
       *(volatile uint32_t*)(register_map_[3].address) |= ((tsu >> 47) & 0x1);
-      Log(verbose,"Register 3 (CHMASK): [0x%X]",*(volatile uint32_t*)(register_map_[3].address) );
+      Log(debug,"Register 3 (CHMASK): [0x%X]",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((tsu >> 47) & 0x1);
-      //      Log(verbose,"Fourth register 0x%X",register_map_[3].value() );
+      //      Log(debug,"Fourth register 0x%X",register_map_[3].value() );
     }
 
 
@@ -460,10 +472,12 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // External triggers go into register 4
       // to bits [26-30]
       uint32_t TRIGEX = strtoul(it->child("Mask").child_value(),&pEnd,16);
+      Log(debug,"TRIGEX [0x%05X] [%s]",TRIGEX,std::bitset<5>(TRIGEX).to_string().c_str());
+
       *(volatile uint32_t*)(register_map_[3].address) |= ((TRIGEX & 0x1F) << 26);
-      Log(verbose,"Register 3 (TRIGEX) : 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
+      Log(debug,"Register 3 (TRIGEX) : 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((TRIGEX & 0x1F) << 26);
-      //      Log(verbose,"Fourth register (TRIGEX) 0x%X",register_map_[3].value() );
+      //      Log(debug,"Fourth register (TRIGEX) 0x%X",register_map_[3].value() );
     }
 
     if (!strcmp(it->name(),"Hardware")) {
@@ -471,10 +485,12 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // Width of the outgoing pulses
       // TrigOutWidth : [25-27]
       uint32_t M_PULSEWIDTH = strtoul(it->child("PulseWidth").child_value(),&pEnd,16);
+      Log(debug,"M_PULSEWIDTH [0x%03X] [%s]",M_PULSEWIDTH,std::bitset<3>(M_PULSEWIDTH).to_string().c_str());
+
       *(volatile uint32_t*)(register_map_[4].address) |= ((M_PULSEWIDTH & 0x7) << 25);
-      Log(verbose,"Register 4 (M_PULSEWIDTH) : [0x%X]", *(volatile uint32_t*)(register_map_[4].address) );
+      Log(debug,"Register 4 (M_PULSEWIDTH) : [0x%X]", *(volatile uint32_t*)(register_map_[4].address) );
       //      register_map_[4].value() |= ((M_TRIGOUT & 0x7) << 25);
-      //      Log(verbose,"Fourth register (M_PULSEWIDTH) 0x%X", register_map_[4].value() );
+      //      Log(debug,"Fourth register (M_PULSEWIDTH) 0x%X", register_map_[4].value() );
 
     }
     // The most troublesome part: muon triggers
@@ -484,11 +500,13 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
 
       // The lockout window goes into register 3
       // LockoutWindow : [1-5]
-      uint32_t MT_LOCKOUT = strtoul(it->child("LockdownWindow").child_value(),&pEnd,16);
-      *(volatile uint32_t*)(register_map_[3].address) |= ((MT_LOCKOUT & 0x1F) << 1);
-      Log(verbose,"Register 3 (MT_LOCKDOWN) 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
+      uint32_t MT_LOCKDOWN = strtoul(it->child("LockdownWindow").child_value(),&pEnd,16);
+      Log(debug,"MT_LOCKDOWN [0x%05X] [%s]",MT_LOCKDOWN,std::bitset<5>(MT_LOCKDOWN).to_string().c_str());
+
+      *(volatile uint32_t*)(register_map_[3].address) |= ((MT_LOCKDOWN & 0x1F) << 1);
+      Log(debug,"Register 3 (MT_LOCKDOWN) 0x%X 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((MT_LOCKDOWN & 0x1F) << 1);
-      //      Log(verbose,"Fourth register (MT_LOCKDOWN) 0x%X",register_map_[3].value() );
+      //      Log(debug,"Fourth register (MT_LOCKDOWN) 0x%X",register_map_[3].value() );
 
       // The remaining configuration words go into register 5
 
@@ -496,8 +514,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       // Width of the trigger window
       // TriggerWindow : [22-24]
       uint32_t M_LOCKHI = strtoul(it->child("TriggerWindow").child_value(),&pEnd,16);
+      Log(debug,"M_LOCKHI [0x%03X] [%s]",M_LOCKHI,std::bitset<3>(M_LOCKHI).to_string().c_str());
+
       *(volatile uint32_t*)(register_map_[4].address) |= ((M_LOCKHI & 0x7) << 22);
-      Log(verbose,"Register 4 (M_LOCKHI) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
+      Log(debug,"Register 4 (M_LOCKHI) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
       //      register_map_[4].value() |= ((M_LOCKHI & 0x7) << 22);
       //      Log(verbose,"Fourth register (M_LOCKHI) 0x%X", register_map_[4].value() );
 
@@ -563,8 +583,11 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
           period = 0x0;
         } else {
           enable = node.child("enabled").child_value();
-          Log(debug,"Calibration channel %u enable : %s (%s)",i+1,enable.c_str(),node.child("enable").child_value());
+//          Log(debug,"Calibration channel %u enable : %s(%s)",i+1,enable.c_str(),node.child("enable").child_value());
+          Log(debug,"Calibration channel %u enable : %s",i+1,enable.c_str());
           period = strtoul(node.child("period").child_value(),&pEnd,16);
+          Log(debug,"%s PERIOD [0x%X] [%s]",channel_id[i],period,std::bitset<30>(period).to_string().c_str());
+
         }
 
         reg = reg_init + i;
@@ -704,6 +727,8 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
   }
   *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
+  Log(verbose,"ExtLogic [0x%X] [%s]",input_word,std::bitset<2>(input_word).to_string().c_str());
+
   Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
   //  register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
   //  Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),register_map_[reg].value() );
@@ -722,6 +747,8 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
   // For trigger A this translates into
   // input_word & 0x7 << 13 ==> [13-15]
   *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
+  Log(verbose,"Prescale [0x%X] [%s]",input_word,std::bitset<3>(input_word).to_string().c_str());
+
   Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
   //  register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
   //  Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),register_map_[reg].value() );
@@ -754,6 +781,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // i = 1 : [20-21]
     //    input_word & 0x3 << 20 ==> [20-21]
     *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
+    Log(verbose,"Logic [0x%X] [%s]",input_word,std::bitset<2>(input_word).to_string().c_str());
     Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
     //    register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
     //    Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),register_map_[reg].value() );
@@ -774,6 +802,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // i = 1: [Reg8] : [0-31]
     //       map[8] : input_longword & 0xFFFFFFFF;
     *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) = (input_longword & mask);
+    Log(verbose,"BSU mask [0x%X] [%s]",input_longword,std::bitset<49>(input_longword).to_string().c_str());
     Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) );
     //    register_map_[reg+reg_offset+(i*3)].value() = (input_longword & mask);
     //    Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),register_map_[reg+reg_offset+(i*3)].value() );
@@ -806,6 +835,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     } else {
       input_longword = strtoull(G.child("TSU").child_value(),&pEnd,16);
     }
+    Log(verbose,"TSU mask [0x%X] [%s]",input_longword,std::bitset<48>(input_longword).to_string().c_str());
     // The lowest 15 bits (0-14) go into the upper bits of the previous register
     // [17-31]
     mask = 0x7FFF;

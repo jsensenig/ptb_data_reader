@@ -181,7 +181,8 @@ void* reader_thread(void *arg) {
 // }
 
 int main() {
-  Logger::SetSeverity(Logger::debug);
+//  Logger::SetSeverity(Logger::debug);
+	  Logger::SetSeverity(Logger::debug);
   Log(info,"Just a test");
 
   // This doesn't work since the thread gets stuck in the constructor of ConfigServer
@@ -199,7 +200,8 @@ int main() {
   //Log(debug) << "Going to sleep" <<endlog;
   //std::this_thread::sleep_for (std::chrono::seconds(10));
   Log(info,"Starting manager");
-  bool emulate = false;//true;
+  //bool emulate = false;
+  bool emulate = true;
   // Start in emulating mode.
   PTBManager manager(emulate);
 
