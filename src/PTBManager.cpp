@@ -802,7 +802,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // i = 1: [Reg8] : [0-31]
     //       map[8] : input_longword & 0xFFFFFFFF;
     *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) = (input_longword & mask);
-    Log(verbose,"BSU mask [0x%X] [%s]",input_longword,std::bitset<49>(input_longword).to_string().c_str());
+    Log(verbose,"BSU mask [0x%lX] [%s]",input_longword,std::bitset<49>(input_longword).to_string().c_str());
     Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) );
     //    register_map_[reg+reg_offset+(i*3)].value() = (input_longword & mask);
     //    Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),register_map_[reg+reg_offset+(i*3)].value() );
@@ -835,7 +835,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     } else {
       input_longword = strtoull(G.child("TSU").child_value(),&pEnd,16);
     }
-    Log(verbose,"TSU mask [0x%X] [%s]",input_longword,std::bitset<48>(input_longword).to_string().c_str());
+    Log(verbose,"TSU mask [0x%lX] [%s]",input_longword,std::bitset<48>(input_longword).to_string().c_str());
     // The lowest 15 bits (0-14) go into the upper bits of the previous register
     // [17-31]
     mask = 0x7FFF;
