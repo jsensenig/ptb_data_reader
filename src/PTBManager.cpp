@@ -134,7 +134,6 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(10));
-        SetResetBit(true);
         SetResetBit(false);
         reader_->ResetBuffers();
         //RestoreConfigurationRegisters();
@@ -188,6 +187,7 @@ void PTBManager::StartRun() {
 
   // -- Reopen the connection if not yet open
   if (!reader_->isReady()) {
+	Log(warning,"Connection is not opened yet. Retrying to open.");
     reader_->InitConnection();
   }
 
@@ -336,12 +336,15 @@ void PTBManager::FreeRegisters() {
 #ifdef ARM
     munmap(mapped_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
 #endif /*ARM*/
+    Log(debug,"Configuration registers unmapped...");
   }
 
+  Log(debug,"Deleting the cache pointers");
   // Clear and free also the cache registers
   for (uint32_t i =0; i < num_registers_; ++i) {
     delete static_cast<uint32_t*>(register_cache_[i].address);
   }
+  Log(debug,"Clearing the cache");
   register_cache_.clear();
   Log(info,"Memory freed.!");
 }
