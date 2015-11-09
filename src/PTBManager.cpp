@@ -553,6 +553,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         ParseMuonTrigger(empty_node,4,1);
         //continue;
       } else {
+    	  Log(debug,"Parsing configuration for trigger A");
         // -- The operations go into register 5
         ParseMuonTrigger(mtrigger_node,4,1);
       }
@@ -563,6 +564,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         ParseMuonTrigger(empty_node,4,1);
       } else {
         // -- The operations go into register 6
+    	  Log(debug,"Parsing configuration for trigger B");
         ParseMuonTrigger(mtrigger_node,5,7);
       }
 
@@ -572,6 +574,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         ParseMuonTrigger(empty_node,4,1);
       } else {
         // -- The operations go into register 18
+    	  Log(debug,"Parsing configuration for trigger C");
         ParseMuonTrigger(mtrigger_node,17,1);
       }
 
@@ -581,6 +584,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         ParseMuonTrigger(empty_node,4,1);
       } else {
         // -- The operations go into register 19
+    	  Log(debug,"Parsing configuration for trigger D");
         ParseMuonTrigger(mtrigger_node,17,7);
       }
 
@@ -809,11 +813,11 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     if (T.empty()) {
       input_longword = 0x0;
     } else {
-      input_longword = strtoull(G.child("BSU").child_value(),&pEnd,16);
+      input_longword = strtoull(G.child("TSU").child_value(),&pEnd,16);
     }
     // These now go into the offset registers
 
-    // -- First contains the first 32 bits of the word
+    // -- First contains the lsb 32 bits of the word
     mask = 0xFFFFFFFF;
     // -- Trigger A:
     // i = 0: [Reg5 : [0-31]]
@@ -821,14 +825,14 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // i = 1: [Reg8] : [0-31]
     //       map[8] : input_longword & 0xFFFFFFFF;
     *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) = (input_longword & mask);
-    Log(verbose,"BSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<49>(input_longword).to_string().c_str());
+    Log(verbose,"BSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<48>(input_longword).to_string().c_str());
     Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) );
     //    register_map_[reg+reg_offset+(i*3)].value() = (input_longword & mask);
     //    Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),register_map_[reg+reg_offset+(i*3)].value() );
 
-    // The remaining 17 bits (49-32) go into the lower 17 bits of the next word
+    // The remaining 16 bits (47-32) go into the lower 17 bits of the next word
     // [0-16]
-    mask = 0x1FFFF;
+    mask = 0xFFFF;
 
 
     // -- Trigger A:
@@ -848,16 +852,16 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
 
 
 
-    // Now grab the TSU part to complete the mask of this register
+    // Now grab the BSU part to complete the mask of this register
     if (T.empty()) {
       input_word = 0x0;
     } else {
-      input_longword = strtoull(G.child("TSU").child_value(),&pEnd,16);
+      input_longword = strtoull(G.child("BSU").child_value(),&pEnd,16);
     }
-    Log(verbose,"TSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<48>(input_longword).to_string().c_str());
-    // The lowest 15 bits (0-14) go into the upper bits of the previous register
+    Log(verbose,"TSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<49>(input_longword).to_string().c_str());
+    // The lowest 16 bits (0-15) go into the upper bits of the previous register
     // [17-31]
-    mask = 0x7FFF;
+    mask = 0xFFFF;
     bit_offset = 17;
     // -- Trigger A:
     // i = 0: [Reg6 : [17-31]]
@@ -869,7 +873,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     //    register_map_[reg+reg_offset+(i*3)+1].value() |= (input_longword & mask ) << bit_offset;
     //    Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,register_map_[reg+reg_offset+(i*3)+1].value() );
 
-    // The next 32 (47-15) bits go into the next register
+    // The next 32 (48-16) bits go into the next register
     mask = 0xFFFFFFFF;
     bit_offset = 15;
     // -- Trigger A:
