@@ -28,10 +28,18 @@ extern "C" {
 #include <inttypes.h>
 };
 
+/**
+ * This seems to suggest that the control register is always set to 1.
+ * But the config_manager IP inverts the signal so it should be set to 0 here and the
+ * IP takes care of inverting it
+ */
 
-#define CTL_BASE_REG_VAL 0x08000000
+//#define CTL_BASE_REG_VAL 0x08000000
+#define CTL_BASE_REG_VAL 0x00000000
 
-const char* PTBManager::default_config_ = "./config/config_default.xml";
+// -- This is actually never used, I think
+//const char* PTBManager::default_config_ = "./config/config_default.xml";
+
 
 // Init with a new reader attached
 PTBManager::PTBManager(bool emu_mode) : reader_(0), cfg_srv_(0),status_(IDLE),emu_mode_(emu_mode) {
@@ -126,9 +134,9 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(10));
+        SetResetBit(true);
         SetResetBit(false);
         reader_->ResetBuffers();
-
         //RestoreConfigurationRegisters();
         // Reset the configuration buggers to an enable state
         // Reassign the configuration (was kept in memory before)
@@ -197,16 +205,21 @@ void PTBManager::StartRun() {
 
   Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
 
-  // Check back if the ack was set
-  // if (register_map_[30].value() >> 30  & 0x1 ) {
-  if (GetEnableBitACK() || emu_mode_) {
-    status_ = RUNNING;
-    Log(info,"Run Start ACK received.");
-  } else {
-    status_ = IDLE;
-    Log(error,"Failed to start run. ACK not received.");
-    throw std::string("Start Run failed. No ACK received.");
-  }
+  // Wait a bit for the ACK or ignore the ACK?
+  // Ignore it for now
+  //FIXME: Plan dealing with the ACK
+//  // Check back if the ack was set
+//  // if (register_map_[30].value() >> 30  & 0x1 ) {
+//  if (GetEnableBitACK() || emu_mode_) {
+//    status_ = RUNNING;
+//    Log(info,"Run Start ACK received.");
+//  } else {
+//    status_ = IDLE;
+//    Log(error,"Failed to start run. ACK not received.");
+//    throw std::string("Start Run failed. No ACK received.");
+//  }
+  status_ = RUNNING;
+  Log(info,"Run Started...");
 }
 
 void PTBManager::StopRun() {
@@ -330,7 +343,7 @@ void PTBManager::FreeRegisters() {
     delete static_cast<uint32_t*>(register_cache_[i].address);
   }
   register_cache_.clear();
-
+  Log(info,"Memory freed.!");
 }
 
 void PTBManager::ProcessConfig(pugi::xml_node config) {
@@ -634,7 +647,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   // Store the cache in the mirror map
   // Register cache 0 is set to (0x08000000).
   // This means everything off, but reset kept high
-  register_cache_.at(0).value() = 0x08000000;
+  register_cache_.at(0).value() = CTL_BASE_REG_VAL;
   for (uint32_t i = 1; i < num_registers_; ++i) {
     register_cache_.at(i).value() = register_map_.at(i).value();
   }
@@ -946,32 +959,32 @@ bool PTBManager::GetEnableBitACK() {
 
 /// -- Other old and outdated methods.
 
-// -- Outdated. This should no longer be used.
-void PTBManager::LoadDefaultConfig() {
-  // File opened alright. Proceed with the parsing
-  // Instanciate the XML plugin
-  try {
-    pugi::xml_document doc;
-    pugi::xml_parse_result result = doc.load_file(default_config_);
-    Log(verbose,"Load result : %s",result.description() );
-    pugi::xml_node config = doc.child("config");
-    if (config == NULL) {
-      Log(error,"Failed to load the config block from input file [%s]",default_config_);
-    } else {
-      ProcessConfig(config);
-    }
-  }
-  catch (pugi::xpath_exception &e) {
-    Log(error,"PUGIXML exception caught: %s",e.what() );
-    return;
-  }
-  catch (std::exception &e) {
-    Log(error,"STD exception caught: %s",e.what() );
-    return;
-  }
-  catch (...) {
-    Log(error,"Unknown exception caught. This is going to mean trouble." );
-    return;
-  }
-}
+//// -- Outdated. This should no longer be used.
+//void PTBManager::LoadDefaultConfig() {
+//  // File opened alright. Proceed with the parsing
+//  // Instanciate the XML plugin
+//  try {
+//    pugi::xml_document doc;
+//    pugi::xml_parse_result result = doc.load_file(default_config_);
+//    Log(verbose,"Load result : %s",result.description() );
+//    pugi::xml_node config = doc.child("config");
+//    if (config == NULL) {
+//      Log(error,"Failed to load the config block from input file [%s]",default_config_);
+//    } else {
+//      ProcessConfig(config);
+//    }
+//  }
+//  catch (pugi::xpath_exception &e) {
+//    Log(error,"PUGIXML exception caught: %s",e.what() );
+//    return;
+//  }
+//  catch (std::exception &e) {
+//    Log(error,"STD exception caught: %s",e.what() );
+//    return;
+//  }
+//  catch (...) {
+//    Log(error,"Unknown exception caught. This is going to mean trouble." );
+//    return;
+//  }
+//}
 

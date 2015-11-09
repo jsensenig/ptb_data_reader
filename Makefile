@@ -31,7 +31,7 @@ ifeq ($(MACHINE), armv7l)
 else
    $(info +++ Compiling for Server) 
    DEF      :=
-   CFLAGS   := $(DEF_CFLAGS) -m32 -fpermissive -g
+   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
    LFLAGS   := $(DEF_LFLAGS)
    EXT_TARS := 
    CLN      := server_clean
