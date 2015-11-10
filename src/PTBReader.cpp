@@ -423,7 +423,13 @@ void PTBReader::ClientTransmiter() {
       pthread_mutex_unlock(&lock_);
       Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[0],frame[1],frame[2],frame[3]);
 
-      
+      // Very first check to discard "ghost frames"
+      // -- Ghost frames are caused by the NOvA timing not being fully initialized by
+      // the time the word was generated. These usually occur because there is a delay
+      // between the sync pulse and the timestamps starting to be populated.
+      if ((frame[0] & 0xFFFFFFF) == 0x0) {
+        continue;
+      }
       // If we still didn't get the first timestamp just drop the packages
       //Log(verbose, "--> Frame1 %x \n",frame[0]);
 
