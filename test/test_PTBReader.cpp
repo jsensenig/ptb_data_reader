@@ -55,7 +55,7 @@ void control_thread() {
 
 
   // Sleep for 15 s and then stop the run
-  std::this_thread::sleep_for(std::chrono::seconds(5));
+  std::this_thread::sleep_for(std::chrono::seconds(10));
 
   Log(warning,"Sending STOP RUN\n");
   const char *stop_run = "<command>StopRun</command>";
@@ -181,7 +181,8 @@ void* reader_thread(void *arg) {
 // }
 
 int main() {
-  Logger::SetSeverity(Logger::debug);
+//  Logger::SetSeverity(Logger::debug);
+	  Logger::SetSeverity(Logger::debug);
   Log(info,"Just a test");
 
   // This doesn't work since the thread gets stuck in the constructor of ConfigServer

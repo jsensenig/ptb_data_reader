@@ -155,7 +155,6 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
     Log(verbose,"Duplicating the input");
     localBuffer += instBuffer;
     Log(verbose,"Duplicated [%s] \n Length [%u]",localBuffer.c_str(),localBuffer.length());
-    printf("!!!! Initializing pos!\n");
     std::size_t pos = 0;
     // CHeck if it is a compelte configuration set
     // Loop until all configurations and commands are processed
@@ -237,7 +236,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
           localBuffer = localBuffer.substr(pos+strlen("</command>"));
           Log(verbose,"new buffer [%s]",localBuffer.c_str());
 
-          Log(verbose,"Processing commadn buffer [%s]",tcp_buffer_.c_str() );
+          Log(verbose,"Processing command buffer [%s]",tcp_buffer_.c_str() );
           ProcessTransmission(tcp_buffer_.c_str());
           sprintf(instBuffer,"<success>true</success>");
         }
