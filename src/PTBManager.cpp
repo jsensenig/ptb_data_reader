@@ -186,8 +186,9 @@ void PTBManager::StartRun() {
   if (!reader_) reader_ = new PTBReader(emu_mode_);
 
   // -- Reopen the connection if not yet open
+  // -- This is not correct. The threads might be destroyed, but the connection may still be open.
   if (!reader_->isReady()) {
-	Log(warning,"Connection is not opened yet. Retrying to open.");
+    Log(warning,"Connection is not opened yet. Trying to reopen.");
     reader_->InitConnection();
   }
 
@@ -256,6 +257,8 @@ void PTBManager::StopRun() {
   }
 
   reader_->StopDataTaking();
+
+
 
   status_ = IDLE;
 }

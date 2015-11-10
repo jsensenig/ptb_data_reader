@@ -33,7 +33,7 @@ uint64_t ClockGetTime() {
 
 
 PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
-    packet_rollover_(0),socket_(0),
+    packet_rollover_(0),socket_(NULL),
     client_thread_collector_(0),client_thread_transmitor_(0),ready_(false), emu_mode_(emu),
 				 fragmented_(false),keep_transmitting_(true),/*ready_to_send_(false),*/first_ts_(true),keep_collecting_(true),previous_ts_(0),timeout_cnt_(0)
 
@@ -69,7 +69,7 @@ void PTBReader::ClearThreads() {
 	Log(debug,"Killing the daughter threads.\n");
 	// First stop the loops
 	keep_collecting_ = false;
-	std::this_thread::sleep_for (std::chrono::seconds(2));
+	std::this_thread::sleep_for (std::chrono::seconds(1));
 	Log(info,"Killing collector thread.");
 	// Kill the collector thread first
 	pthread_cancel(client_thread_collector_);
@@ -82,9 +82,12 @@ void PTBReader::ClearThreads() {
 }
 
 void PTBReader::StopDataTaking() {
+  // This should be a full stop. However there should aso be a PauseDataTaking, that does not destroy the threads
+  // and simply waits for a StartRun to come again.
 
   ClearThreads();
-  ready_ = false;
+  //ready_ = false;
+  // Prepare everything so that the PTB gets ready again
 }
 
 void PTBReader::StartDataTaking() {
@@ -236,7 +239,7 @@ void PTBReader::ClientCollector() {
         Log(debug,"Done storing the buffer");
         pos += 4;
         if (pos+4 >= buffer_size) {
-        	Log(warning,"Reached buffer size.Resetting to start.\n");
+        	Log(info,"Reached buffer size.Resetting to start.\n");
         	pos = 0;
         }
       }
@@ -397,7 +400,7 @@ void PTBReader::ClientTransmiter() {
     uint32_t frame[4];
     header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
     eth_buffer[0] = header;
-    Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
+    //Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
     // ipck should not include the header
     // But it also works as an index counter, so the manipulation is done at the end
     ipck += 1;
@@ -462,8 +465,6 @@ void PTBReader::ClientTransmiter() {
           // break out of the cycle
           //delete [] frame;
           break;
-          // FIXME: Add the situation in which we arrive to the time rollover.
-
         } else {
           // Not ready to send yet. Drop this frame and get another
           //delete [] frame;

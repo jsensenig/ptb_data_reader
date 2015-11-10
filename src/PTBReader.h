@@ -124,6 +124,10 @@ public:
     time_rollover_ = timeRollover;
   }
 
+  bool getConnectionValid() const {
+    return (socket_ != NULL);
+  }
+
 protected:
   /** DMA data collector function into the queue. Runs on it's own thread**/
   //static void* ClientCollectorFunc(void *args);
