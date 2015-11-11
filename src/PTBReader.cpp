@@ -30,9 +30,6 @@ uint64_t ClockGetTime() {
 
 }
 
-
-
-
 PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     packet_rollover_(0),socket_(NULL),
     client_thread_collector_(0),client_thread_transmitor_(0),ready_(false), emu_mode_(emu),
@@ -219,10 +216,11 @@ void PTBReader::ClientCollector() {
       (void)timeout_cnt_;
       (void)timeout_cnt_threshold_;
       }
-    } else {
+    }
+#ifdef ARM
+    else {
       // Registers should be setup already.
       // First setup the DMA:
-#ifdef ARM
         ///FIXME: Maybe this code could be moved elsewhere to speed up initialization
 
     	int status = xdma_init();
@@ -281,8 +279,8 @@ void PTBReader::ClientCollector() {
       // Log(debug,"Shutting down the DMA engine.");
       // xdma_exit();
       // Log(debug,"DMA engine done.");
-#endif /*ARM*/
     }
+#endif /*ARM*/
 }
 
 
@@ -715,11 +713,13 @@ void PTBReader::ClientTransmiter() {
     // }
   } // -- while(keep_transmitting_)
   // Exited the  run loop. Return.
-  Log(info,"Exited transmission loop. Checking for queued packets." );
+  Log(info,"Exited transmission loop.");
   // Deallocate the memory
   free(eth_buffer);
 #ifdef ARM
-  Log(info,"Shutting down the DMA engine.");
+  //FIXME: There is a risk that the thread is killed before
+  // the execution reaches this point.
+  Log(warning,"Shutting down the DMA engine.");
   xdma_exit();
   Log(debug,"DMA engine done.");
 #endif
