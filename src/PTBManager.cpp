@@ -9,6 +9,10 @@
 #include "PTBReader.h"
 #include "Logger.h"
 #include "ConfigServer.h"
+#include "PracticalSocket.h"
+#include "util.h"
+
+
 #ifdef ARM
 #include "ptb_registers.h"
 #endif /*ARM*/
@@ -20,6 +24,7 @@
 #include <chrono>
 #include <bitset>
 #include <cmath>
+
 
 #define __STDC_FORMAT_MACROS
 
@@ -418,12 +423,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         duration = pow(2,28)-1;
       }
       uint64_t timeRollOver = (uint64_t)duration;//(1 << duration);
-      printf("bla\n");
       //Log(debug,"MicroSlice time rollover : [%u] --> %lu clock ticks. [%X][%s]",duration,timeRollOver,duration,std::bitset<28>(duration).to_string().c_str());
       reader_->setTimeRollover(timeRollOver);
-      printf("bla\n");
-      SetBitRange(35,duration,0,28);
-      printf("bla\n");
+//      SetBitRange(35,duration,0,28);
+      register_map_[35].value() = SetBitRange(register_map_[1].value(),duration,0,28);
       Log(debug,"Register 35 : [0x%X]", register_map_[35].value() );
 
     }
@@ -672,16 +675,22 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   // After parsing everything (and making sure that all the configuration is set)
   // Store the configuration locally
   config_ = config;
-  Log(debug,"Sleeping for 5s prior to init the connection to DAQ upstream.");
 
 
 
   // Tell the reader to start the connection
-  std::this_thread::sleep_for (std::chrono::seconds(5));
-  //sleep(15);
+  // This sleep migh not even be necessary. At least reduce it to 1 sencond
+  Log(debug,"Sleeping for 1s prior to init the connection to DAQ upstream.");
+  std::this_thread::sleep_for (std::chrono::seconds(1));
+
   Log(verbose,"Initializing connection to DAQ upstream." );
   //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
-  reader_->InitConnection();
+  try {
+    reader_->InitConnection();
+  }
+  catch(SocketException &e) {
+	  Log(warning,"Connection failed to establish. This might cause troubles later.");
+  }
 
   // Most likely the connection will fail at this point. Not a big problem.
 }
@@ -707,10 +716,14 @@ void PTBManager::ResetConfigurationRegisters() {
   }
   register_map_.at(0).value() = CTL_BASE_REG_VAL;
   // Reset the control registers in steps as well
+  //-- Shouldn't the configuration then be committed to the board?
+  Log(debug,"Recommitting the configuration to the hardware.");
+  SetConfigBit(true);
 }
 
 void PTBManager::RestoreConfigurationRegisters() {
-  Log(debug,"Restoring configuration registers to local cache");
+  Log(debug,"Restoring configuration registers from local cache");
+  // -- Do not restore the control register
   for (size_t i = 1; i < register_map_.size(); ++i) {
     Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
     register_map_.at(i).value() = register_cache_.at(i).value();
@@ -913,11 +926,11 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
 /// NOTE: The value has to be shifted to the right bit positions
 /// Position is in bit number. If position is set to 16, the new value starts being inserted in the
 /// 17th bit (bit 16, since bits start at 0).
-void PTBManager::SetBitRange(uint32_t reg, uint32_t value, uint32_t pos, uint32_t len) {
-  // Create a mask based on pos and len
-  uint32_t mask = (((uint32_t)1 << len)-1) << pos;
-  register_map_[reg].value() = (register_map_[reg].value() & ~mask) | (value & mask);
-}
+//void PTBManager::SetBitRange(uint32_t reg, uint32_t value, uint32_t pos, uint32_t len) {
+//  // Create a mask based on pos and len
+//  uint32_t mask = (((uint32_t)1 << len)-1) << pos;
+//  register_map_[reg].value() = (register_map_[reg].value() & ~mask) | (value & mask);
+//}
 
 
 bool PTBManager::GetBit(uint32_t reg, uint32_t bit) {
@@ -966,35 +979,3 @@ bool PTBManager::GetConfigBitACK() {
 bool PTBManager::GetEnableBitACK() {
   return GetBit(0,30);
 }
-
-/// -- Other old and outdated methods.
-
-//// -- Outdated. This should no longer be used.
-//void PTBManager::LoadDefaultConfig() {
-//  // File opened alright. Proceed with the parsing
-//  // Instanciate the XML plugin
-//  try {
-//    pugi::xml_document doc;
-//    pugi::xml_parse_result result = doc.load_file(default_config_);
-//    Log(verbose,"Load result : %s",result.description() );
-//    pugi::xml_node config = doc.child("config");
-//    if (config == NULL) {
-//      Log(error,"Failed to load the config block from input file [%s]",default_config_);
-//    } else {
-//      ProcessConfig(config);
-//    }
-//  }
-//  catch (pugi::xpath_exception &e) {
-//    Log(error,"PUGIXML exception caught: %s",e.what() );
-//    return;
-//  }
-//  catch (std::exception &e) {
-//    Log(error,"STD exception caught: %s",e.what() );
-//    return;
-//  }
-//  catch (...) {
-//    Log(error,"Unknown exception caught. This is going to mean trouble." );
-//    return;
-//  }
-//}
-
