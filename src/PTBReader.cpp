@@ -74,8 +74,10 @@ void PTBReader::ClearThreads() {
 	// Kill the collector thread first
 	pthread_cancel(client_thread_collector_);
 	// Kill the transmittor thread.
+
 	keep_transmitting_ = false;
 	std::this_thread::sleep_for (std::chrono::seconds(2));
+	// -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
 	Log(info,"Killing transmiter thread.");
 	pthread_cancel(client_thread_transmitor_);
 
@@ -88,6 +90,16 @@ void PTBReader::StopDataTaking() {
   ClearThreads();
   //ready_ = false;
   // Prepare everything so that the PTB gets ready again
+
+  // Stop the DMA.
+#ifdef ARM
+  //FIXME: There is a risk that the thread is killed before
+  // the execution reaches this point.
+  Log(warning,"Shutting down the DMA engine.");
+  xdma_exit();
+  Log(debug,"DMA engine done.");
+#endif
+
 }
 
 void PTBReader::StartDataTaking() {
@@ -436,7 +448,9 @@ void PTBReader::ClientTransmiter() {
     ipck += 1;
     // while a packet_sending_condition is not reached
     // keep the loop going...
-    while(carry_on) {
+    // Needs some extra protection for when the StopRun is called, otherwise the loop does not
+    //really stop since it will waiting forever for a timestamp word that will never arrive.
+    while(carry_on and keep_transmitting_) {
 
 
       // Grab a frame
@@ -446,7 +460,11 @@ void PTBReader::ClientTransmiter() {
       Log(debug,"Collecting data");
       Log(verbose, "Transmitting data...\n");
       pthread_mutex_lock(&lock_);
-//      uint32_t *frametmp = buffer_queue_.front();
+      uint32_t *frametmp = buffer_queue_.front();
+      for (uint32_t i =0; i < 4; ++i) {
+    	  frame[i] = frametmp[i];
+      }
+
 //      // This could be avoided with an adjustment of the indexes in the code below
 //      frame[0] = frametmp[3];
 //      frame[1] = frametmp[2];
@@ -716,13 +734,6 @@ void PTBReader::ClientTransmiter() {
   Log(info,"Exited transmission loop.");
   // Deallocate the memory
   free(eth_buffer);
-#ifdef ARM
-  //FIXME: There is a risk that the thread is killed before
-  // the execution reaches this point.
-  Log(warning,"Shutting down the DMA engine.");
-  xdma_exit();
-  Log(debug,"DMA engine done.");
-#endif
 
 }
 ///////////////////////////////////////////////////////////////
