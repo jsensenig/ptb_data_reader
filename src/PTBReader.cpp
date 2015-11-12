@@ -105,7 +105,14 @@ void PTBReader::StopDataTaking() {
 void PTBReader::StartDataTaking() {
 	//FIXME: Migrate this to C++11 constructs
   if (ready_) {
-
+# ifdef ARM
+	  int status = xdma_init();
+    if (status < 0) {
+      Log(error,"Failed to initialize the DMA engine for data collection.");
+      throw std::string("Failed to initialize the DMA engine for data collection.");
+      return;
+    }
+#endif
     // We are ready to do business. Start reading the DMA into the queue.
     Log(verbose, "==> Creating collector\n" );
     keep_collecting_ = true;
@@ -240,12 +247,6 @@ void PTBReader::ClientCollector() {
       // First setup the DMA:
         ///FIXME: Maybe this code could be moved elsewhere to speed up initialization
 
-    	int status = xdma_init();
-      if (status < 0) {
-        Log(error,"Failed to initialize the DMA engine for data collection.");
-        throw std::string("Failed to initialize the DMA engine for data collection.");
-        return;
-      }
       Log(debug,"Allocating the DMA buffer.");
 
       uint32_t *frame = NULL;
