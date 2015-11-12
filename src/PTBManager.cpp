@@ -686,7 +686,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   Log(verbose,"Initializing connection to DAQ upstream." );
   //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
   try {
-    reader_->InitConnection();
+    reader_->InitConnection(true);
   }
   catch(SocketException &e) {
 	  Log(warning,"Connection failed to establish. This might cause troubles later.");

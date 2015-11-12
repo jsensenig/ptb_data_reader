@@ -144,7 +144,7 @@ void PTBReader::ResetBuffers() {
   Log(info,"Popped %u entries from the buffer queue.",counter);
 }
 
-void PTBReader::InitConnection() {
+void PTBReader::InitConnection(bool force) {
 
 //  // If a connection exists. Close it
 //  if (socket_ != NULL) {
@@ -154,8 +154,13 @@ void PTBReader::InitConnection() {
 
 	//-- If a connection exists, assume it is correct and continue to use it
 	if (socket_ != NULL) {
-		Log(info,"Reusing existing connection.");
-		return;
+		if (force) {
+			Log(warning,"Destroying existing socket!");
+			delete socket_;
+		} else {
+			Log(info,"Reusing existing connection.");
+			return;
+		}
 	}
 
   // Check if the server data is set up, and compute
