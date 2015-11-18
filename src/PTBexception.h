@@ -18,7 +18,7 @@ class PTBexception: public std::exception {
 
     PTBexception();
     virtual ~PTBexception();
-    const char * what() {return msg_.c_str();};
+    virtual const char * what() const _NOEXCEPT {return msg_.c_str();};
 
   protected:
     std::string msg_;

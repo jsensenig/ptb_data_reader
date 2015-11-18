@@ -169,7 +169,7 @@ private:
    * @param len The size of the mask to be created in number of bits.
    * @param value The contents to be overwritten
    */
-  void SetBitRange(uint32_t reg, uint32_t pos, uint32_t len, uint32_t value);
+//  void SetBitRange(uint32_t reg, uint32_t pos, uint32_t len, uint32_t value);
 
   // The class responsible for the data reading.
   PTBReader *reader_;
