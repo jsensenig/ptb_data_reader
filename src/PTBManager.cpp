@@ -9,6 +9,8 @@
 #include "PTBReader.h"
 #include "Logger.h"
 #include "ConfigServer.h"
+#include "PTBexception.h"
+
 #ifdef ARM
 #include "ptb_registers.h"
 #endif /*ARM*/
@@ -34,11 +36,7 @@ extern "C" {
  * IP takes care of inverting it
  */
 
-//#define CTL_BASE_REG_VAL 0x08000000
 #define CTL_BASE_REG_VAL 0x00000000
-
-// -- This is actually never used, I think
-//const char* PTBManager::default_config_ = "./config/config_default.xml";
 
 
 // Init with a new reader attached
@@ -56,10 +54,6 @@ PTBManager::PTBManager(bool emu_mode) : reader_(0), cfg_srv_(0),status_(IDLE),em
   // we are ready to deliver.
   SetupRegisters();
 
-  // In fact, load also a default configuration as well.
-  // Won't work...client is not ready
-  //LoadDefaultConfig();
-
   // This had to occur after setting up the command list or we might run into trouble.
   cfg_srv_ = ConfigServer::get();
   // Register to receive callbacks
@@ -70,8 +64,7 @@ PTBManager::PTBManager(bool emu_mode) : reader_(0), cfg_srv_(0),status_(IDLE),em
 
 
 PTBManager::~PTBManager() {
-  Log(debug,"Destroying object." );
-  //FIXME: Implement memory deallocations to free the microZed.
+  Log(debug,"Destroying manager..." );
   FreeRegisters();
   // Clear the map
   commands_.clear();
@@ -86,16 +79,12 @@ PTBManager::~PTBManager() {
 void PTBManager::ExecuteCommand(const char* cmd) {
   try{
 
-    Log(debug,"Received [%s]", cmd);
+    Log(debug,"Received command [%s]", cmd);
     std::map<std::string, Command>::iterator it;
     for (it = commands_.begin(); it != commands_.end(); ++it) {
       Log(debug,"Key : [%s] : Value [%u]",it->first.c_str(),it->second );
-      if (it->first == cmd) {
-        Log(verbose,"It is the same" );
-      }
     }
 
-    Log(verbose,"Going into the switch to try %d",commands_.at(cmd) );
     switch (commands_.at(cmd)) {
       // -- Send the signal to start the run. Should be a register.
       case STARTRUN:
@@ -105,7 +94,7 @@ void PTBManager::ExecuteCommand(const char* cmd) {
           Log(warning,"A run is already running. Ignoring command" );
         } else {
           // Start the run
-          Log(verbose,"The Run should START now" );
+          Log(verbose,"Starting a new Run." );
           StartRun();
           break;
         }
@@ -124,10 +113,10 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         // Not sure if this is going to work as intended
         RestoreConfigurationRegisters();
         SetConfigBit(true);
-        //SetEnableBit(true);
         break;
       case HARDRESET:
         // A hard reset should sent the whole thing to zeros
+        // Including clearing up the configuration.
         SetEnableBit(false);
         SetConfigBit(false);
         // the hard reset also includes a complete reset of the local buffers
@@ -140,8 +129,6 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         // Reset the configuration buggers to an enable state
         // Reassign the configuration (was kept in memory before)
         //SetConfigBit(true);
-        // -- After a reset do not enable data taking! A new run start should come
-        //SetEnableBit(true);
         break;
       case STOPRUN:
         if (getStatus() != PTBManager::RUNNING) {
@@ -154,12 +141,16 @@ void PTBManager::ExecuteCommand(const char* cmd) {
           break;
         }
       default:
-        throw std::string("Unkown command"); // command_exception("Unkown command");
+        throw PTBexception("Unkown command"); // command_exception("Unkown command");
     }
   }
   catch (const std::out_of_range &oor) {
     Log(error,"Out of range error: %s",oor.what() );
     throw std::string("Unkown command");
+  }
+  catch(PTBexception &e) {
+    Log(error,"Caught PTB exception : %s.",e.what());
+    throw;
   }
   catch(std::exception &e) {
     Log(error,"STL exception caught : %s",e.what() );
@@ -194,14 +185,12 @@ void PTBManager::StartRun() {
 
   if (!reader_->isReady()) {
     Log(warning,"Received call to start transmitting but reader is not ready. Refusing to run." );
-    throw std::string("Data reader not ready...");
+    throw PTBexception("Data reader not ready yet.");
     return;
   }
   reader_->StartDataTaking();
 
   // The GLB_EN is located in bin 31 of register 30
-  //*(volatile uint32_t*)(register_map_[30].address) |= (0x1 << 31);
-  //register_map_[30].value() |= (0x1 << 31);
   SetEnableBit(true);
 
   Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
@@ -225,17 +214,6 @@ void PTBManager::StartRun() {
 
 void PTBManager::StopRun() {
   Log(debug,"Stopping the run" );
-  // FIXME: IMplement the specifics for setting the appropriate registers
-  //        to stop the run. This should include:
-  //        Propagate into the PTBReader to stop data collection
-  //        Deallocate its streaming connection.
-
-  // First check that it is running
-  // We should be able to ignore this!!!
-  //  if ((status_ != RUNNING) || GetEnableBitACK() == false ) {//(((register_map_[30].value() >> 30) & 0x1) != 0x1 )) {
-  //    Log(warning,"Stop Run requested, but device isn't running. Ignoring.");
-  //    return;
-  //  }
 
   // The order should be:
   // 1. Set the GLB_EN register to 0 (stop readout in the fabric)
@@ -244,16 +222,13 @@ void PTBManager::StopRun() {
 
 
   // The GLB_EN is located in bin 31 of register 30
-  //  *(volatile uint32_t*)(register_map_[34].address) |= (0x0 << 31);
-  //  register_map_[30].value() |= (0x0 << 31);
   SetEnableBit(false);
   Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
 
   // Check the ACK bit
-  //  if (((register_map_[30].value() >> 30 ) & 0x1)) {
   if (GetEnableBitACK() != false && !emu_mode_) {
     Log(warning,"Stop Run failed. ACK bit still high.");
-    throw std::string("Stop Run failed. No ACK received.");
+    throw PTBexception("Stop Run failed. No ACK received.");
   }
 
   reader_->StopDataTaking();
@@ -335,11 +310,11 @@ void PTBManager::FreeRegisters() {
     register_map_.clear();
 
   } else {
-    Log(warning,"Still haven't tested the unmap. Might or might not fail miserably..." );
+    Log(info,"Clearing the registers.");
 #ifdef ARM
     munmap(mapped_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
 #endif /*ARM*/
-    Log(debug,"Configuration registers unmapped...");
+    Log(debug,"Configuration registers unmapped.");
   }
 
   Log(debug,"Deleting the cache pointers");
@@ -349,7 +324,7 @@ void PTBManager::FreeRegisters() {
   }
   Log(debug,"Clearing the cache");
   register_cache_.clear();
-  Log(info,"Memory freed.!");
+  Log(info,"Memory released!");
 }
 
 void PTBManager::ProcessConfig(pugi::xml_node config) {
@@ -365,13 +340,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
 
   std::this_thread::sleep_for (std::chrono::microseconds(10));
   SetResetBit(false);
-  Log(info,"Reset applied");
 
-  // // Check if the reader is ready. If it is ignore the change
-  // if (reader_->isReady()) {
-  //   Log(warning,"FIXME: Reader is ready. Do not overwrite config.");
-  //   return;
-  // }
 
   // This is the workhorse of the configuration.
   // At this point the registers should already be mapped and things should be flowing
@@ -382,7 +351,6 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   // Load the children nodes by parts.
   // Could use a iterator but then
 
-  ///! FIXME: Perhaps a default configuration should be hardcoded here
   ///!
   ///! DataBuffer
   ///!
@@ -399,17 +367,16 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       //-- Get the host
       std::string host = it->child("DaqHost").child_value();
       reader_->setTcpHost(host);
-      //uint32_t port = strtoul(it->child("DaqPort").child_value(),&pEnd,10);
       unsigned short port = atoi(it->child("DaqPort").child_value());
-      Log(debug,"Received port %hu",port );
+      Log(debug,"DaqPort port %hu",port );
       reader_->setTcpPort(port);
       Log(debug,"Setting data transmission channel to [%s:%hu]",host.c_str(),port);
 
-      //uint32_t rollOver = strtoul(it->child("RollOver").child_value(),&pEnd,10);
+      //FIXME: ELiminate this from the code.
       uint32_t rollOver = atoi(it->child("RollOver").child_value());
       Log(debug,"Packet Rollover %u",rollOver);
       reader_->setPacketRollover(rollOver);
-      // uint32_t duration = strtoul(it->child("MicroSliceDuration").child_value(),&pEnd,10);
+
       uint32_t duration = atoi(it->child("MicroSliceDuration").child_value());
       // Microslice duration is now a full number...check if it fits into 28 bits
       Log(debug,"MicroSlice Duration %u [%X][%s]",duration,duration, std::bitset<28>(duration).to_string().c_str());
@@ -417,13 +384,11 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
         Log(warning,"Input value of [%u] above maximum rollover [28]. Truncating to maximum.",duration);
         duration = pow(2,28)-1;
       }
-      uint64_t timeRollOver = (uint64_t)duration;//(1 << duration);
-      printf("bla\n");
+      uint64_t timeRollOver = (uint64_t)duration;
       //Log(debug,"MicroSlice time rollover : [%u] --> %lu clock ticks. [%X][%s]",duration,timeRollOver,duration,std::bitset<28>(duration).to_string().c_str());
       reader_->setTimeRollover(timeRollOver);
-      printf("bla\n");
+
       SetBitRange(35,duration,0,28);
-      printf("bla\n");
       Log(debug,"Register 35 : [0x%X]", register_map_[35].value() );
 
     }
@@ -441,8 +406,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       ////// BSU[31-0]
       ////// ------
 
-      *(volatile uint32_t*)(register_map_[34].address) = bsu & 0xFFFFFFFF;
-      //register_map_[34].value() = bsu & 0xFFFFFFFF;
+//      *(volatile uint32_t*)(register_map_[34].address) = bsu & 0xFFFFFFFF;
+      register_map_[34].value() = bsu & 0xFFFFFFFF;
       Log(debug,"Register 34 : [0x%X]", register_map_[34].value() );
 
       ////// ------
@@ -451,8 +416,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       ////// ------
       // The remaining 17 bits (49-32) go into the lower 17 bits of the next word
       // [0-16]
-      *(volatile uint32_t*)(register_map_[1].address) = (bsu >> 32 ) & 0x1FFFF;
-      //register_map_[1].value() = (bsu >> 32 ) & 0x1FFFF;
+//      *(volatile uint32_t*)(register_map_[1].address) = (bsu >> 32 ) & 0x1FFFF;
+      register_map_[1].value() = (bsu >> 32 ) & 0x1FFFF;
       Log(debug,"Register 1 (tmp) : [0x%X]",register_map_[1].value() );
 
       // Now grab the TSU part to complete the mask of this register
@@ -463,8 +428,9 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
 
       // The lowest 15 bits go into the upper bits of the previous register
       // [17-31]
-      *(volatile uint32_t*)(register_map_[1].address) |= ((tsu & 0x7FFF) << 17);
-      //register_map_[1].value() |= ((tsu & 0x7FFF) << 17);
+//      *(volatile uint32_t*)(register_map_[1].address) |= ((tsu & 0x7FFF) << 17);
+      SetBitRange(1,(tsu & 0x7FFF),17,15);
+//      register_map_[1].value() |= ((tsu & 0x7FFF) << 17);
       Log(debug,"Register 1 : [0x%X]", register_map_[1].value() );
 
       ////// ------
@@ -473,8 +439,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       ////// ------
 
       // The remaining 33 (47-15) bits go into the next registers
-      *(volatile uint32_t*)(register_map_[2].address) = ((tsu >> 15) & 0xFFFFFFFF);
-      //register_map_[2].value() = ((tsu >> 15) & 0xFFFFFFFF);
+//      *(volatile uint32_t*)(register_map_[2].address) = ((tsu >> 15) & 0xFFFFFFFF);
+      register_map_[2].value() = ((tsu >> 15) & 0xFFFFFFFF);
       Log(debug,"Register 2 : [0x%X]",*(volatile uint32_t*)(register_map_[2].address) );
 
       ////// ------
@@ -483,7 +449,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       ////// ------
 
       // The final bit goes into the lsb of register 4
-      *(volatile uint32_t*)(register_map_[3].address) |= ((tsu >> 47) & 0x1);
+//      *(volatile uint32_t*)(register_map_[3].address) |= ((tsu >> 47) & 0x1);
+      SetBitRange(3,((tsu >> 47) & 0x1),0,1);
       Log(debug,"Register 3 (CHMASK): [0x%X]",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((tsu >> 47) & 0x1);
       //      Log(debug,"Fourth register 0x%X",register_map_[3].value() );
@@ -496,8 +463,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       uint32_t TRIGEX = strtoul(it->child("Mask").child_value(),&pEnd,16);
       Log(debug,"TRIGEX [0x%05X] [%s]",TRIGEX,std::bitset<5>(TRIGEX).to_string().c_str());
 
-      *(volatile uint32_t*)(register_map_[3].address) |= ((TRIGEX & 0x1F) << 26);
-      Log(debug,"Register 3 (TRIGEX) : 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
+//      *(volatile uint32_t*)(register_map_[3].address) |= ((TRIGEX & 0x1F) << 26);
+      SetBitRange(3,((TRIGEX & 0x1F) << 26),26,5);
+            Log(debug,"Register 3 (TRIGEX) : 0x%X",register_map_[3].value());
+//      Log(debug,"Register 3 (TRIGEX) : 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((TRIGEX & 0x1F) << 26);
       //      Log(debug,"Fourth register (TRIGEX) 0x%X",register_map_[3].value() );
     }
@@ -509,8 +478,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       uint32_t M_PULSEWIDTH = strtoul(it->child("PulseWidth").child_value(),&pEnd,16);
       Log(debug,"M_PULSEWIDTH [0x%03X] [%s]",M_PULSEWIDTH,std::bitset<3>(M_PULSEWIDTH).to_string().c_str());
 
-      *(volatile uint32_t*)(register_map_[4].address) |= ((M_PULSEWIDTH & 0x7) << 25);
-      Log(debug,"Register 4 (M_PULSEWIDTH) : [0x%X]", *(volatile uint32_t*)(register_map_[4].address) );
+//      *(volatile uint32_t*)(register_map_[4].address) |= ((M_PULSEWIDTH & 0x7) << 25);
+      SetBitRange(4,((M_PULSEWIDTH & 0x7) << 25),25,3);
+//      Log(debug,"Register 4 (M_PULSEWIDTH) : [0x%X]", *(volatile uint32_t*)(register_map_[4].address) );
+      Log(debug,"Register 4 (M_PULSEWIDTH) : [0x%X]", register_map_[4].value());
       //      register_map_[4].value() |= ((M_TRIGOUT & 0x7) << 25);
       //      Log(debug,"Fourth register (M_PULSEWIDTH) 0x%X", register_map_[4].value() );
 
@@ -525,10 +496,11 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       uint32_t MT_LOCKDOWN = strtoul(it->child("LockdownWindow").child_value(),&pEnd,16);
       Log(debug,"MT_LOCKDOWN [0x%05X] [%s]",MT_LOCKDOWN,std::bitset<5>(MT_LOCKDOWN).to_string().c_str());
 
-      *(volatile uint32_t*)(register_map_[3].address) |= ((MT_LOCKDOWN & 0x1F) << 1);
-      Log(debug,"Register 3 (MT_LOCKDOWN) 0x%X 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
+      SetBitRange(3,((MT_LOCKDOWN & 0x1F) << 1),1,5);
+//      *(volatile uint32_t*)(register_map_[3].address) |= ((MT_LOCKDOWN & 0x1F) << 1);
+//      Log(debug,"Register 3 (MT_LOCKDOWN) 0x%X 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((MT_LOCKDOWN & 0x1F) << 1);
-      //      Log(debug,"Fourth register (MT_LOCKDOWN) 0x%X",register_map_[3].value() );
+            Log(debug,"Register 3 (MT_LOCKDOWN) [0x%X]",register_map_[3].value() );
 
       // The remaining configuration words go into register 5
 
@@ -538,10 +510,12 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
       uint32_t M_LOCKHI = strtoul(it->child("TriggerWindow").child_value(),&pEnd,16);
       Log(debug,"M_LOCKHI [0x%03X] [%s]",M_LOCKHI,std::bitset<3>(M_LOCKHI).to_string().c_str());
 
-      *(volatile uint32_t*)(register_map_[4].address) |= ((M_LOCKHI & 0x7) << 22);
-      Log(debug,"Register 4 (M_LOCKHI) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
-      //      register_map_[4].value() |= ((M_LOCKHI & 0x7) << 22);
-      //      Log(verbose,"Fourth register (M_LOCKHI) 0x%X", register_map_[4].value() );
+//      *(volatile uint32_t*)(register_map_[4].address) |= ((M_LOCKHI & 0x7) << 22);
+//      Log(debug,"Register 4 (M_LOCKHI) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
+
+      SetBitRange(4,((M_LOCKHI & 0x7) << 22),22,3);
+//      register_map_[4].value() |= ((M_LOCKHI & 0x7) << 22);
+      Log(verbose,"Fourth register (M_LOCKHI) 0x%X", register_map_[4].value() );
 
       // Now it is specific trigger codes...
       // Deal with one at a time
@@ -650,7 +624,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   Log(debug,"Control register after config commit 0x%08X", register_map_[0].value() );
   if (!GetConfigBitACK() && emu_mode_ == false) {
     Log(error,"Failed set to set the configuration bit. ACK not received");
-    throw("Configuration failed to commit. ACK not received.");
+    throw PTBexception("Configuration failed to commit. ACK not received.");
   }
 
   Log(debug,"Registered committed configuration to the local cache.");
@@ -672,12 +646,12 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   // After parsing everything (and making sure that all the configuration is set)
   // Store the configuration locally
   config_ = config;
-  Log(debug,"Sleeping for 5s prior to init the connection to DAQ upstream.");
+  Log(debug,"Sleeping for 1s prior to init the connection to DAQ upstream.");
 
 
 
   // Tell the reader to start the connection
-  std::this_thread::sleep_for (std::chrono::seconds(5));
+  std::this_thread::sleep_for (std::chrono::seconds(1));
   //sleep(15);
   Log(verbose,"Initializing connection to DAQ upstream." );
   //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;

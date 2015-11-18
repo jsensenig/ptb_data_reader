@@ -8,6 +8,7 @@
 #include "PTBReader.h"
 #include "Logger.h"
 #include "PracticalSocket.h"
+#include "PTBexception.h"
 
 #include <sys/time.h>
 #include <stdint.h>
@@ -110,7 +111,7 @@ void PTBReader::StartDataTaking() {
 
   } else {
     Log(error,"Calling to start taking data connection is not ready yet." );
-
+    throw PTBexception("Connection not available.");
   }
 }
 
