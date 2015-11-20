@@ -242,7 +242,7 @@ void PTBReader::ClientCollector() {
       const uint32_t buffer_size = 1024;//4096;
       uint32_t pos = 0;
       timeout_cnt_ = 0;
-
+      int status = 0;
       // Allocate the memory necessary for a packet.
       //frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
       // This should build a 1000 value circular buffer
@@ -450,7 +450,6 @@ void PTBReader::ClientTransmiter() {
         continue;
       }
       Log(debug,"Collecting data");
-      Log(verbose, "Transmitting data...\n");
       pthread_mutex_lock(&lock_);
       uint32_t *frametmp = buffer_queue_.front();
       for (uint32_t i =0; i < 4; ++i) {
@@ -532,6 +531,9 @@ void PTBReader::ClientTransmiter() {
           eth_buffer[ipck+k] = ((frame[4-(k+1)] & 0x1) << 31) | ((frame[4-(k+2)] & 0xFFFFFFFE) >> 1);
         }
         eth_buffer[ipck+3] = ((frame[3] & 0x1) << 31);
+//        Log(debug,"Counter word (%08X %08X %08X %08X %08X)",eth_buffer[ipck-1],
+//            eth_buffer[ipck], eth_buffer[ipck+1],eth_buffer[ipck+2],eth_buffer[ipck+3]);
+
         // Refresh ipck to the latest position
         ipck += 4;
       } else if ((frame[3] >> 29 & 0x7) == 0x2) {
