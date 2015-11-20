@@ -41,6 +41,7 @@ PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
 
 {
   Log(verbose,"Creating an instance of the reader with emu %s\n",emu_mode_?"true":"false");
+  (void) first_ts_;
 
   if (emu_mode_) {
 	  Log(warning,"Running in emulator mode.");
@@ -137,12 +138,6 @@ void PTBReader::ResetBuffers() {
 
 void PTBReader::InitConnection() {
 
-//  // If a connection exists. Close it
-//  if (socket_ != NULL) {
-//    Log(warning,"Destroying existing socket!");
-//    delete socket_;
-//  }
-
 	//-- If a connection exists, assume it is correct and continue to use it
 	if (socket_ != NULL) {
 		Log(info,"Reusing existing connection.");
@@ -151,15 +146,6 @@ void PTBReader::InitConnection() {
 
   // Check if the server data is set up, and compute
   if (tcp_host_ != "" && tcp_port_ != 0) {
-
-//	  //-- This has been sorted out. No need for this check any more.
-//	  if (tcp_port_ == 2320) {
-//     Log(verbose, "JCF: the true tcp_port_ value is 2320" );
-//    } else if (tcp_port_ == 8992) {
-//      Log(verbose, "JCF: the true tcp_port_ value is 8992" );
-//    } else {
-//      Log(warning, "JCF: the true tcp_port_ value is neither 2320 nor 8992, cout prints it as %hu", tcp_port_ );
-//    }
 
     try{
       Log(debug, "Opening socket connection : %s : %hu",tcp_host_.c_str(),tcp_port_ );
@@ -250,7 +236,7 @@ void PTBReader::ClientCollector() {
     	  frame[i] = 0;
         }
       while (keep_collecting_) {
-        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
+//        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
         status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[pos]),4);
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
@@ -265,14 +251,14 @@ void PTBReader::ClientCollector() {
         }
         // DMA transaction was successful.
         // -- add the data to the queue;
-        Log(debug,"Storing the buffer");
+//        Log(debug,"Storing the buffer");
         pthread_mutex_lock(&lock_);
         buffer_queue_.push(&frame[pos]);
         pthread_mutex_unlock(&lock_);
-        Log(debug,"Done storing the buffer");
+//        Log(debug,"Done storing the buffer");
         pos += 4;
         if (pos+4 >= buffer_size) {
-        	Log(info,"Reached buffer size.Resetting to start.\n");
+//        	Log(info,"Reached buffer size.Resetting to start.\n");
         	pos = 0;
         }
       }
@@ -341,11 +327,12 @@ void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
       bitdump.str(""); bitdump << std::bitset<3>(ftype)
 			       << " " << std::bitset<28>(tstamp);
       Log(debug,"Counter word : Time %u [%s]",(fheader >> 1) & 0xFFFFFFF,bitdump.str().c_str() );
-      bitdump.str(""); bitdump << std::bitset<1>(fheader & 0x1) 
-			       << " " << std::bitset<32>(buffer[counter]) 
+      bitdump.str(""); //bitdump << std::bitset<1>(fheader & 0x1)
+      bitdump << " " << std::bitset<32>(buffer[counter])
 			       << " " << std::bitset<32>(buffer[counter+1])
-			       << " " << std::bitset<32>(buffer[counter+2]);
-      counter += 3;
+			       << " " << std::bitset<32>(buffer[counter+2])
+             << " " << std::bitset<32>(buffer[counter+3]);
+      counter += 4;
       Log(debug,"Counter word : Body [%s]",bitdump.str().c_str());
     } else if (ftype == 0x7) {
       
@@ -388,11 +375,10 @@ void PTBReader::ClientTransmiter() {
   Log(verbose, "Starting transmitter\n");
   Log(verbose, "previous : %lu roll %lu \n",previous_ts_,time_rollover_);
   std::ostringstream bitdump;
-  // FIXME: Finish implementation
-  // Fetch a frame from the queue
+
   seq_num_ = 1;
   uint32_t header = 0;
-  // Allocate the maximum memory that a eth packet can have.
+  // Allocate the maximum memory that an eth packet can have.
   //FIXME: Change this to zero memory copy.
   // -- No memory leak found here.
   // Ideally one would want to not allocate the eth packet and simply use the
@@ -504,20 +490,28 @@ void PTBReader::ClientTransmiter() {
 
       /// --  Not a TS packet...just accumulate it
       // Start another index to move in words of 32 bits
-      // These can loop all the
-      //Log(verbose, "--> Frame2 %x \n",frame[0]);
+
+      // -- Grab the header for all situations
       eth_buffer[ipck] = frame[3];
       ipck += 1;
       // trim the data depending on the type
-      if ((frame[3] >> 29 & 0x7) == 0x1) { // counter word. Just assign as it is
+      if ((frame[3] >> 29 & 0x7) == 0x1) { // counter word.
+        // NOTE: The word received from the PL has to be
+        // unrolled to avoid problems in the board reader.
         for (size_t k = 0; k < 3; ++k) {
-        	// k: 0 , k+1 : 1, 3-(k+1): 2
-        	// k: 1 , k+1 : 2, 3-(k+1): 1
-        	// k: 2 , k+1 : 3, 3-(k+1): 0
-          eth_buffer[ipck+k] = frame[3-(k+1)];
+        	// k: 0 , k+1 : 1, 4-(k+1): 3
+        	// k: 1 , k+1 : 2, 4-(k+1): 2
+        	// k: 2 , k+1 : 3, 4-(k+1): 1
+          // k: 3 , k+1 : 4, 4-(k+1): 0
+          // -- The pattern is to pick up the lsb from previous word and the rest from the follow-up
+          // except for the last one
+//          eth_buffer[ipck+k] = frame[3-(k+1)];
+
+          eth_buffer[ipck+k] = ((frame[4-(k+1)] & 0x1) << 31) | ((frame[4-(k+2)] & 0xFFFFFFFE) >> 1);
         }
+        eth_buffer[ipck+3] = ((frame[3] & 0x1) << 31);
         // Refresh ipck to the latest position
-        ipck += 3;
+        ipck += 4;
       } else if ((frame[3] >> 29 & 0x7) == 0x2) {
         // trigger word: Only the first 32 bits of the payload
         // are actually needed
@@ -539,109 +533,6 @@ void PTBReader::ClientTransmiter() {
       }
 
     }
-/** Original code
- *
-
-      // Grab a frame
-      if (buffer_queue_.size() == 0) {
-        continue;
-      }
-      Log(debug,"Collecting data");
-      Log(verbose, "Transmitting data...\n");
-      pthread_mutex_lock(&lock_);
-      uint32_t *frametmp = buffer_queue_.front();
-      // This could be avoided with an adjustment of the indexes in the code below
-      frame[0] = frametmp[3];
-      frame[1] = frametmp[2];
-      frame[2] = frametmp[1];
-      frame[3] = frametmp[0];
-      //Log(debug,"Collect the data %08X",frame);
-      buffer_queue_.pop();
-      pthread_mutex_unlock(&lock_);
-      Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[0],frame[1],frame[2],frame[3]);
-
-      // Very first check to discard "ghost frames"
-      // -- Ghost frames are caused by the NOvA timing not being fully initialized by
-      // the time the word was generated. These usually occur because there is a delay
-      // between the sync pulse and the timestamps starting to be populated.
-      if ((frame[0] & 0xFFFFFFF) == 0x0) {
-        continue;
-      }
-      // If we still didn't get the first timestamp just drop the packages
-      //Log(verbose, "--> Frame1 %x \n",frame[0]);
-
-      /// -- Check if it is a TS frame
-      if ((frame[0] >> 29 & 0x7) == 0x7) {
-        // This is a timestamp word.
-        // Check if this is the first TS after StartRun
-        Log(verbose, "Timestamp frame...\n");
-        uint64_t tmp_val1 = frame[1];
-        uint64_t tmp_val2 = frame[2];
-
-        current_ts_ = (tmp_val1 << 32) | tmp_val2;
-
-        if (first_ts_) {
-          // First TS after Run start
-          previous_ts_ = (frame[1] << 31) | frame[2];
-          first_ts_ = false;
-          //delete [] frame;
-          continue;
-        } else if (current_ts_ >= (previous_ts_ + time_rollover_)) {
-          Log(verbose, "Sending the packet\n");
-          // Check if we are ready to send the packet (reached the time rollover).
-          // Close the packet
-          eth_buffer[ipck] = frame[0];
-          eth_buffer[ipck+1] = frame[1];
-          eth_buffer[ipck+2] = frame[2];
-          ipck +=3;
-          carry_on = false;
-          fragmented_ = false;
-          // break out of the cycle
-          //delete [] frame;
-          break;
-        } else {
-          // Not ready to send yet. Drop this frame and get another
-          //delete [] frame;
-          continue;
-        }
-      }
-
-      /// --  Not a TS packet...just accumulate it
-      // Start another index to move in words of 32 bits
-      // These can loop all the
-      //Log(verbose, "--> Frame2 %x \n",frame[0]);
-      eth_buffer[ipck] = frame[0];
-      ipck += 1;
-      // trim the data depending on the type
-      if ((frame[0] >> 29 & 0x7) == 0x1) { // counter word. Just assign as it is
-        for (size_t k = 0; k < 3; ++k) {
-          eth_buffer[ipck+k] = frame[k+1];
-        }
-        // Refresh ipck to the latest position
-        ipck += 3;
-      } else if ((frame[0] >> 29 & 0x7) == 0x2) {
-        // trigger word: Only the first 32 bits of the payload
-        // are actually needed
-        eth_buffer[ipck] = frame[1];
-        // The rest of the buffer is crap
-        ipck += 1;
-      }
-
-      //delete [] frame;
-      // Frame completed. check if we can wait for another or keep collecting
-      iframe += 1;
-
-      // Size Rollover reached. Produce a fragmented block;
-      // Keep collecting only until the next TS word
-      if (iframe == packet_rollover_) {
-        fragmented_ = true;
-        break;
-      }
-
-    }
- *
- */
-
 
     // Transmit the data.
     Log(verbose, "Packet completed. Calculating the checksum.\n");

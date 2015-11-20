@@ -166,7 +166,7 @@ private:
 
   // A few more constants that are important
   // This is actually
-  static const uint32_t fw_version_ = 0x1;
+  static const uint32_t fw_version_ = 0x2;
 
   // Frame sequence number
   uint32_t seq_num_;
