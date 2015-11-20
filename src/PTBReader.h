@@ -106,7 +106,7 @@ public:
    */
   void ResetBuffers();
 
-  void InitConnection();
+  void InitConnection(bool force = false);
 
   bool isEmuMode() const {
     return emu_mode_;

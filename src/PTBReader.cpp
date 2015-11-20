@@ -31,9 +31,6 @@ uint64_t ClockGetTime() {
 
 }
 
-
-
-
 PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     packet_rollover_(0),socket_(NULL),
     client_thread_collector_(0),client_thread_transmitor_(0),ready_(false), emu_mode_(emu),
@@ -79,8 +76,10 @@ void PTBReader::ClearThreads() {
 	// Kill the collector thread first
 	pthread_cancel(client_thread_collector_);
 	// Kill the transmittor thread.
+
 	keep_transmitting_ = false;
 	std::this_thread::sleep_for (std::chrono::seconds(2));
+	// -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
 	Log(info,"Killing transmiter thread.");
 	pthread_cancel(client_thread_transmitor_);
 
@@ -93,12 +92,29 @@ void PTBReader::StopDataTaking() {
   ClearThreads();
   //ready_ = false;
   // Prepare everything so that the PTB gets ready again
+
+  // Stop the DMA.
+#ifdef ARM
+  //FIXME: There is a risk that the thread is killed before
+  // the execution reaches this point.
+  Log(warning,"Shutting down the DMA engine.");
+  xdma_exit();
+  Log(debug,"DMA engine done.");
+#endif
+
 }
 
 void PTBReader::StartDataTaking() {
 	//FIXME: Migrate this to C++11 constructs
   if (ready_) {
-
+# ifdef ARM
+	  int status = xdma_init();
+    if (status < 0) {
+      Log(error,"Failed to initialize the DMA engine for data collection.");
+      throw std::string("Failed to initialize the DMA engine for data collection.");
+      return;
+    }
+#endif
     // We are ready to do business. Start reading the DMA into the queue.
     Log(verbose, "==> Creating collector\n" );
     keep_collecting_ = true;
@@ -136,12 +152,17 @@ void PTBReader::ResetBuffers() {
   Log(info,"Popped %u entries from the buffer queue.",counter);
 }
 
-void PTBReader::InitConnection() {
+void PTBReader::InitConnection(bool force) {
 
 	//-- If a connection exists, assume it is correct and continue to use it
 	if (socket_ != NULL) {
-		Log(info,"Reusing existing connection.");
-		return;
+		if (force) {
+			Log(warning,"Destroying existing socket!");
+			delete socket_;
+		} else {
+			Log(info,"Reusing existing connection.");
+			return;
+		}
 	}
 
   // Check if the server data is set up, and compute
@@ -205,18 +226,13 @@ void PTBReader::ClientCollector() {
       (void)timeout_cnt_;
       (void)timeout_cnt_threshold_;
       }
-    } else {
+    }
+#ifdef ARM
+    else {
       // Registers should be setup already.
       // First setup the DMA:
-#ifdef ARM
         ///FIXME: Maybe this code could be moved elsewhere to speed up initialization
 
-    	int status = xdma_init();
-      if (status < 0) {
-        Log(error,"Failed to initialize the DMA engine for data collection.");
-        throw std::string("Failed to initialize the DMA engine for data collection.");
-        return;
-      }
       Log(debug,"Allocating the DMA buffer.");
 
       uint32_t *frame = NULL;
@@ -267,8 +283,8 @@ void PTBReader::ClientCollector() {
       // Log(debug,"Shutting down the DMA engine.");
       // xdma_exit();
       // Log(debug,"DMA engine done.");
-#endif /*ARM*/
     }
+#endif /*ARM*/
 }
 
 
@@ -424,7 +440,9 @@ void PTBReader::ClientTransmiter() {
     ipck += 1;
     // while a packet_sending_condition is not reached
     // keep the loop going...
-    while(carry_on) {
+    // Needs some extra protection for when the StopRun is called, otherwise the loop does not
+    //really stop since it will waiting forever for a timestamp word that will never arrive.
+    while(carry_on and keep_transmitting_) {
 
 
       // Grab a frame
@@ -434,7 +452,11 @@ void PTBReader::ClientTransmiter() {
       Log(debug,"Collecting data");
       Log(verbose, "Transmitting data...\n");
       pthread_mutex_lock(&lock_);
-//      uint32_t *frametmp = buffer_queue_.front();
+      uint32_t *frametmp = buffer_queue_.front();
+      for (uint32_t i =0; i < 4; ++i) {
+    	  frame[i] = frametmp[i];
+      }
+
 //      // This could be avoided with an adjustment of the indexes in the code below
 //      frame[0] = frametmp[3];
 //      frame[1] = frametmp[2];
@@ -606,14 +628,9 @@ void PTBReader::ClientTransmiter() {
     // }
   } // -- while(keep_transmitting_)
   // Exited the  run loop. Return.
-  Log(info,"Exited transmission loop. Checking for queued packets." );
+  Log(info,"Exited transmission loop.");
   // Deallocate the memory
   free(eth_buffer);
-#ifdef ARM
-  Log(info,"Shutting down the DMA engine.");
-  xdma_exit();
-  Log(debug,"DMA engine done.");
-#endif
 
 }
 ///////////////////////////////////////////////////////////////

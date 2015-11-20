@@ -11,6 +11,7 @@
 #include <sstream>
 #include <cstdlib>
 #include <cstdarg>
+#include "util.h"
 
 extern "C" {
 #include <stdio.h>
@@ -46,7 +47,7 @@ void Logger::message(Logger::severity sev, const char* where, const char* fmt,..
 
 
     char header[250];
-    sprintf(header,"%s:%s:",tostr(sev),where);
+    sprintf(header,"%s:%s:%s:",tostr(sev),where,currentDateTime().c_str());
     std::string tmp_fmt = header;
     tmp_fmt += fmt;
     char msg[2048];
