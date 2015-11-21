@@ -400,7 +400,9 @@ void PTBReader::ClientTransmiter() {
   // Ideally one would want to not allocate the eth packet and simply use the
   // allocated RAM directly. Doable, but must be careful because of the circular buffer.
   // For the moment copy the contents and see if performance is good enough.
+  // I suspect there is a problem of endianess here
   uint32_t *eth_buffer = (uint32_t*)calloc(0xFFFF,1);
+  //uint8_t *eth_buffer = (uint8_t*)calloc(0xFFFF,1);
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
@@ -597,7 +599,7 @@ void PTBReader::ClientTransmiter() {
     // why there was an extra uint32_t (above and beyond the
     // microslice header) being sent
 
-    Log(debug,"Sending packet with %u bytes",sizeof(uint32_t)*(ipck+1));
+    Log(debug,"Sending packet with %u bytes (including header)",sizeof(uint32_t)*(ipck+1));
     //DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+1));
 
     /// -- Send the packet:

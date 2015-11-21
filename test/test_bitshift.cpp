@@ -66,5 +66,14 @@ int main() {
   }
   //std::cout << "Bitset : " << std::bitset<160>((unsigned char*)newv,20) << std::endl;
 
+
+  uint8_t *field = reinterpret_cast<uint8_t*>(newv);
+
+
+  std::cout << "Recast :" << std::endl;
+    for (uint32_t i = 0; i < 20; ++i) {
+    std::cout << std::bitset<8>(field[i]) << " ";
+  }
+  std::cout << std::endl;
   return 0;
 }
