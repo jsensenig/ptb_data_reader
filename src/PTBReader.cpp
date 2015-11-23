@@ -235,25 +235,26 @@ void PTBReader::ClientCollector() {
 
       Log(debug,"Allocating the DMA buffer.");
 
-      uint32_t *frame = NULL;
+      uint8_t *frame = NULL;
       //      const uint32_t nbytes_to_collect = 16; //128 bit frame
       // -- Can easily increase this to avoid overlaps?
       // FIXME: Increase the buffer size to have contingency memory.
-      const uint32_t buffer_size = 1024;//4096;
+      const uint32_t buffer_size = 1024*1024;
       uint32_t pos = 0;
       timeout_cnt_ = 0;
       int status = 0;
       // Allocate the memory necessary for a packet.
       //frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
       // This should build a 1000 value circular buffer
-      frame = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,4*sizeof(uint32_t)));
+      // The bus is 16 bytes, and that should be the size of each frame
+      frame = reinterpret_cast<uint8_t*>(xdma_alloc(buffer_size,16));
       // There should be a more efficient way of zeroing the data
-      for (size_t i = 0; i < 4*buffer_size; ++i) {
+      for (size_t i = 0; i < buffer_size*16; ++i) {
     	  frame[i] = 0;
         }
       while (keep_collecting_) {
 //        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
-        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[pos]),4);
+        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[pos]),16);
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
           timeout_cnt_++;
@@ -272,8 +273,8 @@ void PTBReader::ClientCollector() {
         buffer_queue_.push(&frame[pos]);
         pthread_mutex_unlock(&lock_);
 //        Log(debug,"Done storing the buffer");
-        pos += 4;
-        if (pos+4 >= buffer_size) {
+        pos += 16;
+        if (pos+16 >= buffer_size) {
 //        	Log(info,"Reached buffer size.Resetting to start.\n");
         	pos = 0;
         }
@@ -401,8 +402,8 @@ void PTBReader::ClientTransmiter() {
   // allocated RAM directly. Doable, but must be careful because of the circular buffer.
   // For the moment copy the contents and see if performance is good enough.
   // I suspect there is a problem of endianess here
-  uint32_t *eth_buffer = (uint32_t*)calloc(0xFFFF,1);
-  //uint8_t *eth_buffer = (uint8_t*)calloc(0xFFFF,1);
+  //uint32_t *eth_buffer = (uint32_t*)calloc(0xFFFF,1);
+  uint8_t *eth_buffer = (uint8_t*)calloc(0xFFFF,1);
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
