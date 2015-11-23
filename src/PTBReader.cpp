@@ -232,7 +232,7 @@ void PTBReader::ClientCollector() {
       // Registers should be setup already.
       // First setup the DMA:
         ///FIXME: Maybe this code could be moved elsewhere to speed up initialization
-
+      int status = 0;
       Log(debug,"Allocating the DMA buffer.");
 
       uint32_t *frame = NULL;
@@ -533,8 +533,8 @@ void PTBReader::ClientTransmiter() {
           eth_buffer[ipck+k] = ((frame[4-(k+1)] & 0x1) << 31) | ((frame[4-(k+2)] & 0xFFFFFFFE) >> 1);
         }
         eth_buffer[ipck+3] = ((frame[3] & 0x1) << 31);
-//        Log(debug,"Counter word (%08X %08X %08X %08X %08X)",eth_buffer[ipck-1],
-//            eth_buffer[ipck], eth_buffer[ipck+1],eth_buffer[ipck+2],eth_buffer[ipck+3]);
+        Log(debug,"Counter word (%08X %08X %08X %08X %08X)",eth_buffer[ipck-1],
+            eth_buffer[ipck], eth_buffer[ipck+1],eth_buffer[ipck+2],eth_buffer[ipck+3]);
 
         // Refresh ipck to the latest position
         ipck += 4;
