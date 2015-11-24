@@ -265,13 +265,13 @@ void PTBReader::ClientCollector() {
       const uint32_t buffer_size = 1024*1024;
       uint32_t pos = 0;
       timeout_cnt_ = 0;
-      int status = 0;
       // Allocate the memory necessary for a packet.
       //frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
       // This should build a 1000 value circular buffer
       // The bus is 16 bytes, and that should be the size of each frame
       frame = reinterpret_cast<uint8_t*>(xdma_alloc(buffer_size,16));
       // There should be a more efficient way of zeroing the data
+      // Do we really need to zero the data?
       for (size_t i = 0; i < buffer_size*16; ++i) {
     	  frame[i] = 0;
         }
