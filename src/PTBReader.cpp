@@ -18,9 +18,31 @@
 #include <thread>
 #include <chrono>
 
+#include <cstring>
+
 #ifdef ARM
 #include "libxdma.h"
 #endif /*ARM*/
+
+
+
+std::string display_bits(void* memstart, size_t nbytes) {
+
+  std::stringstream bitstr;
+  bitstr << "The " << nbytes << "-byte chunk of memory beginning at " << static_cast<void*>(memstart) << " is : [";
+
+  // -- NFB : Nov-20-2015
+  // reversed the order of the bits when printing, so that the msb remain on the left
+  for(unsigned int i = 0; i < nbytes; i++) {
+    bitstr << std::bitset<8>(*((reinterpret_cast<uint8_t*>(memstart))+i)) << " ";
+  }
+  bitstr << "]";
+  return bitstr.str();
+
+//  std::cout << "Field [" << bitstr.str() << "]" << std::endl;
+//  mf::LogInfo(sourcename.c_str()) << bitstr.str();
+}
+
 
 // Completely auxiliary clock function
 uint64_t ClockGetTime() {
@@ -39,11 +61,12 @@ PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
 {
   Log(verbose,"Creating an instance of the reader with emu %s\n",emu_mode_?"true":"false");
   (void) first_ts_;
+  (void) current_ts_;
 
   if (emu_mode_) {
 	  Log(warning,"Running in emulator mode.");
     Log(verbose,"Filling emulator queue");
-    InitEmuSampler();
+    //-- InitEmuSampler();
   } else {
     Log(verbose,"Not filling emulator queue");
     // Nothing should need to be done here.
@@ -214,9 +237,9 @@ void PTBReader::ClientCollector() {
     if (emu_mode_) {
       while(keep_collecting_) {
       // Reserve the memory for one frame (128 bits long)
-      uint32_t* frame = (uint32_t*)calloc(4,sizeof(uint32_t));
+      uint8_t* frame = (uint8_t*)calloc(16,sizeof(uint8_t));
       Log(verbose, "Generating the frame\n");
-      GenerateFrame(&frame);
+      // -- GenerateFrame(&frame);
       // If the header is something else do nothing.
       if (((frame[0] >> 29) & 0x7) == 0x0) continue;
       Log(verbose, "Frame generated\n");
@@ -423,6 +446,7 @@ void PTBReader::ClientTransmiter() {
     //uint32_t *eth_buffer = (uint32_t*)calloc(0xFFFF,1);
 
     // zero the memory in. Use memset as it is should be pretty fast
+    // FIXME: This eventually will not be needed
     memset(eth_buffer,0,0xFFFF);
 
 
@@ -434,13 +458,20 @@ void PTBReader::ClientTransmiter() {
     // iframe : Frame counter.
     uint32_t ipck = 0,iframe = 0;
     bool carry_on = true;
-    uint32_t frame[4];
+//    uint32_t frame[4];
+//    uint8_t frame[16];
+    uint8_t *frame;
     header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
-    eth_buffer[0] = header;
+    std::memcpy(&eth_buffer[0],&header,sizeof(header));
+
+
+
+//    eth_buffer[0] = header;
     // Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
     // ipck should not include the header
     // But it also works as an index counter, so the manipulation is done at the end
-    ipck += 1;
+
+    ipck += sizeof(header);
     // while a packet_sending_condition is not reached
     // keep the loop going...
     // Needs some extra protection for when the StopRun is called, otherwise the loop does not
@@ -454,10 +485,11 @@ void PTBReader::ClientTransmiter() {
       }
       Log(debug,"Collecting data");
       pthread_mutex_lock(&lock_);
-      uint32_t *frametmp = buffer_queue_.front();
-      for (uint32_t i =0; i < 4; ++i) {
-    	  frame[i] = frametmp[i];
-      }
+//      uint8_t *frametmp = buffer_queue_.front();
+//      for (uint32_t i =0; i < 4; ++i) {
+//    	  frame[i] = frametmp[i];
+//      }
+      frame = buffer_queue_.front();
 
 //      // This could be avoided with an adjustment of the indexes in the code below
 //      frame[0] = frametmp[3];
@@ -467,27 +499,35 @@ void PTBReader::ClientTransmiter() {
       //Log(debug,"Collect the data %08X",frame);
       buffer_queue_.pop();
       pthread_mutex_unlock(&lock_);
-      Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[3],frame[2],frame[1],frame[0]);
+      //Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[3],frame[2],frame[1],frame[0]);
+      Log(debug,"Frame collected :");
+      Log(debug,"%s",display_bits(frame, 16).c_str());
+
+      Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(frame[0]);
 
       // Very first check to discard "ghost frames"
       // -- Ghost frames are caused by the NOvA timing not being fully initialized by
       // the time the word was generated. These usually occur because there is a delay
       // between the sync pulse and the timestamps starting to be populated in the NOvA firmware.
       // Unfortunately it doesn't seem that anything can be done about it
-      if ((frame[3] & 0xFFFFFFF) == 0x0) {
+
+//      if ((reinterpret_cast<uint32_t*>(&(frame[0]))[0] & 0xFFFFFFF) == 0x0) {
+//        continue;
+//      }
+      if ((payload_header->short_nova_timestamp & 0xFFFFFFF) == 0x0)
         continue;
-      }
 
       /// -- Check if it is a TS frame
-      if ((frame[3] >> 29 & 0x7) == 0x7) {
+//      if ((frame[0] >> 5 & 0x7) == 0x7) {
+      if(payload_header->data_packet_type == DataTypeTimestamp) {
         // This is a timestamp word.
         // Check if this is the first TS after StartRun
         Log(verbose, "Timestamp frame...\n");
-        uint64_t tmp_val1 = frame[2];
-        uint64_t tmp_val2 = frame[1];
-
-        current_ts_ = (tmp_val1 << 32) | tmp_val2;
-
+//        uint64_t tmp_val1 = frame[2];
+//        uint64_t tmp_val2 = frame[1];
+//
+//        current_ts_ = (tmp_val1 << 32) | tmp_val2;
+//
 //        if (first_ts_) {
 //          // First TS after Run start
 ////          previous_ts_ = (frame[2] << 31) | frame[1];
@@ -500,10 +540,12 @@ void PTBReader::ClientTransmiter() {
           Log(verbose, "Sending the packet\n");
           // Check if we are ready to send the packet (reached the time rollover).
           // Close the packet
-          eth_buffer[ipck] = frame[3];
-          eth_buffer[ipck+1] = frame[2];
-          eth_buffer[ipck+2] = frame[1];
-          ipck +=3;
+//          eth_buffer[ipck] = frame[3];
+//          eth_buffer[ipck+1] = frame[2];
+//          eth_buffer[ipck+2] = frame[1];
+
+          std::memcpy(&eth_buffer[ipck],&frame[0],Payload_Header::size_words +payload_size_timestamp);
+          ipck += Payload_Header::size_words +payload_size_timestamp;
           carry_on = false;
           fragmented_ = false;
           // break out of the cycle
@@ -513,39 +555,65 @@ void PTBReader::ClientTransmiter() {
       }
 
       /// --  Not a TS packet...just accumulate it
-      // Start another index to move in words of 32 bits
 
-      // -- Grab the header for all situations
-      eth_buffer[ipck] = frame[3];
-      ipck += 1;
-      // trim the data depending on the type
-      if ((frame[3] >> 29 & 0x7) == 0x1) { // counter word.
-        // NOTE: The word received from the PL has to be
-        // unrolled to avoid problems in the board reader.
-        for (size_t k = 0; k < 3; ++k) {
-        	// k: 0 , k+1 : 1, 4-(k+1): 3
-        	// k: 1 , k+1 : 2, 4-(k+1): 2
-        	// k: 2 , k+1 : 3, 4-(k+1): 1
-          // k: 3 , k+1 : 4, 4-(k+1): 0
-          // -- The pattern is to pick up the lsb from previous word and the rest from the follow-up
-          // except for the last one
-//          eth_buffer[ipck+k] = frame[3-(k+1)];
+      // -- Grab the header (valid for all situations
+      std::memcpy(&eth_buffer[ipck],&frame[0],Payload_Header::size_words);
+      ipck += Payload_Header::size_words;
+//      eth_buffer[ipck] = frame[3];
+//      ipck += 1;
 
-          eth_buffer[ipck+k] = ((frame[4-(k+1)] & 0x1) << 31) | ((frame[4-(k+2)] & 0xFFFFFFFE) >> 1);
-        }
-        eth_buffer[ipck+3] = ((frame[3] & 0x1) << 31);
-//        Log(debug,"Counter word (%08X %08X %08X %08X %08X)",eth_buffer[ipck-1],
-//            eth_buffer[ipck], eth_buffer[ipck+1],eth_buffer[ipck+2],eth_buffer[ipck+3]);
 
-        // Refresh ipck to the latest position
-        ipck += 4;
-      } else if ((frame[3] >> 29 & 0x7) == 0x2) {
-        // trigger word: Only the first 32 bits of the payload
-        // are actually needed
-        eth_buffer[ipck] = frame[2];
-        // The rest of the buffer is crap
-        ipck += 1;
+
+      switch(payload_header->data_packet_type) {
+        case DataTypeCounter:
+          // This one requires some special handling since it needs to shift the bits from the header
+          for (size_t k=0; k< payload_size_counter-1; ++k) {
+            eth_buffer[ipck+k] = ((frame[Payload_Header::size_words-1+k] & 0x1) << 31) | (frame[Payload_Header::size_words+k] & 0xFE);
+          }
+          eth_buffer[ipck+payload_size_counter-1] = (frame[payload_size_counter-1] & 0x1) << 7;
+          ipck += payload_size_counter;
+          break;
+        case DataTypeTrigger:
+          std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_trigger);
+          ipck += payload_size_trigger;
+          break;
+        case DataTypeSelftest:
+          std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_selftest);
+          ipck += payload_size_selftest;
+          break;
+        default:
+          char msg[50];
+          sprintf(msg,"Unknown data type [%X]",frame[0] & 0xFF);
+          throw PTBexception(msg);
       }
+      // trim the data depending on the type
+//      if ((frame[3] >> 29 & 0x7) == 0x1) { // counter word.
+//        // NOTE: The word received from the PL has to be
+//        // unrolled to avoid problems in the board reader.
+//        for (size_t k = 0; k < 3; ++k) {
+//        	// k: 0 , k+1 : 1, 4-(k+1): 3
+//        	// k: 1 , k+1 : 2, 4-(k+1): 2
+//        	// k: 2 , k+1 : 3, 4-(k+1): 1
+//          // k: 3 , k+1 : 4, 4-(k+1): 0
+//          // -- The pattern is to pick up the lsb from previous word and the rest from the follow-up
+//          // except for the last one
+////          eth_buffer[ipck+k] = frame[3-(k+1)];
+//
+//          eth_buffer[ipck+k] = ((frame[4-(k+1)] & 0x1) << 31) | ((frame[4-(k+2)] & 0xFFFFFFFE) >> 1);
+//        }
+//        eth_buffer[ipck+3] = ((frame[3] & 0x1) << 31);
+////        Log(debug,"Counter word (%08X %08X %08X %08X %08X)",eth_buffer[ipck-1],
+////            eth_buffer[ipck], eth_buffer[ipck+1],eth_buffer[ipck+2],eth_buffer[ipck+3]);
+//
+//        // Refresh ipck to the latest position
+//        ipck += 4;
+//      } else if ((frame[3] >> 29 & 0x7) == 0x2) {
+//        // trigger word: Only the first 32 bits of the payload
+//        // are actually needed
+//        eth_buffer[ipck] = frame[2];
+//        // The rest of the buffer is crap
+//        ipck += 1;
+//      }
 
       //delete [] frame;
       // Frame completed. check if we can wait for another or keep collecting
@@ -567,10 +635,10 @@ void PTBReader::ClientTransmiter() {
     // Write the size (in bytes)
     // keep in mind that ipck is summed 1 for the checksum
 //    uint16_t packet_size = ((ipck+1)*sizeof(uint32_t));
-    uint32_t packet_size = ((ipck+1)*sizeof(uint32_t));
-    //eth_buffer[0] |= packet_size ;
-    eth_buffer[0] = SetBitRange(eth_buffer[0],packet_size,0,16);
+    uint32_t packet_size = ipck+sizeof(uint32_t);
     Log(verbose,"Size was calculated to be %u",packet_size);
+
+    eth_buffer[0] = SetBitRange(eth_buffer[0],packet_size,0,16);
     bitdump.str(""); bitdump << std::bitset<4>(eth_buffer[0] >> 28) 
 			     << " " << std::bitset<4>(eth_buffer[0] >> 24 & 0xF)
 			     << " " << std::bitset<8>(eth_buffer[0] >> 16 & 0xFF)
@@ -581,8 +649,9 @@ void PTBReader::ClientTransmiter() {
     // -- Followed the recipe in
     //    https://en.wikipedia.org/wiki/BSD_checksum
     uint16_t checksum = 0x0;
-    uint8_t*ch_buff = reinterpret_cast<uint8_t*>(eth_buffer);
-    for (uint32_t i = 0; i < ipck*4; ++i) {
+//    uint8_t*ch_buff = reinterpret_cast<uint8_t*>(eth_buffer);
+    uint8_t*ch_buff = eth_buffer;
+    for (uint32_t i = 0; i < ipck; ++i) {
 
       checksum = (checksum >> 1) + ((checksum & 0x1) << 15) ;
       checksum += ch_buff[i];
@@ -590,27 +659,31 @@ void PTBReader::ClientTransmiter() {
       //Log(debug," Byte %u : %08X Chksum %08X (%hu)",i,ch_buff[i],checksum,checksum);
     }
 
+
     Log(verbose,"Checksum : %hu",checksum);
     // Calculate 16 bit checksum of the packet
     // Add the checksum to the last packet
-    eth_buffer[ipck] = (0x4 << 29) | checksum;
+    //eth_buffer[ipck] = (0x4 << 29) | checksum;
+    uint32_t checksum_word = (0x4 << 29) | checksum;
+    std::memcpy(&eth_buffer[ipck],&checksum_word,sizeof(uint32_t));
     // JCF, Jul-18-2015
-
+    ipck += sizeof(checksum_word);
     // I'm switching "ipck+1" in place of "ipck+2", below - not sure
     // why there was an extra uint32_t (above and beyond the
     // microslice header) being sent
 
-    Log(debug,"Sending packet with %u bytes (including header)",sizeof(uint32_t)*(ipck+1));
+//    Log(debug,"Sending packet with %u bytes (including header)",sizeof(uint32_t)*(ipck+1));
+    Log(debug,"Sending packet with %u bytes (including header)",ipck);
     //DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+1));
 
     /// -- Send the packet:
     try {
-      socket_->send(eth_buffer,sizeof(uint32_t)*(ipck+1));
+      socket_->send(eth_buffer,ipck);
     }
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what() );
       // Retry
-      socket_->send(eth_buffer,sizeof(uint32_t)*(ipck+1));
+      socket_->send(eth_buffer,ipck);
     }
     // Clear out the memory
     //free(eth_buffer);
@@ -636,154 +709,5 @@ void PTBReader::ClientTransmiter() {
   Log(info,"Exited transmission loop.");
   // Deallocate the memory
   free(eth_buffer);
-
-}
-///////////////////////////////////////////////////////////////
-///
-/// Everything that is under this part is for simulation
-///
-///////////////////////////////////////////////////////////////
-
-
-
-void PTBReader::GenerateFrame(uint32_t **buffer) {
-
-  std::ostringstream bitdump;
-  static uint64_t prev = 0;
-
-  // printf("In GenerateFrame\n");
-  // printf("== [%x] \n",buffer[0][0]);
-  // printf("== [%x] \n",buffer[0][1]);
-  uint32_t*lbuf = buffer[0];
-  //printf("Getting time\n");
-  uint64_t now = ClockGetTime();
-  //Log(verbose, "Clock %lu",now );
-  // Here we decide which type of packet I am going to generate
-  // It should be dependent on the frequencies that I attach to each type
-  // (not using calibrations for now)
-
-  // When should the next event occur
-
-  evtType nextEvt = evt_queue_.top();
-  //Log(verbose, "Got an event.\n");
-
-    Log(verbose,"Checking time %lu against %lu (%lu+%lu)",now,prev+time_rollover_,prev,time_rollover_);
-
-    if (now >= (prev+time_rollover_)) {
-      
-      Log(verbose, "Creating a TS packet\n");
-      lbuf[0] = (0x7 << 29) | ((now & 0xFFFFFFF) << 1);
-      lbuf[1] = (now >> 32 & 0xFFFFFFF);
-      lbuf[2] = (now & 0xFFFFFFF);
-      //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]) << " " <<  std::bitset<32>(lbuf[2]);
-      //Log(debug,"FRAME : %X %X %X [%s]",lbuf[0],lbuf[1],lbuf[2],bitdump.str().c_str());
-      prev = now + time_rollover_;
-      return;
-    }
-    
-    // If we haven't reached the time for the next event just send a TS packet.
-    if (now < nextEvt.next) {
-      // If we are past the time rollover issue a TS packet.
-      // Otherwise just do nothing
-      
-      return;
-      
-    }
-
-  //Log(verbose, "Creating something else");
-
-  // pop it from the queue now that we know that it is going to be returned
-  evt_queue_.pop();
-
-  // Write the header of the frame
-  lbuf[0] = ((nextEvt.type & 0x7) << 29) | ((now & 0xFFFFFFF) << 1) | 0x0;
-  if (nextEvt.type == 0x1) {
-    // This is a counter word
-    // Generate 3 random numbers and assign them
-    uint32_t val = rand();
-    lbuf[0] |= ((val >> 31) & 0x1);
-    lbuf[1] = val;
-    lbuf[2] = rand();
-    lbuf[3] = rand();
-    
-    //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]) << " " <<  std::bitset<32>(lbuf[2]) << " " <<  std::bitset<32>(lbuf[3]);
-    //Log(debug,"FRAME : %X %X %X %X [%s]",lbuf[0],lbuf[1],lbuf[2],lbuf[3],bitdump.str().c_str());
-
-  } else {
-    // The 5 msb are the trigger word mask (10000 for muon counters)
-    lbuf[1] = (0x10 << 27) | ((nextEvt.trigger & 0xF) << 23) | 0x0;
-
-    //bitdump.str(""); bitdump << std::bitset<32>(lbuf[0]) << " " <<  std::bitset<32>(lbuf[1]);
-    //Log(debug,"FRAME : %X %X [%s]",lbuf[0],lbuf[1],bitdump.str().c_str());
-  }
-
-  // Put it back again in the queue
-  if (nextEvt.type == 0x1) {
-    nextEvt.next =now + (1.0/freq_counter)*1000000UL;;
-  } else {
-
-    switch(nextEvt.trigger) {
-    case 0x8:
-      nextEvt.next = now + (1.0/freq_trigA)*1000000UL;
-      break;
-    case 0x4:
-      nextEvt.next = now + (1.0/freq_trigB)*1000000UL;
-      break;
-    case 0x2:
-      nextEvt.next = now + (1.0/freq_trigC)*1000000UL;
-      break;
-    case 0x1:
-      nextEvt.next = now + (1.0/freq_trigD)*1000000UL;
-      break;
-    default:
-      Log(error,"Failed to figure out the evt type to requeue." );
-    }
-  }
-  evt_queue_.push(nextEvt);
-  //Log(verbose,"Pushed event to bottom of the stack again.");
-
-}
-
-
-void PTBReader::InitEmuSampler() {
-  // Attach the evt frequencies -- in Hz
-  Log(verbose, "Starting the Sampler\n");
-
-  freq_counter = 100000;
-  freq_trigA = 10000;
-  freq_trigB = 2000;
-  freq_trigC = 3000;
-  freq_trigD = 1000;
-
-  uint64_t now = ClockGetTime();
-  evtType evt;
-  // Counter word
-  evt.type = 0x1;
-  evt.trigger = 0x0;
-  evt.next = now + (1.0/freq_counter)*1000000UL;
-  evt_queue_.push(evt);
-
-  // Trigger word
-  evt.type = 0x2;
-  evt.trigger = 0x8;
-  evt.next = now + (1.0/freq_trigA)*1000000UL;
-  evt_queue_.push(evt);
-
-  evt.type = 0x2;
-  evt.trigger = 0x4;
-  evt.next = now + (1.0/freq_trigB)*1000000UL;
-  evt_queue_.push(evt);
-
-  evt.type = 0x2;
-  evt.trigger = 0x2;
-  evt.next = now + (1.0/freq_trigC)*1000000UL;
-  evt_queue_.push(evt);
-
-  evt.type = 0x2;
-  evt.trigger = 0x8;
-  evt.next = now + (1.0/freq_trigD)*1000000UL;
-  evt_queue_.push(evt);
-
-  Log(verbose, "Finished the Sampler\n");
 
 }

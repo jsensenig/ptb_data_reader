@@ -51,6 +51,68 @@ public:
  */
 class PTBReader {
 public:
+
+    struct Header {
+
+      typedef uint32_t data_t;
+
+      typedef uint8_t  format_version_t;
+      typedef uint8_t  sequence_id_t;
+      typedef uint16_t block_size_t;
+
+      // JCF, Jul-28-15
+
+      // The order of these variables have been reversed to reflect that
+      // the block size takes up the two least significant bytes, the
+      // sequence ID the second most significant byte, and the format
+      // version the most significant byte, of the four-byte microslice header
+
+      block_size_t     block_size     : 16;
+      sequence_id_t    sequence_id    : 8;
+      format_version_t format_version : 8;
+
+      static size_t const size_words = sizeof(data_t);
+
+      //static constexpr size_t raw_header_words = 1;
+      //data_t raw_header_data[raw_header_words];
+    };
+
+    struct Payload_Header {
+        typedef uint32_t data_t;
+
+        typedef uint8_t  data_packet_type_t;
+        typedef uint32_t short_nova_timestamp_t;
+
+        // The order of the data packet type and the timestamp have been
+        // swapped to reflect that it's the MOST significant three bits in
+        // the payload header which contain the type. I've also added a
+        // 1-bit pad to reflect that the least significant bit is unused.
+
+        uint8_t padding : 1;
+        short_nova_timestamp_t short_nova_timestamp : 28;
+        data_packet_type_t     data_packet_type     : 3;
+
+        static size_t const size_words = sizeof(data_t);
+    };
+
+    typedef Header::block_size_t microslice_size_t;
+
+    //the size of the payloads (neglecting the Payload_Header)
+    // FIXME: Since everythig is being worked in bytes the sizes can be trimmed
+    static microslice_size_t const payload_size_counter   = 4 * sizeof(uint32_t); //96-bit payload
+    static microslice_size_t const payload_size_trigger   = 1 * sizeof(uint32_t); //32-bit payload
+    static microslice_size_t const payload_size_timestamp = 2 * sizeof(uint32_t); //64-bit payload
+    static microslice_size_t const payload_size_selftest  = 1 * sizeof(uint32_t); //32-bit payload
+    static microslice_size_t const payload_size_checksum  = 0 * sizeof(uint32_t); //32-bit payload
+
+    //The types of data words
+    static const Payload_Header::data_packet_type_t DataTypeSelftest  = 0x0; //0b000
+    static const Payload_Header::data_packet_type_t DataTypeCounter   = 0x1; //0b001
+    static const Payload_Header::data_packet_type_t DataTypeTrigger   = 0x2; //0b010
+    static const Payload_Header::data_packet_type_t DataTypeChecksum  = 0x4; //0b100
+    static const Payload_Header::data_packet_type_t DataTypeTimestamp = 0x7; //0b111
+
+
   PTBReader(bool emu = false);
   virtual ~PTBReader();
 
@@ -137,11 +199,8 @@ protected:
   //static void* ClientTransmitor(void *args);
   void ClientTransmiter();
 
-  void GenerateFrame(uint32_t **buffer);
-
   void DumpPacket(uint32_t* buffer, uint32_t tot_size);
-  /** Method used to initialize the sampler for the simulations **/
-  void InitEmuSampler();
+
 private:
   static void * ClientCollectorFunc(void * This) {((PTBReader *)This)->ClientCollector(); return NULL;}
   static void * ClientTransmitorFunc(void * This) {((PTBReader *)This)->ClientTransmiter(); return NULL;}
@@ -182,19 +241,11 @@ private:
   uint64_t time_rollover_;
   uint64_t current_ts_;
 
-  // -- Simulator parameters
-  uint32_t freq_counter;
-  uint32_t freq_trigA;
-  uint32_t freq_trigB;
-  uint32_t freq_trigC;
-  uint32_t freq_trigD;
-//  uint32_t freq_extTig;
 
   // Debugging and control variables
 uint32_t timeout_cnt_;
 const uint32_t timeout_cnt_threshold_ = 1000;
 
-  std::priority_queue<evtType,std::vector<evtType>,closer> evt_queue_;
 };
 
 #endif /* PTBREADER_H_ */
