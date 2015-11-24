@@ -254,7 +254,7 @@ void PTBReader::ClientCollector() {
     if (emu_mode_) {
       while(keep_collecting_) {
       // Reserve the memory for one frame (128 bits long)
-      uint8_t* frame = (uint8_t*)calloc(16,sizeof(uint8_t));
+      uint32_t* frame = (uint32_t*)calloc(16,sizeof(uint8_t));
       Log(verbose, "Generating the frame\n");
       // -- GenerateFrame(&frame);
       // If the header is something else do nothing.
@@ -275,7 +275,8 @@ void PTBReader::ClientCollector() {
       int status = 0;
       Log(debug,"Allocating the DMA buffer.");
 
-      uint8_t *frame = NULL;
+      //uint8_t *frame = NULL;
+      uint32_t *frame = NULL;
       //      const uint32_t nbytes_to_collect = 16; //128 bit frame
       // -- Can easily increase this to avoid overlaps?
       // FIXME: Increase the buffer size to have contingency memory.
@@ -286,24 +287,25 @@ void PTBReader::ClientCollector() {
       //frame = reinterpret_cast<uint32_t*>(xdma_alloc(4,sizeof(uint32_t)));
       // This should build a 1000 value circular buffer
       // The bus is 16 bytes, and that should be the size of each frame
-      frame = reinterpret_cast<uint8_t*>(xdma_alloc(buffer_size,16));
+      //frame = reinterpret_cast<uint8_t*>(xdma_alloc(buffer_size,16));
+      frame = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,16));
       // There should be a more efficient way of zeroing the data
       // Do we really need to zero the data?
-      for (size_t i = 0; i < buffer_size*16; ++i) {
+      for (size_t i = 0; i < buffer_size*4; ++i) {
     	  frame[i] = 0;
         }
       while (keep_collecting_) {
 //        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
         // the DMA passes data in little endian, i.e., the msb are in the highest index of the array
         // the bits within a byte are correct, though
-        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&frame[pos]),16);
+        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&frame[pos],4);
         Log(verbose,"Received contents [%s]",display_bits(&frame[pos],16).c_str());
         // Try to make a fancy printf
-        for (uint32_t i = 0; i < 16; ++i) {
-          printf("%02X",frame[pos+i] & 0xFF);
-          if (i!=0 && ((i+1)%4 == 0)) printf(" ");
-          }
-        printf("\n");
+//        for (uint32_t i = 0; i < 16; ++i) {
+//          printf("%02X",frame[pos+i] & 0xFF);
+//          if (i!=0 && ((i+1)%4 == 0)) printf(" ");
+//          }
+//        printf("\n");
 
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
@@ -487,8 +489,8 @@ void PTBReader::ClientTransmiter() {
     bool carry_on = true;
 //    uint32_t frame[4];
 //    uint8_t frame[16];
-    uint8_t frame[16];
-    uint8_t *frame_raw = NULL;
+    uint32_t frame[4];
+    uint32_t *frame_raw = NULL;
     header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
     std::memcpy(&eth_buffer[0],&header,sizeof(header));
 
@@ -513,11 +515,12 @@ void PTBReader::ClientTransmiter() {
       }
       Log(debug,"Collecting data");
       pthread_mutex_lock(&lock_);
-      frame_raw = buffer_queue_.front();
-      for (uint32_t i =0; i < 16; ++i) {
-    	  frame[i] = frame_raw[15-i];
+      frame_raw = reinterpret_cast<uint32_t*>(buffer_queue_.front());
+      // Play with the raw since the byte ordering is easier to understand
+      for (uint32_t i =0; i < 4; ++i) {
+    	  frame[i] = frame_raw[3-i];
       }
-//      frame = buffer_queue_.front();
+
 
 //      // This could be avoided with an adjustment of the indexes in the code below
 //      frame[0] = frametmp[3];
@@ -527,11 +530,107 @@ void PTBReader::ClientTransmiter() {
       //Log(debug,"Collect the data %08X",frame);
       buffer_queue_.pop();
       pthread_mutex_unlock(&lock_);
-      //Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[3],frame[2],frame[1],frame[0]);
+      Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[3],frame[2],frame[1],frame[0]);
       Log(debug,"Frame collected :");
       // Keep in mind that the msb are in the last byte.
       Log(debug,"%s",display_bits(&frame[0], 16).c_str());
+      Log(debug,"%s",display_bits(&frame_raw[0], 16).c_str());
       // Reverse the whole word here. Simpler to deal with
+
+      /// -- This is not working. Use traditional shifts. Try this some other time
+      ///
+     /**
+      Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(frame);
+
+      // Very first check to discard "ghost frames"
+      // -- Ghost frames are caused by the NOvA timing not being fully initialized by
+      // the time the word was generated. These usually occur because there is a delay
+      // between the sync pulse and the timestamps starting to be populated in the NOvA firmware.
+      // Unfortunately it doesn't seem that anything can be done about it
+
+//      if ((reinterpret_cast<uint32_t*>(&(frame[0]))[0] & 0xFFFFFFF) == 0x0) {
+//        continue;
+//      }
+      if ((payload_header->short_nova_timestamp & 0xFFFFFFF) == 0x0)
+        continue;
+
+      /// -- Check if it is a TS frame
+//      if ((frame[0] >> 5 & 0x7) == 0x7) {
+      if(payload_header->data_packet_type == DataTypeTimestamp) {
+        // This is a timestamp word.
+        // Check if this is the first TS after StartRun
+        Log(verbose, "Timestamp frame...\n");
+//        uint64_t tmp_val1 = frame[2];
+//        uint64_t tmp_val2 = frame[1];
+//
+//        current_ts_ = (tmp_val1 << 32) | tmp_val2;
+//
+//        if (first_ts_) {
+//          // First TS after Run start
+////          previous_ts_ = (frame[2] << 31) | frame[1];
+//          previous_ts_ = current_ts_;
+//          first_ts_ = false;
+//          //delete [] frame;
+//          continue;
+//        } else {
+
+          Log(verbose, "Sending the packet\n");
+          // Check if we are ready to send the packet (reached the time rollover).
+          // Close the packet
+//          eth_buffer[ipck] = frame[3];
+//          eth_buffer[ipck+1] = frame[2];
+//          eth_buffer[ipck+2] = frame[1];
+
+          std::memcpy(&eth_buffer[ipck],&frame[0],Payload_Header::size_words +payload_size_timestamp);
+          ipck += Payload_Header::size_words +payload_size_timestamp;
+          carry_on = false;
+          fragmented_ = false;
+          // break out of the cycle
+          //delete [] frame;
+          break;
+//        }
+      }
+
+      /// --  Not a TS packet...just accumulate it
+
+      // -- Grab the header (valid for all situations
+      Log(verbose, "Grabbing the header\n");
+
+      std::memcpy(&eth_buffer[ipck],&frame[0],Payload_Header::size_words);
+      ipck += Payload_Header::size_words;
+//      eth_buffer[ipck] = frame[3];
+//      ipck += 1;
+
+
+
+      switch(payload_header->data_packet_type) {
+        case DataTypeCounter:
+          Log(verbose, "Counter word\n");
+          // This one requires some special handling since it needs to shift the bits from the header
+          for (size_t k=0; k< payload_size_counter-1; ++k) {
+            eth_buffer[ipck+k] = ((frame[Payload_Header::size_words-1+k] & 0x1) << 31) | (frame[Payload_Header::size_words+k] & 0xFE);
+          }
+          eth_buffer[ipck+payload_size_counter-1] = (frame[payload_size_counter-1] & 0x1) << 7;
+          ipck += payload_size_counter;
+          break;
+        case DataTypeTrigger:
+          Log(verbose, "Trigger word\n");
+          std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_trigger);
+          ipck += payload_size_trigger;
+          break;
+        case DataTypeSelftest:
+          Log(verbose, "Selftest word\n");
+
+          std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_selftest);
+          ipck += payload_size_selftest;
+          break;
+        default:
+          char msg[100];
+          sprintf(msg,"Unknown data type [%X] (%s)",frame[0] & 0xFF, display_bits(&frame[0],1).c_str());
+          throw PTBexception(msg);
+      }
+
+      **/
 
 
       Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(frame);
@@ -542,7 +641,11 @@ void PTBReader::ClientTransmiter() {
       // between the sync pulse and the timestamps starting to be populated in the NOvA firmware.
       // Unfortunately it doesn't seem that anything can be done about it
 
-//      if ((reinterpret_cast<uint32_t*>(&(frame[0]))[0] & 0xFFFFFFF) == 0x0) {
+//      // -- Keep in mind that on this recast the bytes are swapped.
+//      // -- what used to be 0xFFEEDDCC
+//      // -- is now 0xCCDDEEFF
+//      // -- Therefore we want to check the 28 bits from 2nd msb to 4th lsb
+//      if ((reinterpret_cast<uint32_t*>(&(frame[0]))[0] & 0xFEFFFF8F) == 0x0) {
 //        continue;
 //      }
       if ((payload_header->short_nova_timestamp & 0xFFFFFFF) == 0x0)
@@ -619,8 +722,8 @@ void PTBReader::ClientTransmiter() {
           ipck += payload_size_selftest;
           break;
         default:
-          char msg[50];
-          sprintf(msg,"Unknown data type [%X]",frame[0] & 0xFF);
+          char msg[100];
+          sprintf(msg,"Unknown data type [%X] (%s)",frame[0] & 0xFF, display_bits(&frame[0],1).c_str());
           throw PTBexception(msg);
       }
       // trim the data depending on the type
@@ -713,6 +816,7 @@ void PTBReader::ClientTransmiter() {
 //    Log(debug,"Sending packet with %u bytes (including header)",sizeof(uint32_t)*(ipck+1));
     Log(debug,"Sending packet with %u bytes (including header)",ipck);
     //DumpPacket(eth_buffer,sizeof(uint32_t)*(ipck+1));
+    Log(debug,"%s",display_bits(&eth_buffer[0],ipck).c_str());
 
     /// -- Send the packet:
     try {

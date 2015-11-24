@@ -217,7 +217,7 @@ private:
   bool ready_;
 
   // Keeps frames stored
-  std::queue<uint8_t*> buffer_queue_;
+  std::queue<uint32_t*> buffer_queue_;
 
   // A few auxiliary constants
   static const uint32_t max_packet_size = 0xFFFF;

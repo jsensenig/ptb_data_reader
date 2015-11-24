@@ -30,9 +30,46 @@ void display_bits(void* memstart, size_t nbytes, std::string sourcename = "") {
 
 int main() {
 
+
+  struct Payload_Header {
+      typedef uint32_t data_t;
+
+      typedef uint8_t  data_packet_type_t;
+      typedef uint32_t short_nova_timestamp_t;
+
+      // The order of the data packet type and the timestamp have been
+      // swapped to reflect that it's the MOST significant three bits in
+      // the payload header which contain the type. I've also added a
+      // 1-bit pad to reflect that the least significant bit is unused.
+
+      uint8_t padding : 1;
+      short_nova_timestamp_t short_nova_timestamp : 28;
+      data_packet_type_t     data_packet_type     : 3;
+
+      //static size_t const size_words = sizeof(data_t);
+  };
+
+  struct Payload_Header2 {
+      typedef uint32_t data_t;
+
+      typedef uint8_t  data_packet_type_t;
+      typedef uint32_t short_nova_timestamp_t;
+
+      // The order of the data packet type and the timestamp have been
+      // swapped to reflect that it's the MOST significant three bits in
+      // the payload header which contain the type. I've also added a
+      // 1-bit pad to reflect that the least significant bit is unused.
+
+      data_packet_type_t     data_packet_type     : 3;
+      short_nova_timestamp_t short_nova_timestamp : 28;
+      uint8_t padding : 1;
+
+      //static size_t const size_words = sizeof(data_t);
+  };
+
   uint32_t val[4];
 
-  val[0] = (0x7 << 29) | (0x0FFFFFE << 1) | 0x1 ;
+  val[0] = (0x2 << 29) | (0x0FFFFFE << 1) | 0x1 ;
   val[1] = 0x55555555;
   val[2] = 0x55555555;
   val[3] = 0x55555555;
@@ -59,13 +96,21 @@ int main() {
   }
   std::cout << "re-recasted word: " << std::endl;
   display_bits(data,16);
-  std::cout << "re-recasted word: " << std::endl;
+  std::cout << "re-recasted word (htonl): " << std::endl;
   display_bits(data2,16);
 
 
+  Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(val);
+  Payload_Header2* payload_header2 = reinterpret_cast<Payload_Header2*>(data2);
+
+  printf("%02X %02X %07X \n",payload_header->data_packet_type & 0xE, payload_header->data_packet_type & 0x7, payload_header->short_nova_timestamp & 0xFFFFFFF);
+  printf("%02X %02X %07X \n",payload_header2->data_packet_type & 0xE, payload_header2->data_packet_type & 0x7, payload_header2->short_nova_timestamp & 0xFFFFFFF);
   //
   printf("Original: %08X %08X %08X %08X\n",val[0],val[1],val[2],val[3]);
-  printf("Secondary: %08X %08X %08X %08X\n",reinterpret_cast<uint32_t*>(&(data2[0]))[0],data2[4],data2[8],data2[12]);
+  printf("Secondary: %08X %08X %08X %08X\n",reinterpret_cast<uint32_t*>(&(data2[0]))[0],
+      reinterpret_cast<uint32_t*>(&(data2[4]))[0],
+      reinterpret_cast<uint32_t*>(&(data2[8]))[0],
+      reinterpret_cast<uint32_t*>(&(data2[12]))[0]);
 
 
 //  // Now reassign the whole thing and check it still works
