@@ -43,6 +43,23 @@ std::string display_bits(void* memstart, size_t nbytes) {
 //  mf::LogInfo(sourcename.c_str()) << bitstr.str();
 }
 
+std::string display_bits_reversed(void* memstart, size_t nbytes) {
+
+  std::stringstream bitstr;
+  bitstr << "The " << nbytes << "-byte chunk of memory beginning at " << static_cast<void*>(memstart) << " is : [";
+
+  // -- NFB : Nov-20-2015
+  // reversed the order of the bits when printing, so that the msb remain on the left
+  for(unsigned int i = 0; i < nbytes; i++) {
+    bitstr << std::bitset<8>(*((reinterpret_cast<uint8_t*>(memstart))+(nbytes-i-1))) << " ";
+  }
+  bitstr << "]";
+  return bitstr.str();
+
+//  std::cout << "Field [" << bitstr.str() << "]" << std::endl;
+//  mf::LogInfo(sourcename.c_str()) << bitstr.str();
+}
+
 
 // Completely auxiliary clock function
 uint64_t ClockGetTime() {
@@ -284,7 +301,7 @@ void PTBReader::ClientCollector() {
         // Try to make a fancy printf
         for (uint32_t i = 0; i < 16; ++i) {
           printf("%02X",frame[pos+i] & 0xFF);
-          if (i!=0 && (i%4 == 0)) printf(" ");
+          if (i!=0 && ((i+1)%4 == 0)) printf(" ");
           }
         printf("\n");
 
@@ -470,7 +487,8 @@ void PTBReader::ClientTransmiter() {
     bool carry_on = true;
 //    uint32_t frame[4];
 //    uint8_t frame[16];
-    uint8_t *frame;
+    uint8_t *frame = NULL;
+    uint8_t *frame_raw = NULL;
     header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
     std::memcpy(&eth_buffer[0],&header,sizeof(header));
 
@@ -495,11 +513,11 @@ void PTBReader::ClientTransmiter() {
       }
       Log(debug,"Collecting data");
       pthread_mutex_lock(&lock_);
-//      uint8_t *frametmp = buffer_queue_.front();
-//      for (uint32_t i =0; i < 4; ++i) {
-//    	  frame[i] = frametmp[i];
-//      }
-      frame = buffer_queue_.front();
+      frame_raw = buffer_queue_.front();
+      for (uint32_t i =0; i < 16; ++i) {
+    	  frame[i] = frame_raw[15-i];
+      }
+//      frame = buffer_queue_.front();
 
 //      // This could be avoided with an adjustment of the indexes in the code below
 //      frame[0] = frametmp[3];
@@ -511,7 +529,10 @@ void PTBReader::ClientTransmiter() {
       pthread_mutex_unlock(&lock_);
       //Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[3],frame[2],frame[1],frame[0]);
       Log(debug,"Frame collected :");
+      // Keep in mind that the msb are in the last byte.
       Log(debug,"%s",display_bits(&frame[0], 16).c_str());
+      // Reverse the whole word here. Simpler to deal with
+
 
       Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(frame);
 
