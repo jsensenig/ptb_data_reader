@@ -255,7 +255,7 @@ void PTBReader::ClientCollector() {
       // Registers should be setup already.
       // First setup the DMA:
         ///FIXME: Maybe this code could be moved elsewhere to speed up initialization
-
+      int status = 0;
       Log(debug,"Allocating the DMA buffer.");
 
       uint8_t *frame = NULL;
