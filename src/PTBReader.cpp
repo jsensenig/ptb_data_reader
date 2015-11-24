@@ -277,7 +277,17 @@ void PTBReader::ClientCollector() {
         }
       while (keep_collecting_) {
 //        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
-        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&(frame[pos]),16);
+        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&reinterpret_cast<uint32_t*>(&frame[pos]),16);
+        Log(verbose,"Received contents [");
+        display_bits(frame[pos],16);
+        Log(verbose,"]");
+        // Try to make a fancy printf
+        for (uint32_t i = 0; i < 16; ++i) {
+          printf("%X",frame[pos+i] & 0xFF);
+          if (i!=0 && (i%4 == 0)) printf(" ");
+          }
+        printf("\n");
+
         if (status == -1) {
           Log(warning,"Reached a timeout in the DMA transfer.");
           timeout_cnt_++;
