@@ -280,12 +280,10 @@ void PTBReader::ClientCollector() {
         // the DMA passes data in little endian, i.e., the msb are in the highest index of the array
         // the bits within a byte are correct, though
         status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&frame[pos]),16);
-        Log(verbose,"Received contents [");
-        display_bits(&frame[pos],16);
-        Log(verbose,"]");
+        Log(verbose,"Received contents [%s]",display_bits(&frame[pos],16).c_str());
         // Try to make a fancy printf
         for (uint32_t i = 0; i < 16; ++i) {
-          printf("%X",frame[pos+i] & 0xFF);
+          printf("%02X",frame[pos+i] & 0xFF);
           if (i!=0 && (i%4 == 0)) printf(" ");
           }
         printf("\n");
@@ -515,7 +513,7 @@ void PTBReader::ClientTransmiter() {
       Log(debug,"Frame collected :");
       Log(debug,"%s",display_bits(&frame[0], 16).c_str());
 
-      Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(frame[0]);
+      Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(frame);
 
       // Very first check to discard "ghost frames"
       // -- Ghost frames are caused by the NOvA timing not being fully initialized by
