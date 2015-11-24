@@ -487,7 +487,7 @@ void PTBReader::ClientTransmiter() {
     bool carry_on = true;
 //    uint32_t frame[4];
 //    uint8_t frame[16];
-    uint8_t *frame = NULL;
+    uint8_t frame[16];
     uint8_t *frame_raw = NULL;
     header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
     std::memcpy(&eth_buffer[0],&header,sizeof(header));
