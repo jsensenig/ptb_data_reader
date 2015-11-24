@@ -277,9 +277,11 @@ void PTBReader::ClientCollector() {
         }
       while (keep_collecting_) {
 //        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
-        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&reinterpret_cast<uint32_t*>(&frame[pos]),16);
+        // the DMA passes data in little endian, i.e., the msb are in the highest index of the array
+        // the bits within a byte are correct, though
+        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&frame[pos]),16);
         Log(verbose,"Received contents [");
-        display_bits(frame[pos],16);
+        display_bits(&frame[pos],16);
         Log(verbose,"]");
         // Try to make a fancy printf
         for (uint32_t i = 0; i < 16; ++i) {
@@ -511,7 +513,7 @@ void PTBReader::ClientTransmiter() {
       pthread_mutex_unlock(&lock_);
       //Log(debug,"Frame collected %08X ( %08X %08X %08X %08X)",frame,frame[3],frame[2],frame[1],frame[0]);
       Log(debug,"Frame collected :");
-      Log(debug,"%s",display_bits(frame, 16).c_str());
+      Log(debug,"%s",display_bits(&frame[0], 16).c_str());
 
       Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(frame[0]);
 
@@ -567,6 +569,8 @@ void PTBReader::ClientTransmiter() {
       /// --  Not a TS packet...just accumulate it
 
       // -- Grab the header (valid for all situations
+      Log(verbose, "Grabbing the header\n");
+
       std::memcpy(&eth_buffer[ipck],&frame[0],Payload_Header::size_words);
       ipck += Payload_Header::size_words;
 //      eth_buffer[ipck] = frame[3];
@@ -576,6 +580,7 @@ void PTBReader::ClientTransmiter() {
 
       switch(payload_header->data_packet_type) {
         case DataTypeCounter:
+          Log(verbose, "Counter word\n");
           // This one requires some special handling since it needs to shift the bits from the header
           for (size_t k=0; k< payload_size_counter-1; ++k) {
             eth_buffer[ipck+k] = ((frame[Payload_Header::size_words-1+k] & 0x1) << 31) | (frame[Payload_Header::size_words+k] & 0xFE);
@@ -584,10 +589,13 @@ void PTBReader::ClientTransmiter() {
           ipck += payload_size_counter;
           break;
         case DataTypeTrigger:
+          Log(verbose, "Trigger word\n");
           std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_trigger);
           ipck += payload_size_trigger;
           break;
         case DataTypeSelftest:
+          Log(verbose, "Selftest word\n");
+
           std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_selftest);
           ipck += payload_size_selftest;
           break;
@@ -624,6 +632,7 @@ void PTBReader::ClientTransmiter() {
 //        // The rest of the buffer is crap
 //        ipck += 1;
 //      }
+      Log(verbose, "Frame processed\n");
 
       //delete [] frame;
       // Frame completed. check if we can wait for another or keep collecting

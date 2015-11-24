@@ -11,6 +11,8 @@
 #include <bitset>
 #include <cstring>
 
+#include <arpa/inet.h>
+
 void display_bits(void* memstart, size_t nbytes, std::string sourcename = "") {
 
   std::stringstream bitstr;
