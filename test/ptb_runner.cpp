@@ -35,7 +35,8 @@ void handler(int signal) {
 }
 
 int main() {
-  Logger::SetSeverity(Logger::verbose);
+  //  Logger::SetSeverity(Logger::verbose);
+  Logger::SetSeverity(Logger::warning);
 
   // Register a signal handler
   std::signal(SIGINT,handler);
