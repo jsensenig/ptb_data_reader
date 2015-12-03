@@ -88,9 +88,9 @@ public:
 
   void Shutdown(bool force = false);
 protected:
-  static void ProcessTransmission(const char* buffer);
-  static void ProcessConfig(pugi::xml_node &config);
-	static void ProcessCommand(pugi::xml_node &command);
+  static void ProcessTransmission(const char* buffer,char*& answer);
+  static void ProcessConfig(pugi::xml_node &config,char*& answer);
+	static void ProcessCommand(pugi::xml_node &command,char*& answer);
 
 	static PTBManager *data_manager_;
 private:

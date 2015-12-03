@@ -64,10 +64,10 @@ public:
     this->status_ = status;
   }
 
-  void ExecuteCommand(const char* cmd);
+  void ExecuteCommand(const char* cmd,std::map<std::string,std::string> &answers);
   // Receive the configuration as
   // Passed by copy to keep locally
-  void ProcessConfig(pugi::xml_node config);
+  void ProcessConfig(pugi::xml_node config,std::map<std::string,std::string> &answers);
 
   /**
    * Loops over the registers and dum their contents, both in decimal and Hex.
@@ -84,13 +84,15 @@ public:
    */
   void RestoreConfigurationRegisters();
 
-  void StartRun();
-  void StopRun();
+  void StartRun(std::map<std::string,std::string> &answers);
+  void StopRun(std::map<std::string,std::string> &answers);
 
   void FreeRegisters();
   void ClearCommands() {
 	  commands_.clear();
   }
+
+  uint64_t GetRunStartTime() {return run_start_time_;} ;
 
 protected:
   // Commands that need to be implemented
@@ -171,6 +173,9 @@ private:
    */
   void SetBitRangeRegister(uint32_t reg, uint32_t pos, uint32_t len, uint32_t value);
 
+  // Read the memory mapped registers that contain the run start time
+  void GetSyncStartTime();
+
   // The class responsible for the data reading.
   PTBReader *reader_;
   ConfigServer *cfg_srv_;
@@ -182,6 +187,7 @@ private:
   // When a reset is called, it is the contents of these registers that are sent to the board
   std::map<uint32_t,LocalRegister> register_cache_;
 
+
   std::map<std::string, Command> commands_;
 
   Status status_;
@@ -189,7 +195,11 @@ private:
 
   static const uint8_t num_registers_ = 40;
   static const char *default_config_;
-  void *mapped_base_addr_;
+  void *mapped_conf_base_addr_;
+  void *mapped_time_base_addr_;
+  LocalRegister ptb_start_ts_low_;
+  LocalRegister ptb_start_ts_high_;
+  uint64_t run_start_time_;
 };
 
 #endif /* PTBMANAGER_H_ */

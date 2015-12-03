@@ -195,6 +195,16 @@ public:
     return (socket_ != NULL);
   }
 
+  // -- Statistics methods:
+  uint32_t GetNumMicroslices() {return num_microslices_;};
+  uint32_t GetNumCounterWords() {return num_word_counter_;};
+  uint32_t GetNumTriggerWords() {return num_word_trigger_;};
+  uint32_t GetNumSelftestWords() {return num_word_selftest_;};
+  uint32_t GetNumTimestampWords() {return num_word_tstamp_;};
+  uint32_t GetBytesSent() {return bytes_sent_;};
+  uint64_t GetRunTime() {return (last_timestamp_ - first_timestamp_);};
+
+
 protected:
   /** DMA data collector function into the queue. Runs on it's own thread**/
   //static void* ClientCollectorFunc(void *args);
@@ -241,17 +251,29 @@ private:
   bool fragmented_;
   bool keep_transmitting_;
   //bool ready_to_send_;
-  bool first_ts_;
+  //bool first_ts_;
   bool keep_collecting_;
   // Previous timestamp
-  uint64_t previous_ts_;
+  //uint64_t previous_ts_;
   uint64_t time_rollover_;
-  uint64_t current_ts_;
+  //uint64_t current_ts_;
 
 
   // Debugging and control variables
 uint32_t timeout_cnt_;
 const uint32_t timeout_cnt_threshold_ = 1000;
+
+  // -- Internal run statistics
+  uint32_t num_microslices_;
+  uint32_t num_word_counter_;
+  uint32_t num_word_trigger_;
+  uint32_t num_word_selftest_;
+  uint32_t num_word_tstamp_;
+  uint32_t bytes_sent_;
+  uint32_t first_timestamp_;
+  uint32_t last_timestamp_;
+
+
 
 };
 

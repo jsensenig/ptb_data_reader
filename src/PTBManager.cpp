@@ -43,7 +43,7 @@ extern "C" {
 
 
 // Init with a new reader attached
-PTBManager::PTBManager(bool emu_mode) : reader_(0), cfg_srv_(0),status_(IDLE),emu_mode_(emu_mode) {
+PTBManager::PTBManager(bool emu_mode) : reader_(0), cfg_srv_(0),status_(IDLE),emu_mode_(emu_mode),run_start_time_(0) {
   reader_ =	new PTBReader(emu_mode);
   Log(debug,"Setting up pointers." );
 
@@ -79,7 +79,7 @@ PTBManager::~PTBManager() {
 }
 
 
-void PTBManager::ExecuteCommand(const char* cmd) {
+void PTBManager::ExecuteCommand(const char* cmd,std::map<std::string,std::string> &answers) {
   try{
 
     Log(debug,"Received command [%s]", cmd);
@@ -98,7 +98,7 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         } else {
           // Start the run
           Log(verbose,"Starting a new Run." );
-          StartRun();
+          StartRun(answers);
           break;
         }
         break;
@@ -107,6 +107,7 @@ void PTBManager::ExecuteCommand(const char* cmd) {
         // Essencially it clears the hardware, recommits the configuration and restart the run
         //
       case SOFTRESET:
+        //
         // A reset is also supposed to stop the connections
         SetResetBit(true);
         // Sleep for 10 microseconds to make sure that reset has taken place
@@ -140,7 +141,7 @@ void PTBManager::ExecuteCommand(const char* cmd) {
           break;
         } else {
           Log(verbose,"The Run should STOP now" );
-          StopRun();
+          StopRun(answers);
           break;
         }
       default:
@@ -170,7 +171,7 @@ void PTBManager::ExecuteCommand(const char* cmd) {
   }
 }
 
-void PTBManager::StartRun() {
+void PTBManager::StartRun(std::map<std::string,std::string> &answers) {
   Log(verbose,"Starting the run" );
 
   // Order of execution:
@@ -182,11 +183,14 @@ void PTBManager::StartRun() {
   // -- Reopen the connection if not yet open
   // -- This is not correct. The threads might be destroyed, but the connection may still be open.
   if (!reader_->isReady()) {
+    answers[std::string("warning")] = std::string("Connection to board reader is not opened yet. Trying to reopen.");
+
     Log(warning,"Connection is not opened yet. Trying to reopen.");
     reader_->InitConnection();
   }
 
   if (!reader_->isReady()) {
+    answers[std::string("error")] = std::string("PTB::Received call to start but reader object is not ready.");
     Log(warning,"Received call to start transmitting but reader is not ready. Refusing to run." );
     throw PTBexception("Data reader not ready yet.");
     return;
@@ -212,10 +216,26 @@ void PTBManager::StartRun() {
 //    throw std::string("Start Run failed. No ACK received.");
 //  }
   status_ = RUNNING;
-  Log(info,"Run Started...");
+  Log(info,"Run Start requested...");
+  // Get the run start time before considering itself done
+  // Also take the oportunity and check the run start ACK
+  uint32_t n_tries = 0;
+  static const uint32_t max_tries = 50;
+  do {
+    GetSyncStartTime();
+    if (run_start_time_ == 0) {
+      std::this_thread::sleep_for (std::chrono::milliseconds(100));
+      n_tries++;
+    }
+  } while ((run_start_time_ == 0) and (n_tries < max_tries));
+
+  if (run_start_time_ == 0) {
+    answers[std::string("error")] = std::string("Failed to get run start time.");
+    throw PTBexception("Failed to get run start time after 5s. Did we miss the sync?");
+  }
 }
 
-void PTBManager::StopRun() {
+void PTBManager::StopRun(std::map<std::string,std::string> &answers) {
   Log(debug,"Stopping the run" );
 
   // The order should be:
@@ -230,15 +250,24 @@ void PTBManager::StopRun() {
 
   // Check the ACK bit
   if (GetEnableBitACK() != false && !emu_mode_) {
+    answers[std::string("error")] = std::string("Didn't receive stop run ACK");
     Log(warning,"Stop Run failed. ACK bit still high.");
     throw PTBexception("Stop Run failed. No ACK received.");
   }
 
   reader_->StopDataTaking();
 
-
+  // -- Get the run statistics from the reader and add them to the answers
+  answers[std::string("num_microslices")] = reader_->GetNumMicroslices();
+  answers[std::string("num_word_counter")] = reader_->GetNumCounterWords();
+  answers[std::string("num_word_trigger")] = reader_->GetNumTriggerWords();
+  answers[std::string("num_word_tstamp")] = reader_->GetNumTimestampWords();
+  answers[std::string("num_word_selftest")] = reader_->GetNumSelftestWords();
+  answers[std::string("num_bytes")] = reader_->GetBytesSent();
+  answers[std::string("time_run_board")] = reader_->GetRunTime();
 
   status_ = IDLE;
+  run_start_time_ = 0;
 }
 
 void PTBManager::SetupRegisters() {
@@ -276,21 +305,26 @@ void PTBManager::SetupRegisters() {
 #ifdef ARM
     SetupConfRegisters();
     // First get the virtual address for the mapped physical address
-    mapped_base_addr_ = MapPhysMemory(conf_reg.base_addr,conf_reg.high_addr);
-    Log(debug,"Received virtual address for configuration : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_base_addr_));
+    mapped_conf_base_addr_ = MapPhysMemory(conf_reg.base_addr,conf_reg.high_addr);
+    Log(debug,"Received virtual address for configuration : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_conf_base_addr_));
     // Cross check that we have at least as many offsets as registers expected
     if (conf_reg.n_registers < num_registers_) {
       Log(warning,"Have less configured registers than the ones required. (%u != %u)",conf_reg.n_registers,num_registers_);
     }
-    // This is wrong since the first register is special.
-    // Setting it to 0 makes the board to be in a permanent reset state
-    register_map_[0].address =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_base_addr_) + conf_reg.addr_offset[0]);
+
+    register_map_[0].address =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_conf_base_addr_) + conf_reg.addr_offset[0]);
     register_map_[0].value() = CTL_BASE_REG_VAL;
     for (uint32_t i = 1; i < num_registers_; ++i) {
-      register_map_[i].address =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_base_addr_) + conf_reg.addr_offset[i]);
+      register_map_[i].address =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_conf_base_addr_) + conf_reg.addr_offset[i]);
       register_map_[i].value() = 0;
     }
 
+    //-- Now repeat for the time registers
+    SetupTimeRegisters();
+    mapped_time_base_addr_ = MapPhysMemory(time_reg.base_addr,time_reg.high_addr);
+    Log(debug,"Received virtual address for run start timestamp : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_time_base_addr_));
+    ptb_start_ts_low_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + time_reg.addr_offset[0]);
+    ptb_start_ts_high_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + time_reg.addr_offset[1]);
 
 #endif /*ARM*/
   }
@@ -330,7 +364,7 @@ void PTBManager::FreeRegisters() {
   Log(info,"Memory released!");
 }
 
-void PTBManager::ProcessConfig(pugi::xml_node config) {
+void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::string> &answers) {
   // Only accept a new configuration if we are not running.
   // NFB: Not sure if I shouldn't always accept a config but simply place it in the cache.
   if (status_ == RUNNING) {
@@ -635,6 +669,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
   Log(debug,"Control register after config commit 0x%08X", register_map_[0].value() );
   if (!GetConfigBitACK() && emu_mode_ == false) {
     Log(error,"Failed set to set the configuration bit. ACK not received");
+    answers[std::string("error")] = std::string("Configuration failed to acknowledge.");
     throw PTBexception("Configuration failed to commit. ACK not received.");
   }
 
@@ -668,6 +703,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config) {
     reader_->InitConnection(true);
   }
   catch(SocketException &e) {
+    answers[std::string("warning")] = std::string("Failed to open connection to board reader.");
 	  Log(warning,"Connection failed to establish. This might cause troubles later.");
   }
 
@@ -969,3 +1005,12 @@ bool PTBManager::GetConfigBitACK() {
 bool PTBManager::GetEnableBitACK() {
   return GetBit(0,30);
 }
+
+void PTBManager::GetSyncStartTime() {
+  uint64_t ts_low = (uint64_t)ptb_start_ts_low_.value();
+  uint64_t ts_high = (uint64_t)ptb_start_ts_high_.value();
+
+  run_start_time_ = (ts_high << 32) | (ts_low & 0xFFFFFFFF);
+
+}
+

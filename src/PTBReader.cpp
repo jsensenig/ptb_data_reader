@@ -67,15 +67,17 @@ uint64_t ClockGetTime() {
 PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     packet_rollover_(0),socket_(NULL),
     client_thread_collector_(0),client_thread_transmitor_(0),ready_(false), emu_mode_(emu),
-				 fragmented_(false),keep_transmitting_(true),/*ready_to_send_(false),*/first_ts_(true),keep_collecting_(true),previous_ts_(0),timeout_cnt_(0)
-
+    fragmented_(false),keep_transmitting_(true),/*ready_to_send_(false),first_ts_(true),*/
+    keep_collecting_(true)/*,previous_ts_(0)*/,timeout_cnt_(0),num_microslices_(0),
+    num_word_counter_(0),num_word_trigger_(0),num_word_tstamp_(0),bytes_sent_(0),
+    first_timestamp_(0),last_timestamp_(0)
 {
   Log(verbose,"Creating an instance of the reader with emu %s\n",emu_mode_?"true":"false");
-  (void) first_ts_;
-  (void) current_ts_;
+//  (void) first_ts_;
+//  (void) current_ts_;
 
   if (emu_mode_) {
-	  Log(warning,"Running in emulator mode.");
+    Log(warning,"Running in emulator mode.");
     Log(verbose,"Filling emulator queue");
     //-- InitEmuSampler();
   } else {
@@ -101,21 +103,21 @@ PTBReader::~PTBReader() {
 }
 
 void PTBReader::ClearThreads() {
-	// FIXME: Migrate this to C++11 constructs.
-	Log(debug,"Killing the daughter threads.\n");
-	// First stop the loops
-	keep_collecting_ = false;
-	std::this_thread::sleep_for (std::chrono::seconds(1));
-	Log(info,"Killing collector thread.");
-	// Kill the collector thread first
-	pthread_cancel(client_thread_collector_);
-	// Kill the transmittor thread.
+  // FIXME: Migrate this to C++11 constructs.
+  Log(debug,"Killing the daughter threads.\n");
+  // First stop the loops
+  keep_collecting_ = false;
+  std::this_thread::sleep_for (std::chrono::seconds(1));
+  Log(info,"Killing collector thread.");
+  // Kill the collector thread first
+  pthread_cancel(client_thread_collector_);
+  // Kill the transmittor thread.
 
-	keep_transmitting_ = false;
-	std::this_thread::sleep_for (std::chrono::seconds(2));
-	// -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
-	Log(info,"Killing transmiter thread.");
-	pthread_cancel(client_thread_transmitor_);
+  keep_transmitting_ = false;
+  std::this_thread::sleep_for (std::chrono::seconds(2));
+  // -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
+  Log(info,"Killing transmiter thread.");
+  pthread_cancel(client_thread_transmitor_);
 
 }
 
@@ -139,10 +141,10 @@ void PTBReader::StopDataTaking() {
 }
 
 void PTBReader::StartDataTaking() {
-	//FIXME: Migrate this to C++11 constructs
+  //FIXME: Migrate this to C++11 constructs
   if (ready_) {
 # ifdef ARM
-	  int status = xdma_init();
+    int status = xdma_init();
     if (status < 0) {
       Log(error,"Failed to initialize the DMA engine for data collection.");
       throw std::string("Failed to initialize the DMA engine for data collection.");
@@ -171,7 +173,7 @@ void PTBReader::StartDataTaking() {
 }
 
 void PTBReader::ResetBuffers() {
-	// FIXME: Migrate this to C++11 constructs (std::thread::mutex)
+  // FIXME: Migrate this to C++11 constructs (std::thread::mutex)
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
   pthread_mutex_lock(&lock_);
@@ -187,16 +189,16 @@ void PTBReader::ResetBuffers() {
 
 void PTBReader::InitConnection(bool force) {
 
-	//-- If a connection exists, assume it is correct and continue to use it
-	if (socket_ != NULL) {
-		if (force) {
-			Log(warning,"Destroying existing socket!");
-			delete socket_;
-		} else {
-			Log(info,"Reusing existing connection.");
-			return;
-		}
-	}
+  //-- If a connection exists, assume it is correct and continue to use it
+  if (socket_ != NULL) {
+    if (force) {
+      Log(warning,"Destroying existing socket!");
+      delete socket_;
+    } else {
+      Log(info,"Reusing existing connection.");
+      return;
+    }
+  }
 
   // Check if the server data is set up, and compute
   if (tcp_host_ != "" && tcp_port_ != 0) {
@@ -222,14 +224,14 @@ void PTBReader::InitConnection(bool force) {
       throw;
     }
     catch(std::exception &e) {
-        ready_ = false;
-        socket_ = NULL;
+      ready_ = false;
+      socket_ = NULL;
       Log(error,"STD exception caught : %s",e.what() );
       throw;
     }
     catch(...) {
-        ready_ = false;
-        socket_ = NULL;
+      ready_ = false;
+      socket_ = NULL;
       Log(error,"Unknown exception caught." );
       throw;
     }
@@ -244,85 +246,85 @@ void PTBReader::InitConnection(bool force) {
 
 void PTBReader::ClientCollector() {
   Log(info, "Starting data collector\n" );
-    if (emu_mode_) {
-      while(keep_collecting_) {
-	// Reserve the memory for one frame (128 bits long)
-	uint8_t* frame = (uint8_t*)calloc(16,sizeof(uint8_t));
-	Log(verbose, "Generating the frame\n");
-	// -- GenerateFrame(&frame);
-	// If the header is something else do nothing.
-	if (((frame[0] >> 29) & 0x7) == 0x0) continue;
-	Log(verbose, "Frame generated\n");
-	pthread_mutex_lock(&lock_);
-	buffer_queue_.push(frame);
-	pthread_mutex_unlock(&lock_);
-	(void)timeout_cnt_;
-	(void)timeout_cnt_threshold_;
-      }
+  if (emu_mode_) {
+    while(keep_collecting_) {
+      // Reserve the memory for one frame (128 bits long)
+      uint8_t* frame = (uint8_t*)calloc(16,sizeof(uint8_t));
+      Log(verbose, "Generating the frame\n");
+      // -- GenerateFrame(&frame);
+      // If the header is something else do nothing.
+      if (((frame[0] >> 29) & 0x7) == 0x0) continue;
+      Log(verbose, "Frame generated\n");
+      pthread_mutex_lock(&lock_);
+      buffer_queue_.push(frame);
+      pthread_mutex_unlock(&lock_);
+      (void)timeout_cnt_;
+      (void)timeout_cnt_threshold_;
     }
+  }
 #ifdef ARM
-    else {
-      // Registers should be setup already.
-      // First setup the DMA:
-      ///FIXME: Maybe this code could be moved elsewhere to speed up initialization
-      int status = 0;
-      Log(debug,"Allocating the DMA buffer.");
+  else {
+    // Registers should be setup already.
+    // First setup the DMA:
+    ///FIXME: Maybe this code could be moved elsewhere to speed up initialization
+    int status = 0;
+    Log(debug,"Allocating the DMA buffer.");
 
-      uint8_t *frame = NULL;
-      //uint32_t *frame = NULL;
+    uint8_t *frame = NULL;
+    //uint32_t *frame = NULL;
 
-      // -- Can easily increase this to avoid overlaps?
-      // NOTE: This can be increased to bigger values but have to check
-      // with the DMA driver to see if the buffer from the DMA is appropriate.
-      // At the moment the map size is set to 256 MB. This doesn't seem right as the
-      // CDMA is only allocating 64 MB. On the other hand this buffer is only 16 MB long
-      const uint32_t buffer_size = 1024*1024;
-      uint32_t pos = 0;
-      timeout_cnt_ = 0;
+    // -- Can easily increase this to avoid overlaps?
+    // NOTE: This can be increased to bigger values but have to check
+    // with the DMA driver to see if the buffer from the DMA is appropriate.
+    // At the moment the map size is set to 256 MB. This doesn't seem right as the
+    // CDMA is only allocating 64 MB. On the other hand this buffer is only 16 MB long
+    const uint32_t buffer_size = 1024*1024;
+    uint32_t pos = 0;
+    timeout_cnt_ = 0;
 
-      // The bus is 16 bytes, and that should be the size of each frame
-      frame = reinterpret_cast<uint8_t*>(xdma_alloc(buffer_size,frame_size_bytes));
+    // The bus is 16 bytes, and that should be the size of each frame
+    frame = reinterpret_cast<uint8_t*>(xdma_alloc(buffer_size,frame_size_bytes));
 
-      // FIXME:Do we really need to zero the data?
-      std::memset(frame,0,buffer_size*frame_size_bytes);
+    // FIXME:Do we really need to zero the data?
+    std::memset(frame,0,buffer_size*frame_size_bytes);
 
-      while (keep_collecting_) {
-	//        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
-        // the DMA passes data in little endian, i.e., the msbyte are in the highest index of the array
-        // the bits within a byte are correct, though
-	/// -- NOTE: The size of the pointer and the frame size in the call below must match
-	//Log(debug,"Performing transaction with a pointer %u long and %d bytes",sizeof(reinterpret_cast<uint32_t*>(&frame[pos])[0]),frame_size_uint);
-        status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&frame[pos]),frame_size_uint);
-        //Log(verbose,"Received contents [%s]",display_bits(&frame[pos],frame_size_bytes).c_str());
+    while (keep_collecting_) {
+      //        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
+      // the DMA passes data in little endian, i.e., the msbyte are in the highest index of the array
+      // the bits within a byte are correct, though
+      /// -- NOTE: The size of the pointer and the frame size in the call below must match
+      //Log(debug,"Performing transaction with a pointer %u long and %d bytes",sizeof(reinterpret_cast<uint32_t*>(&frame[pos])[0]),frame_size_uint);
+      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&frame[pos]),frame_size_uint);
+      //Log(verbose,"Received contents [%s]",display_bits(&frame[pos],frame_size_bytes).c_str());
 
-        if (status == -1) {
-          Log(warning,"Reached a timeout in the DMA transfer.");
-          timeout_cnt_++;
-          if (timeout_cnt_ > timeout_cnt_threshold_) {
-            Log(error,"Received too many timeouts. Failing the run.");
-            throw std::string("Reached timeout counter limit.");
-          }
-        } else {
-          timeout_cnt_ = 0;
-          //Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3]);
+      if (status == -1) {
+        Log(warning,"Reached a timeout in the DMA transfer.");
+        timeout_cnt_++;
+        if (timeout_cnt_ > timeout_cnt_threshold_) {
+          Log(error,"Received too many timeouts. Failing the run.");
+          throw std::string("Reached timeout counter limit.");
         }
-        // DMA transaction was successful.
-        pthread_mutex_lock(&lock_);
-        buffer_queue_.push(&frame[pos]);
-        pthread_mutex_unlock(&lock_);
-        //Log(debug,"Done storing the buffer");
-        pos += frame_size_bytes;
-        if (pos+frame_size_bytes >= buffer_size*frame_size_bytes) {
-	  Log(info,"Reached buffer size.Resetting to start.\n");
-	  pos = 0;
-        }
+      } else {
+        timeout_cnt_ = 0;
+        //Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3]);
       }
-      Log(warning,"Stopped collecting data.");
-      /// We can't exit the engine here otherwise the memory mapped registers disappear and the queue vanishes causing a crash
-      // Log(debug,"Shutting down the DMA engine.");
-      // xdma_exit();
-      // Log(debug,"DMA engine done.");
+      // DMA transaction was successful.
+      pthread_mutex_lock(&lock_);
+      buffer_queue_.push(&frame[pos]);
+      pthread_mutex_unlock(&lock_);
+      //Log(debug,"Done storing the buffer");
+      pos += frame_size_bytes;
+      if (pos+frame_size_bytes >= buffer_size*frame_size_bytes) {
+        Log(info,"Reached buffer size.Resetting to start.\n");
+        pos = 0;
+      }
     }
+    Log(warning,"Stopped collecting data.");
+    /// We can't exit the engine here otherwise the memory mapped registers disappear and the queue vanishes causing a crash
+    // Log(debug,"Shutting down the DMA engine.");
+    // xdma_exit();
+    // Log(debug,"DMA engine done.");
+  }
 #endif /*ARM*/
 }
 
@@ -344,6 +346,17 @@ void PTBReader::ClientTransmiter() {
   // use std::memcpy for better performance
 
   uint8_t *eth_buffer = new uint8_t[max_packet_size]();
+
+  // this is not strictly accurate but it is close enough
+  num_microslices_ = 0;
+  num_word_counter_ = 0;
+  num_word_trigger_ = 0;
+  num_word_tstamp_ = 0;
+  bytes_sent_ = 0;
+  first_timestamp_ = 0;
+  last_timestamp_ = 0;
+
+  //uint64_t start_run_time_ = ClockGetTime();
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
@@ -373,7 +386,7 @@ void PTBReader::ClientTransmiter() {
         the board reader is not trivial and it was tested as working.
        - The payloads are byte-swapped (using htonl), becoming effectively big-endian and therefore a reflection 
         of what the board actually produces. 
-    */
+     */
 
     // ipck   : Counter of bytes
     // iframe : Frame counter.
@@ -386,7 +399,7 @@ void PTBReader::ClientTransmiter() {
 
     // FIXME: Move part of this assigment out of the loop.
     header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
-    
+
 
 
     //    eth_buffer[0] = header;
@@ -415,12 +428,15 @@ void PTBReader::ClientTransmiter() {
 
       // Reverse the bytes into big-endian
       for (uint32_t i =0; i < frame_size_bytes; ++i) {
-	frame[i] = frame_raw[frame_size_bytes-1-i];
+        frame[i] = frame_raw[frame_size_bytes-1-i];
       }
 
       // Make a new pointer that contains the header. This part we want to always keep it byte swapped
       // FIXME: Use frame_raw instead of new variable
+      // THIS IS A TERRIBLE IDEA. SHOULD BYTE-SWAP EVERYTHIG AND ALWAYS USE IT LIKE THAT
+      // DEALING WITH THE TIMESTAMPS IS GOING TO BE A NIGHTMARE SINCE THEY SPAN MULTIPLE BYTES
       frame_header = htonl(reinterpret_cast<uint32_t*>(frame)[0]);
+
       // Do some debug showing the header in the different reinterpretations
       // Log(debug,"Header_raw %08X raw_rev %08X byte_swap %08X",
       //     reinterpret_cast<uint32_t*>(frame_raw)[0],
@@ -429,35 +445,43 @@ void PTBReader::ClientTransmiter() {
 
 
       Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(&frame_header);
-      
+
       // Very first check to discard "ghost frames"
       // -- Ghost frames are caused by the NOvA timing not being fully initialized by
       // the time the word was generated. These usually occur because there is a delay
       // between the sync pulse and the timestamps starting to be populated in the NOvA firmware.
       // Unfortunately it doesn't seem that anything can be done about it
-      
+
       if ((payload_header->short_nova_timestamp & 0xFFFFFFF) == 0x0) {
-	// Log(warning,"Dropping ghost frame");
+        // Log(warning,"Dropping ghost frame");
         continue;
       }
-      
+
       /// -- Check if it is a TS frame
       if(payload_header->data_packet_type == DataTypeTimestamp) {
         // This is a timestamp word.
         // Check if this is the first TS after StartRun
         // Log(verbose, "Timestamp frame...\n");
-	// Log(verbose, "Sending the packet\n");
-	
-	
-	std::memcpy(&eth_buffer[ipck],&frame_header,Payload_Header::size_words);
-	ipck += Payload_Header::size_words;
+        // Log(verbose, "Sending the packet\n");
 
-	std::memcpy(&eth_buffer[ipck],&(frame[Payload_Header::size_words]),payload_size_timestamp);
-	ipck += payload_size_timestamp;
-	carry_on = false;
-	fragmented_ = false;
-	// break out of the cycle
-	break;
+        if (first_timestamp_ == 0) {
+          uint64_t tmp1 = (uint64_t) ntohl(reinterpret_cast<uint32_t*>(&frame[Payload_Header::size_words])[0]);
+          first_timestamp_ = (tmp1 << 32) |  ((uint64_t)ntohl(reinterpret_cast<uint32_t*>(&frame[Payload_Header::size_words])[1]) & 0xFFFFFFFF);
+          last_timestamp_ = first_timestamp_;
+        } else {
+          uint64_t tmp1 = (uint64_t) ntohl(reinterpret_cast<uint32_t*>(&frame[Payload_Header::size_words])[0]);
+          last_timestamp_ = (tmp1 << 32) |  ((uint64_t)ntohl(reinterpret_cast<uint32_t*>(&frame[Payload_Header::size_words])[1]) & 0xFFFFFFFF);
+        }
+        std::memcpy(&eth_buffer[ipck],&frame_header,Payload_Header::size_words);
+        ipck += Payload_Header::size_words;
+
+        std::memcpy(&eth_buffer[ipck],&(frame[Payload_Header::size_words]),payload_size_timestamp);
+        ipck += payload_size_timestamp;
+        carry_on = false;
+        fragmented_ = false;
+        num_word_tstamp_++;
+        // break out of the cycle
+        break;
       }
 
       /// --  Not a TS packet...just accumulate it
@@ -468,42 +492,44 @@ void PTBReader::ClientTransmiter() {
       ipck += Payload_Header::size_words;
 
       switch(payload_header->data_packet_type) {
-      case DataTypeCounter:
-	// Log(verbose, "Counter word\n");
-	// This one requires some special handling since it needs to shift the bits from the header
-	for (size_t k=0; k< payload_size_counter-1; ++k) {
-	  // -- Grab the lsb of the previous word and place it on the msb
-	  // -- Grab the 7 msb of the current word and place them in the 7 lsb
-	  eth_buffer[ipck+k] = ((frame[Payload_Header::size_words-1+k] & 0x1) << 7) | ((frame[Payload_Header::size_words+k] & 0xFE) >> 1);
-	}
-	// last frame just shifts the lsb of the previous word into the msb of current word
-	eth_buffer[ipck+payload_size_counter-1] = (frame[payload_size_counter-1] & 0x1) << 7;
-	ipck += payload_size_counter;
-	break;
-      case DataTypeTrigger:
-	// Log(verbose, "Trigger word\n");
-	std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_trigger);
-	ipck += payload_size_trigger;
-	break;
-      case DataTypeSelftest:
-	// Log(verbose, "Selftest word\n");
-	
-	std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_selftest);
-	ipck += payload_size_selftest;
-	break;
-      default:
-	char msg[100];
-	sprintf(msg,"Unknown data type [%X] (%s)",frame[0] & 0xFF, display_bits(&frame_header,sizeof(frame_header)).c_str());
-	throw PTBexception(msg);
+        case DataTypeCounter:
+          // Log(verbose, "Counter word\n");
+          // This one requires some special handling since it needs to shift the bits from the header
+          for (size_t k=0; k< payload_size_counter-1; ++k) {
+            // -- Grab the lsb of the previous word and place it on the msb
+            // -- Grab the 7 msb of the current word and place them in the 7 lsb
+            eth_buffer[ipck+k] = ((frame[Payload_Header::size_words-1+k] & 0x1) << 7) | ((frame[Payload_Header::size_words+k] & 0xFE) >> 1);
+          }
+          // last frame just shifts the lsb of the previous word into the msb of current word
+          eth_buffer[ipck+payload_size_counter-1] = (frame[payload_size_counter-1] & 0x1) << 7;
+          ipck += payload_size_counter;
+          num_word_counter_++;
+          break;
+        case DataTypeTrigger:
+          // Log(verbose, "Trigger word\n");
+          std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_trigger);
+          ipck += payload_size_trigger;
+          num_word_trigger_++;
+          break;
+        case DataTypeSelftest:
+          // Log(verbose, "Selftest word\n");
+          std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_selftest);
+          ipck += payload_size_selftest;
+          num_word_selftest_++;
+          break;
+        default:
+          char msg[100];
+          sprintf(msg,"Unknown data type [%X] (%s)",frame[0] & 0xFF, display_bits(&frame_header,sizeof(frame_header)).c_str());
+          throw PTBexception(msg);
       }
-      
+
       // Log(verbose, "Frame processed\n");
       // Frame completed. check if we can wait for another or keep collecting
       iframe += 1;
 
       // The check for size rollover should use ipck instead of iframe
       // If we reach dangerously close to the max size of a payload then we should definitely close it and fragment it
-      
+
 
       // Size Rollover reached. Produce a fragmented block;
       // Keep collecting only until the next TS word
@@ -515,11 +541,16 @@ void PTBReader::ClientTransmiter() {
 
     // Transmit the data.
     // Log(verbose, "Packet completed. Calculating the checksum.\n");
-    
+
     // Write the size (in bytes)
     // keep in mind that ipck is summed 1 for the checksum
     //    uint16_t packet_size = ((ipck+1)*sizeof(uint32_t));
+
+    // This discounts the headers and the checksum, only keeps useful data
+    // to be directly comparable to the value reported by the board reader
+    bytes_sent_ += ipck;
     uint32_t packet_size = ipck+sizeof(uint32_t);
+
     // Log(verbose,"Size was calculated to be %u",packet_size);
 
     // eth_buffer is a uint8_t. Better to reassign to the header and then
@@ -538,7 +569,7 @@ void PTBReader::ClientTransmiter() {
     // -- Followed the recipe in
     //    https://en.wikipedia.org/wiki/BSD_checksum
     uint16_t checksum = 0x0;
-//    uint8_t*ch_buff = reinterpret_cast<uint8_t*>(eth_buffer);
+    //    uint8_t*ch_buff = reinterpret_cast<uint8_t*>(eth_buffer);
     uint8_t*ch_buff = eth_buffer;
     for (uint32_t i = 0; i < ipck; ++i) {
 
@@ -563,7 +594,7 @@ void PTBReader::ClientTransmiter() {
 
     // Log(debug,"Sending packet with %u bytes (including header)",ipck);
     // print_bits(eth_buffer,ipck);
-    
+
     /// -- Send the packet:
     try {
       socket_->send(eth_buffer,ipck);
@@ -651,21 +682,21 @@ void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
     if (ftype == 0x1) {
 
       bitdump.str(""); bitdump << std::bitset<3>(ftype)
-             << " " << std::bitset<28>(tstamp);
+      << " " << std::bitset<28>(tstamp);
       Log(debug,"Counter word : Time %u [%s]",(fheader >> 1) & 0xFFFFFFF,bitdump.str().c_str() );
       bitdump.str(""); //bitdump << std::bitset<1>(fheader & 0x1)
       bitdump << " " << std::bitset<32>(buffer[counter])
-             << " " << std::bitset<32>(buffer[counter+1])
-             << " " << std::bitset<32>(buffer[counter+2])
-             << " " << std::bitset<32>(buffer[counter+3]);
+                 << " " << std::bitset<32>(buffer[counter+1])
+                 << " " << std::bitset<32>(buffer[counter+2])
+                 << " " << std::bitset<32>(buffer[counter+3]);
       counter += 4;
       Log(debug,"Counter word : Body [%s]",bitdump.str().c_str());
     } else if (ftype == 0x7) {
 
       bitdump.str(""); bitdump << std::bitset<3>(ftype)
-             << " " << std::bitset<28>(tstamp)
-             << " " << std::bitset<32>(buffer[counter])
-             << " " << std::bitset<32>(buffer[counter+1]);
+      << " " << std::bitset<28>(tstamp)
+      << " " << std::bitset<32>(buffer[counter])
+      << " " << std::bitset<32>(buffer[counter+1]);
       uint64_t tmp1 = buffer[counter];
       uint64_t tmp2 = buffer[counter+1];
       tmp1 = (tmp1 << 32) | tmp2;
@@ -682,7 +713,7 @@ void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
       Log(debug,"Trigger word : Time %X (%u) [%s]", tstamp, tstamp,bitdump.str().c_str() );
 
       bitdump.str(""); bitdump << std::bitset<5>((buffer[counter] >> 27) & 0x1F)
-             << " " << std::bitset<4>((buffer[counter] >> 23) & 0xF);
+      << " " << std::bitset<4>((buffer[counter] >> 23) & 0xF);
       uint32_t trig_type = (buffer[counter] >> 27) & 0x1F;
       uint32_t trig_id = (buffer[counter] >> 23) & 0xF;
       Log(debug,"Trigger word : Body  TrigType : %X TrigId %X [%s]", trig_type,trig_id,bitdump.str().c_str());

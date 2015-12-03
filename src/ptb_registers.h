@@ -37,7 +37,7 @@ typedef struct mapped_register {
 uint32_t g_n_registers_;
 
 mapped_register conf_reg;
-
+mapped_register time_reg;
 
 void SetupConfRegisters() {
 	conf_reg.dev_id = 0;
@@ -59,6 +59,25 @@ void SetupConfRegisters() {
 }
 
 
+void SetupTimeRegisters() {
+  time_reg.dev_id = 0;
+  // FIXME: Update this to the IP address
+  time_reg.base_addr = 0x43C00000;
+  time_reg.high_addr = 0x43C0FFFF;
+  time_reg.n_registers = 4;
+  time_reg.addr_offset = new uint32_t[time_reg.n_registers];
+  unsigned int i = 0;
+  for (i = 0; i < time_reg.n_registers; ++i) {
+   time_reg.addr_offset[i] = i*4;
+    Log(debug,
+        "Setting timestamp register (%u) to address 0x%08X + 0x%08X =  [0x%08X].",
+        i,
+        time_reg.base_addr,
+        time_reg.addr_offset[i],
+        time_reg.base_addr+time_reg.addr_offset[i]);
+  }
+  Log(debug,"Time registers set.");
+}
 
 /**
  * MapPhysMemory
@@ -77,8 +96,10 @@ void *MapPhysMemory(uint32_t base_addr, uint32_t high_addr) {
   mapped_addr = mmap(0, (high_addr-base_addr), PROT_READ | PROT_WRITE, MAP_SHARED, memfd, dev_base & ~(high_addr-base_addr-1));
   if ( reinterpret_cast<int32_t>(mapped_addr) == -1) {
     Log(error,"Failed to map register [0x%08X 0x%08X] into virtual address.",base_addr,high_addr);
-    return NULL;
+    mapped_addr = NULL;
   }
+
+  close(memfd);
 
   return mapped_addr;
 

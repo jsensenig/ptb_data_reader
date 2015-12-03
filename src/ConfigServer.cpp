@@ -15,6 +15,7 @@
 #include "PTBManager.h"
 #include "PTBReader.h"
 #include "Logger.h"
+#include "PTBexception.h"
 
 // -- Contrib classes
 // For Socket, ServerSocket, and SocketException
@@ -193,18 +194,21 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
         catch(std::range_error &e) {
           Log(error,"Range error : %s",e.what());
         }
-
         // Generic
         catch(std::exception &e) {
           Log(error,"Caught std exception : %s",e.what());
         }
+
         // Process the transmission.
         try {
           Log(verbose,"Processing buffer [%s]",tcp_buffer_.c_str());
-          printf("About to process\n");
-	  std::this_thread::sleep_for (std::chrono::seconds(2));
-	  ProcessTransmission(tcp_buffer_.c_str());
-          sprintf(instBuffer,"<success>true</success>");
+          // Don't understand what this sleep is doing here
+          //std::this_thread::sleep_for (std::chrono::seconds(2));
+          char*answer;
+          ProcessTransmission(tcp_buffer_.c_str(),answer);
+          //sprintf(instBuffer,"<success>true</success>");
+          sprintf(instBuffer,"%s",answer);
+          delete [] answer;
         }
         catch (std::string &e) {
           Log(error,"Config exception caught : %s",e.c_str());
@@ -237,16 +241,23 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
           Log(verbose,"new buffer [%s]",localBuffer.c_str());
 
           Log(verbose,"Processing command buffer [%s]",tcp_buffer_.c_str() );
-          ProcessTransmission(tcp_buffer_.c_str());
-          sprintf(instBuffer,"<success>true</success>");
+          char *answer;
+          ProcessTransmission(tcp_buffer_.c_str(),answer);
+          //sprintf(instBuffer,"<success>true</success>");
+          sprintf(instBuffer,"%s",answer);
+          delete [] answer;
         }
         catch (std::string &e) {
           Log(error,"Config exception caught : %s",e.c_str());
           // Return a failure signal.
           sprintf(instBuffer,"<error>%s</error>",e.c_str());
         }
+        catch (PTBexception &e) {
+          Log(error,"PTB exception caught : %s",e.what());
+          sprintf(instBuffer,"<error>%s</error>",e.what());
+        }
         catch (std::exception &e) {
-          Log(error,"STD exception caught :", e.what());
+          Log(error,"STD exception caught : %s", e.what());
           // Return a failure signal.
           sprintf(instBuffer,"<error>%s</error>",e.what());
         }
@@ -305,7 +316,7 @@ void ConfigServer::CheckInstances() const {
  * and on another we want to be able to pass commands to start and end the run.
  * Implement a register handle, that can be used to trigger the manager
  */
-void ConfigServer::ProcessTransmission(const char* buffer) {
+void ConfigServer::ProcessTransmission(const char* buffer,char*& answer) {
   // Before doing any processing check that a DataManager has already
   // been registered. If not simply queue the command into a list and wait
   // Careful if the client connection in the meantime is lost, the memory will disappear.
@@ -339,14 +350,19 @@ void ConfigServer::ProcessTransmission(const char* buffer) {
   // 2.) There are both config and command nodes
   if (command == NULL &&  config == NULL) {
     Log(error,"Neither config nor command blocks were found. Ignoring the data.");
+//    std::ostringstream docstr;
+//    doc.print(docstr);
+//    throw PTBexception(docstr.str().c_str());
+
   } else if (command != NULL and config != NULL){
     Log(error,"Found both a config and a command node. This is not supported yet.");
   } else if (config != NULL) {
     Log(verbose,"Processing config %s : %s ",config.name(),config.child_value());
-    ProcessConfig(config);
+    //
+    ProcessConfig(config,answer);
   } else if (command != NULL){
     Log(verbose,"Processing command [%s] : [%s]",command.name(),command.child_value());
-    ProcessCommand(command);
+    ProcessCommand(command,answer);
   } else {
     Log(warning,"Reached an impossible situation. Pretending nothing happened and carrying on.");
   }
@@ -354,7 +370,7 @@ void ConfigServer::ProcessTransmission(const char* buffer) {
 }
 
 
-void ConfigServer::ProcessConfig(pugi::xml_node &config) {
+void ConfigServer::ProcessConfig(pugi::xml_node &config, char*& answer) {
   Log(verbose,"Processing input buffer");
   Log(verbose,"Name: [%s]",config.name());
   Log(verbose,"Value: [%s]",config.child_value());
@@ -364,17 +380,41 @@ void ConfigServer::ProcessConfig(pugi::xml_node &config) {
     config.print(std::cout,"",pugi::format_raw);
   }
   try {
-    data_manager_->ProcessConfig(config);
+    std::map<std::string,std::string> answers;
+    data_manager_->ProcessConfig(config,answers);
+    if (answers.size() == 0) {
+      answer = new char[50];
+      sprintf(answer,"<answer>NULL</answer>");
+    } else if (answers.size() == 1) {
+      answer = new char[(answers.begin()->second).length()+50];
+      sprintf(answer,"<answer>%s</answer>",(answers.begin()->second).c_str());
+    } else {
+      std::ostringstream msg;
+      msg << "<run_statistics ";
+
+      for (std::map<std::string,std::string>::iterator it = answers.begin(); it != answers.end(); ++it) {
+        msg << it->first << "=" << it->second << " ";
+      }
+      msg << "/>";
+      answer = new char[msg.str().size()+1];
+      sprintf(answer,"%s",msg.str().c_str());
+    }
   }
   catch(std::string &e) {
     Log(error,"Configuration exception caught: %s",e.c_str());
-
+    throw;
   }
-
-  //FIXME: Add call to process the configuration in the manager.
+  catch(PTBexception &e) {
+    Log(error,"PTB exception caught: %s",e.what());
+    throw;
+  }
+  catch(...) {
+    Log(error,"unknown exception caught.");
+    throw;
+  }
 }
 
-void ConfigServer::ProcessCommand(pugi::xml_node &command) {
+void ConfigServer::ProcessCommand(pugi::xml_node &command, char*&answer) {
 
   Log(verbose,"Processing input buffer");
   Log(verbose,"Name: [%s]",command.name());
@@ -386,7 +426,26 @@ void ConfigServer::ProcessCommand(pugi::xml_node &command) {
     Log(debug,"Checking command [%s]",cmd);
 
     // Pass the command to the manager and let it handle it properly
-    data_manager_->ExecuteCommand(cmd);
+    std::map<std::string,std::string> answers;
+    data_manager_->ExecuteCommand(cmd,answers);
+    if (answers.size() == 0) {
+      answer = new char[50];
+      sprintf(answer,"<answer>NULL</answer>");
+    } else if (answers.size() == 1) {
+      answer = new char[(answers.begin()->second).length()+50];
+      sprintf(answer,"<answer>%s</answer>",(answers.begin()->second).c_str());
+    } else {
+      std::ostringstream msg;
+      msg << "<run_statistics ";
+
+      for (std::map<std::string,std::string>::iterator it = answers.begin(); it != answers.end(); ++it) {
+        msg << it->first << "=" << it->second << " ";
+      }
+      msg << "/>";
+      answer = new char[msg.str().size()+1];
+      sprintf(answer,"%s",msg.str().c_str());
+    }
+
   }
   catch (const std::exception &e) {
     Log(error,"STL exception caught : %s ",e.what());
@@ -410,7 +469,10 @@ void ConfigServer::RegisterDataManager(PTBManager *manager)  {
     Log(debug,"Processing outstanding transmission queue.");
     while (queue_.size() > 0) {
       Log(verbose,"Processing an entry");
-      ProcessTransmission(queue_.front());
+      char *answer = NULL;
+      ProcessTransmission(queue_.front(),answer);
+      // In this case ignore the answers, since we don't know if they already timed out upstream
+      delete [] answer;
       queue_.pop_front();
     }
   }
@@ -438,7 +500,9 @@ void ConfigServer::Shutdown(bool force) {
     // Process the queue
     while (queue_.size() > 0) {
       Log(verbose,"Processing an entry");
-      ProcessTransmission(queue_.front());
+      char * answer;
+      ProcessTransmission(queue_.front(), answer);
+      delete [] answer;
       queue_.pop_front();
     }
   } else {
