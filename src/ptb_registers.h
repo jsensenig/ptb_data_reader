@@ -62,8 +62,8 @@ void SetupConfRegisters() {
 void SetupTimeRegisters() {
   time_reg.dev_id = 0;
   // FIXME: Update this to the IP address
-  time_reg.base_addr = 0x43C00000;
-  time_reg.high_addr = 0x43C0FFFF;
+  time_reg.base_addr = 0x43C10000;
+  time_reg.high_addr = 0x43C1FFFF;
   time_reg.n_registers = 4;
   time_reg.addr_offset = new uint32_t[time_reg.n_registers];
   unsigned int i = 0;

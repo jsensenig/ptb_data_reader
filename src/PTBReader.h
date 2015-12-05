@@ -73,33 +73,198 @@ public:
 
       static size_t const size_words = sizeof(data_t);
 
-      //static constexpr size_t raw_header_words = 1;
+      //static const size_t raw_header_words = 1;
       //data_t raw_header_data[raw_header_words];
     };
 
-    struct Payload_Header {
-        typedef uint32_t data_t;
+    struct Word_warning {
+      typedef uint32_t data_t;
+      typedef uint16_t data_size_t;
 
-        typedef uint8_t  data_packet_type_t;
-        typedef uint32_t short_nova_timestamp_t;
+      typedef uint8_t  warning_type_t;
+      typedef uint8_t  data_packet_type_t;
+      typedef uint32_t short_nova_timestamp_t;
 
-        // The order of the data packet type and the timestamp have been
-        // swapped to reflect that it's the MOST significant three bits in
-        // the payload header which contain the type. I've also added a
-        // 1-bit pad to reflect that the least significant bit is unused.
+      // The order of the data packet type and the timestamp have been
+      // swapped to reflect that it's the MOST significant three bits in
+      // the payload header which contain the type. I've also added a
+      // 1-bit pad to reflect that the least significant bit is unused.
 
-        uint8_t padding : 1;
-        short_nova_timestamp_t short_nova_timestamp : 28;
-        data_packet_type_t     data_packet_type     : 3;
+      uint32_t padding : 24;
+      warning_type_t warning_type : 5;
+      data_packet_type_t     data_packet_type     : 3;
 
-        static size_t const size_words = sizeof(data_t);
+      static size_t const size_words = sizeof(data_t);
+      static data_size_t const num_bits_padding     = 24;
+      static data_size_t const num_bits_warning  = 5;
+      static data_size_t const num_bits_packet_type = 3;
+    };
+
+    struct Word_Header {
+      typedef uint32_t data_t;
+      typedef uint16_t data_size_t;
+
+      typedef uint8_t  data_packet_type_t;
+      typedef uint32_t short_nova_timestamp_t;
+
+      // The order of the data packet type and the timestamp have been
+      // swapped to reflect that it's the MOST significant three bits in
+      // the payload header which contain the type. I've also added a
+      // 1-bit pad to reflect that the least significant bit is unused.
+
+      uint8_t padding : 2;
+      short_nova_timestamp_t short_nova_timestamp : 27;
+      data_packet_type_t     data_packet_type     : 3;
+
+      static size_t const size_words = sizeof(data_t);
+      static data_size_t const num_bits_padding 		= 2;
+      static data_size_t const num_bits_short_tstamp	= 27;
+      static data_size_t const num_bits_packet_type	= 3;
+    };
+
+    // I would like to have this payload with the same
+    // 13 bytes that the word is transformed into
+    struct CounterPayload {
+      typedef uint64_t counter_set_t;
+      typedef uint16_t data_size_t;
+      // -- Must be careful to follow the right order
+      // from lsb to msb it is
+      // -- TSU mappings
+      counter_set_t tsu_wu     : 10;
+      counter_set_t tsu_el     : 10;
+      counter_set_t tsu_extra  :  4;
+      counter_set_t tsu_nu     :  6;
+      counter_set_t tsu_sl     :  6;
+      counter_set_t tsu_nl     :  6;
+      counter_set_t tsu_su     :  6;
+      // -- BSU mappings
+      counter_set_t bsu_rm     : 16;//end of first counter_set_t==uint64_t
+      counter_set_t bsu_cu     : 10;
+      counter_set_t bsu_cl1    : 6;
+      counter_set_t extra      : 1;
+      counter_set_t bsu_cl2    : 7;
+      counter_set_t bsu_rl     : 10;
+      // Just ignore the rest of the word
+      counter_set_t padding    : 30;
+
+      // Not sure of what is this exactly
+      //static data_size_t num_bytes_padding_ptb = 2*sizeof(uint32_t);
+
+      static data_size_t const num_bits_tsu_wu = 10;
+      static data_size_t const num_bits_tsu_el     = 10;
+      static data_size_t const num_bits_tsu_extra  =  4;
+      static data_size_t const num_bits_tsu_nu     =  6;
+      static data_size_t const num_bits_tsu_sl     =  6;
+      static data_size_t const num_bits_tsu_nl     =  6;
+      static data_size_t const num_bits_tsu_su     =  6;
+      static data_size_t const num_bits_bsu_rm     = 16;
+      static data_size_t const num_bits_bsu_cu     = 10;
+      static data_size_t const num_bits_bsu_cl1    = 6;
+      static data_size_t const num_bits_bsu_extra = 1;
+      static data_size_t const num_bits_bsu_cl2    = 7;
+      static data_size_t const num_bits_bsu_rl     = 10;
+      static data_size_t const num_bits_padding   = 30;
+
+      static size_t const size_words = 2*sizeof(uint64_t);
+      static size_t const size_words_ptb = 3*sizeof(uint32_t);
+      static size_t const ptb_offset = 0;
+
+    };
+
+    struct TriggerPayload {
+        typedef uint32_t trigger_type_t;
+        typedef uint16_t data_size_t;
+
+
+        // This is the padding in the board reader
+//        trigger_type_t padding : 23; // The 23 lsb are padding. No information is passed there
+        trigger_type_t trigger_id : 4;
+        trigger_type_t trigger_type : 5; // the 5 msb are the trigger type
+
+        static data_size_t const num_bits_padding = 23;
+        static data_size_t const num_bits_trigger_id = 4;
+        static data_size_t const num_bits_trigger_type = 4;
+
+        // Number of bytes that have to be skipped before grabbing the
+        // part that really matters for the PTB
+        //static data_size_t ptb_offset = 2*sizeof(uint32_t);
+        // ID the trigger types
+        static trigger_type_t const calibration = 0x00;
+        static trigger_type_t const muon = 0x10;
+        static trigger_type_t const ssp = 0x08;
+        // -- This should probably be split into RCE and then RCE types
+        static trigger_type_t const rce_a = 0x01;
+        static trigger_type_t const rce_b = 0x02;
+        static trigger_type_t const rce_ab = 0x03;
+        static trigger_type_t const rce_c = 0x04;
+        static trigger_type_t const rce_ac = 0x05;
+        static trigger_type_t const rce_bc = 0x06;
+        static trigger_type_t const rce_abc = 0x07;
+
+        static size_t const size_words = sizeof(uint32_t);
+        // payload offset from the DMA transition
+        static size_t const ptb_offset = 2*sizeof(uint32_t);
+
+        // Add a function that can be used to parse the trigger payload
+        static std::string getTriggerName(trigger_type_t trigger_type) {
+          switch (trigger_type) {
+          case calibration:
+            return "calibration";
+            break;
+          case rce_a:
+            return "rce_a";
+            break;
+          case rce_b:
+            return "rce_b";
+            break;
+          case rce_c:
+            return "rce_c";
+            break;
+          case rce_ab:
+            return "rce_ab";
+            break;
+          case rce_ac:
+            return "rce_ac";
+            break;
+          case rce_bc:
+            return "rce_bc";
+            break;
+          case rce_abc:
+            return "rce_abc";
+            break;
+          case ssp  :
+            return "ssp";
+            break;
+          case muon :
+            return "muon";
+            break;
+          default:
+            return "unknown";
+            break;
+          }
+          return "";
+        }
+    };
+
+    struct TimestampPayload {
+        typedef uint64_t timestamp_t;
+        typedef uint16_t data_size_t;
+        timestamp_t nova_timestamp : 64;
+
+        static data_size_t const num_bits_timestamp = 64;
+        static size_t const size_words = sizeof(uint64_t);
+
+        static size_t const ptb_offset = sizeof(uint32_t);
+
     };
 
     typedef Header::block_size_t microslice_size_t;
 
     //the size of the payloads (neglecting the Payload_Header)
     // FIXME: Since everythig is being worked in bytes the sizes can be trimmed
-    static microslice_size_t const payload_size_counter   = 13; //104 bit payload. The smallest that contains all 97 counters
+    static microslice_size_t const payload_size_counter   = 4*sizeof(uint32_t); //128 bit payload.
+    // Otherwise there are troubles with the casting into the structures on the size of the board
+    // reader
     static microslice_size_t const payload_size_trigger   = 1 * sizeof(uint32_t); //32-bit payload
     static microslice_size_t const payload_size_timestamp = 2 * sizeof(uint32_t); //64-bit payload
     static microslice_size_t const payload_size_selftest  = 1 * sizeof(uint32_t); //32-bit payload
@@ -111,11 +276,11 @@ public:
     /* static microslice_size_t const payload_size_checksum  = 0 * sizeof(uint32_t); //32-bit payload */
 
     //The types of data words
-    static const Payload_Header::data_packet_type_t DataTypeSelftest  = 0x0; //0b000
-    static const Payload_Header::data_packet_type_t DataTypeCounter   = 0x1; //0b001
-    static const Payload_Header::data_packet_type_t DataTypeTrigger   = 0x2; //0b010
-    static const Payload_Header::data_packet_type_t DataTypeChecksum  = 0x4; //0b100
-    static const Payload_Header::data_packet_type_t DataTypeTimestamp = 0x7; //0b111
+    static const Word_Header::data_packet_type_t DataTypeWarning  = 0x0; //0b000
+    static const Word_Header::data_packet_type_t DataTypeCounter   = 0x1; //0b001
+    static const Word_Header::data_packet_type_t DataTypeTrigger   = 0x2; //0b010
+    static const Word_Header::data_packet_type_t DataTypeChecksum  = 0x4; //0b100
+    static const Word_Header::data_packet_type_t DataTypeTimestamp = 0x7; //0b111
 
 
   PTBReader(bool emu = false);
@@ -199,7 +364,7 @@ public:
   uint32_t GetNumMicroslices() {return num_microslices_;};
   uint32_t GetNumCounterWords() {return num_word_counter_;};
   uint32_t GetNumTriggerWords() {return num_word_trigger_;};
-  uint32_t GetNumSelftestWords() {return num_word_selftest_;};
+  uint32_t GetNumFIFOWarnings() {return num_word_fifo_warning_;};
   uint32_t GetNumTimestampWords() {return num_word_tstamp_;};
   uint32_t GetBytesSent() {return bytes_sent_;};
   uint64_t GetRunTime() {return (last_timestamp_ - first_timestamp_);};
@@ -242,7 +407,7 @@ private:
   
   // A few more constants that are important
   // This is actually
-  static const uint32_t fw_version_ = 0x3;
+  static const uint32_t fw_version_ = 0x4;
 
   // Frame sequence number
   uint32_t seq_num_;
@@ -267,7 +432,7 @@ const uint32_t timeout_cnt_threshold_ = 1000;
   uint32_t num_microslices_;
   uint32_t num_word_counter_;
   uint32_t num_word_trigger_;
-  uint32_t num_word_selftest_;
+  uint32_t num_word_fifo_warning_;
   uint32_t num_word_tstamp_;
   uint32_t bytes_sent_;
   uint32_t first_timestamp_;

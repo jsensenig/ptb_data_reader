@@ -380,25 +380,9 @@ void ConfigServer::ProcessConfig(pugi::xml_node &config, char*& answer) {
     config.print(std::cout,"",pugi::format_raw);
   }
   try {
-    std::map<std::string,std::string> answers;
-    data_manager_->ProcessConfig(config,answers);
-    if (answers.size() == 0) {
-      answer = new char[50];
-      sprintf(answer,"<answer>NULL</answer>");
-    } else if (answers.size() == 1) {
-      answer = new char[(answers.begin()->second).length()+50];
-      sprintf(answer,"<answer>%s</answer>",(answers.begin()->second).c_str());
-    } else {
-      std::ostringstream msg;
-      msg << "<run_statistics ";
-
-      for (std::map<std::string,std::string>::iterator it = answers.begin(); it != answers.end(); ++it) {
-        msg << it->first << "=" << it->second << " ";
-      }
-      msg << "/>";
-      answer = new char[msg.str().size()+1];
-      sprintf(answer,"%s",msg.str().c_str());
-    }
+    // Let's treat the writing of the answers directly in the low level code.
+    // easier to evaluate on a run by run basis.
+    data_manager_->ProcessConfig(config,answer);
   }
   catch(std::string &e) {
     Log(error,"Configuration exception caught: %s",e.c_str());
@@ -426,26 +410,7 @@ void ConfigServer::ProcessCommand(pugi::xml_node &command, char*&answer) {
     Log(debug,"Checking command [%s]",cmd);
 
     // Pass the command to the manager and let it handle it properly
-    std::map<std::string,std::string> answers;
-    data_manager_->ExecuteCommand(cmd,answers);
-    if (answers.size() == 0) {
-      answer = new char[50];
-      sprintf(answer,"<answer>NULL</answer>");
-    } else if (answers.size() == 1) {
-      answer = new char[(answers.begin()->second).length()+50];
-      sprintf(answer,"<answer>%s</answer>",(answers.begin()->second).c_str());
-    } else {
-      std::ostringstream msg;
-      msg << "<run_statistics ";
-
-      for (std::map<std::string,std::string>::iterator it = answers.begin(); it != answers.end(); ++it) {
-        msg << it->first << "=" << it->second << " ";
-      }
-      msg << "/>";
-      answer = new char[msg.str().size()+1];
-      sprintf(answer,"%s",msg.str().c_str());
-    }
-
+    data_manager_->ExecuteCommand(cmd,answer);
   }
   catch (const std::exception &e) {
     Log(error,"STL exception caught : %s ",e.what());

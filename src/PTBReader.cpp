@@ -110,6 +110,7 @@ void PTBReader::ClearThreads() {
   std::this_thread::sleep_for (std::chrono::seconds(1));
   Log(info,"Killing collector thread.");
   // Kill the collector thread first
+  // Ideally we would prefer to join the thread
   pthread_cancel(client_thread_collector_);
   // Kill the transmittor thread.
 
@@ -147,7 +148,7 @@ void PTBReader::StartDataTaking() {
     int status = xdma_init();
     if (status < 0) {
       Log(error,"Failed to initialize the DMA engine for data collection.");
-      throw std::string("Failed to initialize the DMA engine for data collection.");
+      throw PTBexception("Failed to initialize the DMA engine for PTB data collection.");
       return;
     }
 #endif
@@ -284,6 +285,7 @@ void PTBReader::ClientCollector() {
 
     // The bus is 16 bytes, and that should be the size of each frame
     frame = reinterpret_cast<uint8_t*>(xdma_alloc(buffer_size,frame_size_bytes));
+    uint32_t* debug_ptr = NULL;
 
     // FIXME:Do we really need to zero the data?
     std::memset(frame,0,buffer_size*frame_size_bytes);
@@ -295,7 +297,7 @@ void PTBReader::ClientCollector() {
       /// -- NOTE: The size of the pointer and the frame size in the call below must match
       //Log(debug,"Performing transaction with a pointer %u long and %d bytes",sizeof(reinterpret_cast<uint32_t*>(&frame[pos])[0]),frame_size_uint);
       status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&frame[pos]),frame_size_uint);
-      //Log(verbose,"Received contents [%s]",display_bits(&frame[pos],frame_size_bytes).c_str());
+      Log(verbose,"Received contents [%s]",display_bits(&frame[pos],frame_size_bytes).c_str());
 
       if (status == -1) {
         Log(warning,"Reached a timeout in the DMA transfer.");
@@ -306,7 +308,25 @@ void PTBReader::ClientCollector() {
         }
       } else {
         timeout_cnt_ = 0;
-        //Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3]);
+        debug_ptr = reinterpret_cast<uint32_t*>(frame);
+        Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3]);
+
+        // Usual output data[31-0],data[63-32],data[95-64],data[127-96]
+        // In little endian this means:
+        // data[7-0],data[15-8],data[23-16],data[31-24],
+        // data[39-32],data[47-40],data[55-48],data[63-56]
+        // data[71-64],data[79-72],data[87-80],data[95-88]
+        // data[103-96],data[111-104],data[119-112],data[127-120]
+
+        // If I reverse completely the byte assignment then I would be getting
+        /**
+                data[103-96],data[111-104],data[119-112],data[127-120]
+                data[71-64],data[79-72],data[87-80],data[95-88]
+                data[39-32],data[47-40],data[55-48],data[63-56]
+                data[7-0],data[15-8],data[23-16],data[31-24],
+                in integers this means:
+                data[127-96],data[95-64],data[63-32],data[31-24]
+        **/
       }
       // DMA transaction was successful.
       pthread_mutex_lock(&lock_);
@@ -328,8 +348,6 @@ void PTBReader::ClientCollector() {
 #endif /*ARM*/
 }
 
-
-
 void PTBReader::ClientTransmiter() {
   Log(verbose, "Starting transmitter\n");
   std::ostringstream bitdump;
@@ -345,6 +363,9 @@ void PTBReader::ClientTransmiter() {
   // For the moment copy the contents and see if performance is good enough.
   // use std::memcpy for better performance
 
+  // This should never happen. Sending a 64kB packet would be way overkill
+  // It would be preferable to fragment the packet, b
+  //FIXME: Implement fragmentation
   uint8_t *eth_buffer = new uint8_t[max_packet_size]();
 
   // this is not strictly accurate but it is close enough
@@ -355,6 +376,13 @@ void PTBReader::ClientTransmiter() {
   bytes_sent_ = 0;
   first_timestamp_ = 0;
   last_timestamp_ = 0;
+
+  static uint32_t ipck = 0,iframe = 0;
+  static bool carry_on = true;
+  //uint8_t frame[16];
+  //uint8_t *frame_raw = NULL;
+  uint8_t* frame = NULL;
+  //uint32_t frame_header = 0;
 
   //uint64_t start_run_time_ = ClockGetTime();
 
@@ -391,11 +419,8 @@ void PTBReader::ClientTransmiter() {
     // ipck   : Counter of bytes
     // iframe : Frame counter.
     // FIXME: Move all these variables out of the loop
-    uint32_t ipck = 0,iframe = 0;
-    bool carry_on = true;
-    uint8_t frame[16];
-    uint8_t *frame_raw = NULL;
-    uint32_t frame_header = 0;
+    ipck = 0,iframe = 0;
+    carry_on = true;
 
     // FIXME: Move part of this assigment out of the loop.
     header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
@@ -421,21 +446,27 @@ void PTBReader::ClientTransmiter() {
       }
       //Log(debug,"Grabbing from queue");
       pthread_mutex_lock(&lock_);
-      frame_raw = buffer_queue_.front();
+      frame = buffer_queue_.front();
 
       buffer_queue_.pop();
       pthread_mutex_unlock(&lock_);
 
-      // Reverse the bytes into big-endian
-      for (uint32_t i =0; i < frame_size_bytes; ++i) {
-        frame[i] = frame_raw[frame_size_bytes-1-i];
-      }
+      // Don't do this any more
+//      // Reverse the bytes into big-endian
+//      for (uint32_t i =0; i < frame_size_bytes; ++i) {
+//        frame[i] = frame_raw[frame_size_bytes-1-i];
+//      }
 
-      // Make a new pointer that contains the header. This part we want to always keep it byte swapped
-      // FIXME: Use frame_raw instead of new variable
-      // THIS IS A TERRIBLE IDEA. SHOULD BYTE-SWAP EVERYTHIG AND ALWAYS USE IT LIKE THAT
-      // DEALING WITH THE TIMESTAMPS IS GOING TO BE A NIGHTMARE SINCE THEY SPAN MULTIPLE BYTES
-      frame_header = htonl(reinterpret_cast<uint32_t*>(frame)[0]);
+
+      // Grab the header, that now should be at the 4 lsB
+      Word_Header *frame_header = reinterpret_cast<Word_Header *>(frame);
+
+//      frame_header
+//      // Make a new pointer that contains the header. This part we want to always keep it byte swapped
+//      // FIXME: Use frame_raw instead of new variable
+//      // THIS IS A TERRIBLE IDEA. SHOULD BYTE-SWAP EVERYTHIG AND ALWAYS USE IT LIKE THAT
+//      // DEALING WITH THE TIMESTAMPS IS GOING TO BE A NIGHTMARE SINCE THEY SPAN MULTIPLE BYTES
+//      frame_header = htonl(reinterpret_cast<uint32_t*>(frame)[0]);
 
       // Do some debug showing the header in the different reinterpretations
       // Log(debug,"Header_raw %08X raw_rev %08X byte_swap %08X",
@@ -444,7 +475,7 @@ void PTBReader::ClientTransmiter() {
       //     frame_header);
 
 
-      Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(&frame_header);
+      //Payload_Header* payload_header = reinterpret_cast<Payload_Header*>(&frame_header);
 
       // Very first check to discard "ghost frames"
       // -- Ghost frames are caused by the NOvA timing not being fully initialized by
@@ -452,31 +483,32 @@ void PTBReader::ClientTransmiter() {
       // between the sync pulse and the timestamps starting to be populated in the NOvA firmware.
       // Unfortunately it doesn't seem that anything can be done about it
 
-      if ((payload_header->short_nova_timestamp & 0xFFFFFFF) == 0x0) {
-        // Log(warning,"Dropping ghost frame");
+      if ((frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
+        Log(warning,"Dropping ghost frame");
         continue;
       }
 
       /// -- Check if it is a TS frame
-      if(payload_header->data_packet_type == DataTypeTimestamp) {
+      if(frame_header->data_packet_type == DataTypeTimestamp) {
         // This is a timestamp word.
         // Check if this is the first TS after StartRun
         // Log(verbose, "Timestamp frame...\n");
         // Log(verbose, "Sending the packet\n");
+        TimestampPayload *t = reinterpret_cast<TimestampPayload *>(&(frame[Word_Header::size_words+TimestampPayload::ptb_offset]));
 
         if (first_timestamp_ == 0) {
-          uint64_t tmp1 = (uint64_t) ntohl(reinterpret_cast<uint32_t*>(&frame[Payload_Header::size_words])[0]);
-          first_timestamp_ = (tmp1 << 32) |  ((uint64_t)ntohl(reinterpret_cast<uint32_t*>(&frame[Payload_Header::size_words])[1]) & 0xFFFFFFFF);
+          Log(warning,"Processing the first timestamp");
+          first_timestamp_ = t->nova_timestamp;
           last_timestamp_ = first_timestamp_;
         } else {
-          uint64_t tmp1 = (uint64_t) ntohl(reinterpret_cast<uint32_t*>(&frame[Payload_Header::size_words])[0]);
-          last_timestamp_ = (tmp1 << 32) |  ((uint64_t)ntohl(reinterpret_cast<uint32_t*>(&frame[Payload_Header::size_words])[1]) & 0xFFFFFFFF);
+          last_timestamp_ = t->nova_timestamp;
         }
-        std::memcpy(&eth_buffer[ipck],&frame_header,Payload_Header::size_words);
-        ipck += Payload_Header::size_words;
+        std::memcpy(&eth_buffer[ipck],&frame,Word_Header::size_words);
+        ipck += Word_Header::size_words;
 
-        std::memcpy(&eth_buffer[ipck],&(frame[Payload_Header::size_words]),payload_size_timestamp);
-        ipck += payload_size_timestamp;
+        // Don't forget to apply the ptb_offset!!
+        std::memcpy(&eth_buffer[ipck],&(frame[Word_Header::size_words+TimestampPayload::ptb_offset]),TimestampPayload::size_words);
+        ipck += TimestampPayload::size_words;
         carry_on = false;
         fragmented_ = false;
         num_word_tstamp_++;
@@ -488,34 +520,39 @@ void PTBReader::ClientTransmiter() {
       // -- Grab the header (valid for all situations
       // Log(verbose, "Grabbing the header\n");
 
-      std::memcpy(&eth_buffer[ipck],&frame_header,Payload_Header::size_words);
-      ipck += Payload_Header::size_words;
+      std::memcpy(&eth_buffer[ipck],&frame,Word_Header::size_words);
+      ipck += Word_Header::size_words;
 
-      switch(payload_header->data_packet_type) {
+      switch(frame_header->data_packet_type) {
         case DataTypeCounter:
-          // Log(verbose, "Counter word\n");
-          // This one requires some special handling since it needs to shift the bits from the header
-          for (size_t k=0; k< payload_size_counter-1; ++k) {
-            // -- Grab the lsb of the previous word and place it on the msb
-            // -- Grab the 7 msb of the current word and place them in the 7 lsb
-            eth_buffer[ipck+k] = ((frame[Payload_Header::size_words-1+k] & 0x1) << 7) | ((frame[Payload_Header::size_words+k] & 0xFE) >> 1);
-          }
-          // last frame just shifts the lsb of the previous word into the msb of current word
-          eth_buffer[ipck+payload_size_counter-1] = (frame[payload_size_counter-1] & 0x1) << 7;
-          ipck += payload_size_counter;
+
+          // The counter words now require even more special handling
+
+          // The data that is in the header is from the BSU's, so we can simply copy the payload
+          // and then just add the 2 additional bits from the header at the end
+          std::memcpy(&eth_buffer[ipck],&(frame[Word_Header::size_words]),CounterPayload::size_words_ptb);
+          // Now add the remaining 2 bits to the lsb of the next byte and pad the rest with zeros
+          ipck += CounterPayload::size_words_ptb;
+          eth_buffer[ipck] = 0x2 & frame_header->padding;
+          ipck+=1;
+          // There's 3 more bytes that have to be padded
+         for (uint32_t i = 0; i < 3; ++i) {
+           eth_buffer[ipck] = 0x00;
+           ipck += 1;
+         }
           num_word_counter_++;
           break;
         case DataTypeTrigger:
           // Log(verbose, "Trigger word\n");
-          std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_trigger);
-          ipck += payload_size_trigger;
+          std::memcpy(&eth_buffer[ipck],&frame[Word_Header::size_words+TriggerPayload::ptb_offset],TriggerPayload::size_words);
+          ipck += TriggerPayload::size_words;
           num_word_trigger_++;
           break;
-        case DataTypeSelftest:
+        case DataTypeWarning:
+          Log(warning,"+++ Received a FIFO warning.+++");
+          // We only really care for the header. Ignore everything else
           // Log(verbose, "Selftest word\n");
-          std::memcpy(&eth_buffer[ipck],&frame[Payload_Header::size_words],payload_size_selftest);
-          ipck += payload_size_selftest;
-          num_word_selftest_++;
+          num_word_fifo_warning_++;
           break;
         default:
           char msg[100];
@@ -533,7 +570,7 @@ void PTBReader::ClientTransmiter() {
 
       // Size Rollover reached. Produce a fragmented block;
       // Keep collecting only until the next TS word
-      if ((ipck+10) >= packet_rollover_) {
+      if ((ipck+20) >= packet_rollover_) {
         fragmented_ = true;
         break;
       }
@@ -628,101 +665,101 @@ void PTBReader::ClientTransmiter() {
 }
 
 
-
-void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
-
-  // JCF, Jul-20-2015
-
-  // Uncomment the following "for" loop in order to see the entire
-  // contents of the buffer
-
-  //  for (decltype(tot_size) i = 0; i < tot_size/sizeof(uint32_t); ++i) {
-  //    std::ostringstream bitdump;
-  //    bitdump << "Byte " << i*4 << ": " << std::bitset<32>(buffer[i]);
-  //    Log(debug,"%s",bitdump.str().c_str());
-  //  }
-
-  // First get the 32 bit header
-  uint32_t header = buffer[0];
-  std::ostringstream bitdump;
-  bitdump << std::bitset<32>(header);
-  // And now print it
-  Log(debug,"HEADER : 0x%X [%s]",header,bitdump.str().c_str());
-
-  // extract the different parts of the header
-  uint32_t version = (header >> 28 & 0xF); // 4msb [28-31]
-  uint32_t version_completement = (header >> 24 & 0xF); // grab only the 4 lsb [24-27]
-  uint32_t seq_num = (header >> 16) & 0xFF; // bits [16-23]
-  uint32_t size = header & 0xFFFF; // 16 lsb [0-16]
-  bitdump.str(""); bitdump << std::bitset<4>(version);
-  Log(debug,"Version 0x%X (%u) [%s]",version,version,bitdump.str().c_str());
-  bitdump.str(""); bitdump << std::bitset<4>(version_completement);
-  Log(debug,"Version Complement 0x%X (%u) [%s]",version_completement,version_completement,bitdump.str().c_str());
-  bitdump.str(""); bitdump << std::bitset<8>(seq_num & 0xFF);
-  Log(debug,"Seq number 0x%X (%u) [%s]",seq_num,seq_num,bitdump.str().c_str());
-  bitdump.str(""); bitdump << std::bitset<16>(size & 0xFFFF);
-  Log(debug,"Size 0x%X (%u) [%s]",size,size,bitdump.str().c_str());
-
-  // First sanity check: the size*sizeof(uint32_t)+sizeof(uint32_t) should be = to tot_size
-
-  if (tot_size != size) {
-    Log(warning,"Packet sizes do not match! encoded : %u calculated : %u",size,tot_size);
-  }
-  // Keep looping until we reach the end of the packet
-  uint32_t counter = 1;
-  // Calculate the number of uint32_t are stored in the array
-  uint32_t num_units = size/sizeof(uint32_t);
-  while (counter < num_units) {
-    // Fetch the header of the frame
-    uint32_t fheader = buffer[counter];
-    counter++;
-    // Extract the 3 msb to determine the frame type
-    uint32_t ftype = (fheader >> 29) & 0x7;
-    uint32_t tstamp= (fheader >> 1) & 0xFFFFFFF;
-    if (ftype == 0x1) {
-
-      bitdump.str(""); bitdump << std::bitset<3>(ftype)
-      << " " << std::bitset<28>(tstamp);
-      Log(debug,"Counter word : Time %u [%s]",(fheader >> 1) & 0xFFFFFFF,bitdump.str().c_str() );
-      bitdump.str(""); //bitdump << std::bitset<1>(fheader & 0x1)
-      bitdump << " " << std::bitset<32>(buffer[counter])
-                 << " " << std::bitset<32>(buffer[counter+1])
-                 << " " << std::bitset<32>(buffer[counter+2])
-                 << " " << std::bitset<32>(buffer[counter+3]);
-      counter += 4;
-      Log(debug,"Counter word : Body [%s]",bitdump.str().c_str());
-    } else if (ftype == 0x7) {
-
-      bitdump.str(""); bitdump << std::bitset<3>(ftype)
-      << " " << std::bitset<28>(tstamp)
-      << " " << std::bitset<32>(buffer[counter])
-      << " " << std::bitset<32>(buffer[counter+1]);
-      uint64_t tmp1 = buffer[counter];
-      uint64_t tmp2 = buffer[counter+1];
-      tmp1 = (tmp1 << 32) | tmp2;
-      Log(debug,"TS word : %X (%u) %X %X %lu",tstamp,tstamp, buffer[counter], buffer[counter+1], tmp1);
-      Log(debug,"TS word : [%s]",bitdump.str().c_str());
-
-      counter +=2;
-    } else if (ftype == 0x4) {
-      uint32_t checksum = fheader & 0x1FFFFFFF;
-      bitdump.str(""); bitdump << std::bitset<3>(ftype) << " " << std::bitset<29>(checksum);
-      Log(debug,"Checksum word : %X (%u) [%s]",checksum,checksum,bitdump.str().c_str());
-    } else if (ftype == 0x2) {
-      bitdump.str(""); bitdump << std::bitset<3>(ftype) << " " << std::bitset<28>(tstamp);
-      Log(debug,"Trigger word : Time %X (%u) [%s]", tstamp, tstamp,bitdump.str().c_str() );
-
-      bitdump.str(""); bitdump << std::bitset<5>((buffer[counter] >> 27) & 0x1F)
-      << " " << std::bitset<4>((buffer[counter] >> 23) & 0xF);
-      uint32_t trig_type = (buffer[counter] >> 27) & 0x1F;
-      uint32_t trig_id = (buffer[counter] >> 23) & 0xF;
-      Log(debug,"Trigger word : Body  TrigType : %X TrigId %X [%s]", trig_type,trig_id,bitdump.str().c_str());
-      counter += 1;
-    } else {
-
-      bitdump.str(""); bitdump << std::bitset<3>(ftype) << " " << std::bitset<28>(tstamp);
-      Log(warning,"Unkown word type: %X  %X (%u) [%s]",ftype,tstamp,tstamp,bitdump.str().c_str());
-    }
-
-  }
-}
+//
+//void PTBReader::DumpPacket(uint32_t* buffer, uint32_t tot_size) {
+//
+//  // JCF, Jul-20-2015
+//
+//  // Uncomment the following "for" loop in order to see the entire
+//  // contents of the buffer
+//
+//  //  for (decltype(tot_size) i = 0; i < tot_size/sizeof(uint32_t); ++i) {
+//  //    std::ostringstream bitdump;
+//  //    bitdump << "Byte " << i*4 << ": " << std::bitset<32>(buffer[i]);
+//  //    Log(debug,"%s",bitdump.str().c_str());
+//  //  }
+//
+//  // First get the 32 bit header
+//  uint32_t header = buffer[0];
+//  std::ostringstream bitdump;
+//  bitdump << std::bitset<32>(header);
+//  // And now print it
+//  Log(debug,"HEADER : 0x%X [%s]",header,bitdump.str().c_str());
+//
+//  // extract the different parts of the header
+//  uint32_t version = (header >> 28 & 0xF); // 4msb [28-31]
+//  uint32_t version_completement = (header >> 24 & 0xF); // grab only the 4 lsb [24-27]
+//  uint32_t seq_num = (header >> 16) & 0xFF; // bits [16-23]
+//  uint32_t size = header & 0xFFFF; // 16 lsb [0-16]
+//  bitdump.str(""); bitdump << std::bitset<4>(version);
+//  Log(debug,"Version 0x%X (%u) [%s]",version,version,bitdump.str().c_str());
+//  bitdump.str(""); bitdump << std::bitset<4>(version_completement);
+//  Log(debug,"Version Complement 0x%X (%u) [%s]",version_completement,version_completement,bitdump.str().c_str());
+//  bitdump.str(""); bitdump << std::bitset<8>(seq_num & 0xFF);
+//  Log(debug,"Seq number 0x%X (%u) [%s]",seq_num,seq_num,bitdump.str().c_str());
+//  bitdump.str(""); bitdump << std::bitset<16>(size & 0xFFFF);
+//  Log(debug,"Size 0x%X (%u) [%s]",size,size,bitdump.str().c_str());
+//
+//  // First sanity check: the size*sizeof(uint32_t)+sizeof(uint32_t) should be = to tot_size
+//
+//  if (tot_size != size) {
+//    Log(warning,"Packet sizes do not match! encoded : %u calculated : %u",size,tot_size);
+//  }
+//  // Keep looping until we reach the end of the packet
+//  uint32_t counter = 1;
+//  // Calculate the number of uint32_t are stored in the array
+//  uint32_t num_units = size/sizeof(uint32_t);
+//  while (counter < num_units) {
+//    // Fetch the header of the frame
+//    uint32_t fheader = buffer[counter];
+//    counter++;
+//    // Extract the 3 msb to determine the frame type
+//    uint32_t ftype = (fheader >> 29) & 0x7;
+//    uint32_t tstamp= (fheader >> 1) & 0xFFFFFFF;
+//    if (ftype == 0x1) {
+//
+//      bitdump.str(""); bitdump << std::bitset<3>(ftype)
+//      << " " << std::bitset<28>(tstamp);
+//      Log(debug,"Counter word : Time %u [%s]",(fheader >> 1) & 0xFFFFFFF,bitdump.str().c_str() );
+//      bitdump.str(""); //bitdump << std::bitset<1>(fheader & 0x1)
+//      bitdump << " " << std::bitset<32>(buffer[counter])
+//                 << " " << std::bitset<32>(buffer[counter+1])
+//                 << " " << std::bitset<32>(buffer[counter+2])
+//                 << " " << std::bitset<32>(buffer[counter+3]);
+//      counter += 4;
+//      Log(debug,"Counter word : Body [%s]",bitdump.str().c_str());
+//    } else if (ftype == 0x7) {
+//
+//      bitdump.str(""); bitdump << std::bitset<3>(ftype)
+//      << " " << std::bitset<27>(tstamp)
+//      << " " << std::bitset<32>(buffer[counter])
+//      << " " << std::bitset<32>(buffer[counter+1]);
+//      uint64_t tmp1 = buffer[counter];
+//      uint64_t tmp2 = buffer[counter+1];
+//      tmp1 = (tmp1 << 32) | tmp2;
+//      Log(debug,"TS word : %X (%u) %X %X %lu",tstamp,tstamp, buffer[counter], buffer[counter+1], tmp1);
+//      Log(debug,"TS word : [%s]",bitdump.str().c_str());
+//
+//      counter +=2;
+//    } else if (ftype == 0x4) {
+//      uint32_t checksum = fheader & 0x1FFFFFFF;
+//      bitdump.str(""); bitdump << std::bitset<3>(ftype) << " " << std::bitset<29>(checksum);
+//      Log(debug,"Checksum word : %X (%u) [%s]",checksum,checksum,bitdump.str().c_str());
+//    } else if (ftype == 0x2) {
+//      bitdump.str(""); bitdump << std::bitset<3>(ftype) << " " << std::bitset<28>(tstamp);
+//      Log(debug,"Trigger word : Time %X (%u) [%s]", tstamp, tstamp,bitdump.str().c_str() );
+//
+//      bitdump.str(""); bitdump << std::bitset<5>((buffer[counter] >> 27) & 0x1F)
+//      << " " << std::bitset<4>((buffer[counter] >> 23) & 0xF);
+//      uint32_t trig_type = (buffer[counter] >> 27) & 0x1F;
+//      uint32_t trig_id = (buffer[counter] >> 23) & 0xF;
+//      Log(debug,"Trigger word : Body  TrigType : %X TrigId %X [%s]", trig_type,trig_id,bitdump.str().c_str());
+//      counter += 1;
+//    } else {
+//
+//      bitdump.str(""); bitdump << std::bitset<3>(ftype) << " " << std::bitset<28>(tstamp);
+//      Log(warning,"Unkown word type: %X  %X (%u) [%s]",ftype,tstamp,tstamp,bitdump.str().c_str());
+//    }
+//
+//  }
+//}

@@ -79,8 +79,10 @@ PTBManager::~PTBManager() {
 }
 
 
-void PTBManager::ExecuteCommand(const char* cmd,std::map<std::string,std::string> &answers) {
+void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
   try{
+    msgs_.clear();
+    msgs_.str("");
 
     Log(debug,"Received command [%s]", cmd);
     std::map<std::string, Command>::iterator it;
@@ -89,63 +91,63 @@ void PTBManager::ExecuteCommand(const char* cmd,std::map<std::string,std::string
     }
 
     switch (commands_.at(cmd)) {
-      // -- Send the signal to start the run. Should be a register.
-      case STARTRUN:
-        // Only starts a run if the manager is in IDLE state
-        // Otherwise issue a warning
-        if (getStatus() != PTBManager::IDLE) {
-          Log(warning,"A run is already running. Ignoring command" );
-        } else {
-          // Start the run
-          Log(verbose,"Starting a new Run." );
-          StartRun(answers);
-          break;
-        }
+    // -- Send the signal to start the run. Should be a register.
+    case STARTRUN:
+      // Only starts a run if the manager is in IDLE state
+      // Otherwise issue a warning
+      if (getStatus() != PTBManager::IDLE) {
+        Log(warning,"A run is already running. Ignoring command" );
+      } else {
+        // Start the run
+        Log(verbose,"Starting a new Run." );
+        StartRun();
         break;
-        // -- Send reset. In both cases there is a hardware reset sent
-        // The soft reset is just a reset of the hardware. And let the SW remain as it is.
-        // Essencially it clears the hardware, recommits the configuration and restart the run
-        //
-      case SOFTRESET:
-        //
-        // A reset is also supposed to stop the connections
-        SetResetBit(true);
-        // Sleep for 10 microseconds to make sure that reset has taken place
-        std::this_thread::sleep_for (std::chrono::microseconds(10));
-        SetResetBit(false);
-        // -- Re-commit the configuration
-        // Not sure if this is going to work as intended
-        RestoreConfigurationRegisters();
-        SetConfigBit(true);
+      }
+      break;
+      // -- Send reset. In both cases there is a hardware reset sent
+      // The soft reset is just a reset of the hardware. And let the SW remain as it is.
+      // Essencially it clears the hardware, recommits the configuration and restart the run
+      //
+    case SOFTRESET:
+      //
+      SetResetBit(true);
+      // Sleep for 10 microseconds to make sure that reset has taken place
+      std::this_thread::sleep_for (std::chrono::microseconds(10));
+      SetResetBit(false);
+      // -- Re-commit the configuration
+      // Not sure if this is going to work as intended
+      RestoreConfigurationRegisters();
+      SetConfigBit(true);
+      break;
+    case HARDRESET:
+      // A hard reset should sent the whole thing to zeros
+      // Including clearing up the configuration.
+      SetEnableBit(false);
+      SetConfigBit(false);
+      // the hard reset also includes a complete reset of the local buffers
+      SetResetBit(true);
+      // Sleep for 10 microseconds to make sure that reset has taken place
+      std::this_thread::sleep_for (std::chrono::microseconds(10));
+      SetResetBit(false);
+      reader_->ResetBuffers();
+      //RestoreConfigurationRegisters();
+      // Reset the configuration buggers to an enable state
+      // Reassign the configuration (was kept in memory before)
+      //SetConfigBit(true);
+      break;
+    case STOPRUN:
+      if (getStatus() != PTBManager::RUNNING) {
+        Log(warning,"Called for STOPRUN but there is no run ongoing. Ignoring." );
+        // -- Same thing.
         break;
-      case HARDRESET:
-        // A hard reset should sent the whole thing to zeros
-        // Including clearing up the configuration.
-        SetEnableBit(false);
-        SetConfigBit(false);
-        // the hard reset also includes a complete reset of the local buffers
-        SetResetBit(true);
-        // Sleep for 10 microseconds to make sure that reset has taken place
-        std::this_thread::sleep_for (std::chrono::microseconds(10));
-        SetResetBit(false);
-        reader_->ResetBuffers();
-        //RestoreConfigurationRegisters();
-        // Reset the configuration buggers to an enable state
-        // Reassign the configuration (was kept in memory before)
-        //SetConfigBit(true);
+      } else {
+        Log(verbose,"The Run should STOP now" );
+        StopRun();
         break;
-      case STOPRUN:
-        if (getStatus() != PTBManager::RUNNING) {
-          Log(warning,"Called for STOPRUN but there is no run ongoing. Ignoring." );
-          // -- Same thing.
-          break;
-        } else {
-          Log(verbose,"The Run should STOP now" );
-          StopRun(answers);
-          break;
-        }
-      default:
-        throw PTBexception("Unkown command"); // command_exception("Unkown command");
+      }
+    default:
+      char msg[50]; sprintf(msg,"Unknown PTB command [%s]",cmd);
+      throw PTBexception(msg); // command_exception("Unkown command");
     }
   }
   catch (const std::out_of_range &oor) {
@@ -169,10 +171,15 @@ void PTBManager::ExecuteCommand(const char* cmd,std::map<std::string,std::string
     Log(error,"Unknown exception caught." );
     throw std::string("Unkown command");
   }
+  msgs_str_ = msgs_.str();
+  answers = new char[msgs_str_.size()+1];
+  sprintf(answers,"%s",msgs_str_.c_str());
 }
 
-void PTBManager::StartRun(std::map<std::string,std::string> &answers) {
+void PTBManager::StartRun() {
   Log(verbose,"Starting the run" );
+  msgs_.clear();
+  msgs_.str("");
 
   // Order of execution:
   // Tell the PTBReader to start taking data (it won't receive anything but it will be ready)
@@ -183,14 +190,12 @@ void PTBManager::StartRun(std::map<std::string,std::string> &answers) {
   // -- Reopen the connection if not yet open
   // -- This is not correct. The threads might be destroyed, but the connection may still be open.
   if (!reader_->isReady()) {
-    answers[std::string("warning")] = std::string("Connection to board reader is not opened yet. Trying to reopen.");
-
+    msgs_ << "<warning>Connection to board reader is not opened yet. Trying to reopen.</warning>";
     Log(warning,"Connection is not opened yet. Trying to reopen.");
     reader_->InitConnection();
   }
 
   if (!reader_->isReady()) {
-    answers[std::string("error")] = std::string("PTB::Received call to start but reader object is not ready.");
     Log(warning,"Received call to start transmitting but reader is not ready. Refusing to run." );
     throw PTBexception("Data reader not ready yet.");
     return;
@@ -205,16 +210,16 @@ void PTBManager::StartRun(std::map<std::string,std::string> &answers) {
   // Wait a bit for the ACK or ignore the ACK?
   // Ignore it for now
   //FIXME: Plan dealing with the ACK
-//  // Check back if the ack was set
-//  // if (register_map_[30].value() >> 30  & 0x1 ) {
-//  if (GetEnableBitACK() || emu_mode_) {
-//    status_ = RUNNING;
-//    Log(info,"Run Start ACK received.");
-//  } else {
-//    status_ = IDLE;
-//    Log(error,"Failed to start run. ACK not received.");
-//    throw std::string("Start Run failed. No ACK received.");
-//  }
+  //  // Check back if the ack was set
+  //  // if (register_map_[30].value() >> 30  & 0x1 ) {
+  //  if (GetEnableBitACK() || emu_mode_) {
+  //    status_ = RUNNING;
+  //    Log(info,"Run Start ACK received.");
+  //  } else {
+  //    status_ = IDLE;
+  //    Log(error,"Failed to start run. ACK not received.");
+  //    throw std::string("Start Run failed. No ACK received.");
+  //  }
   status_ = RUNNING;
   Log(info,"Run Start requested...");
   // Get the run start time before considering itself done
@@ -230,19 +235,24 @@ void PTBManager::StartRun(std::map<std::string,std::string> &answers) {
   } while ((run_start_time_ == 0) and (n_tries < max_tries));
 
   if (run_start_time_ == 0) {
-    answers[std::string("error")] = std::string("Failed to get run start time.");
-    throw PTBexception("Failed to get run start time after 5s. Did we miss the sync?");
+    msgs_ << "<warning>Timeout waiting for run start time (after 5s.)</warning>";
+    Log(warning,"Failed to get run start time.");
+    //throw PTBexception("Failed to get run start time after 5s. Did we miss the sync?");
+  } else {
+    msgs_ << "<run_start>" << run_start_time_<< "</run_start>";
   }
+  msgs_ << "<success>true</success>";
 }
 
-void PTBManager::StopRun(std::map<std::string,std::string> &answers) {
+void PTBManager::StopRun() {
   Log(debug,"Stopping the run" );
+  msgs_.clear();
+  msgs_.str("");
 
   // The order should be:
   // 1. Set the GLB_EN register to 0 (stop readout in the fabric)
   // 2. Set the status to IDLE
   // 3. Tell the PTB reader to stop streaming
-
 
   // The GLB_EN is located in bin 31 of register 30
   SetEnableBit(false);
@@ -250,22 +260,35 @@ void PTBManager::StopRun(std::map<std::string,std::string> &answers) {
 
   // Check the ACK bit
   if (GetEnableBitACK() != false && !emu_mode_) {
-    answers[std::string("error")] = std::string("Didn't receive stop run ACK");
+    // Exceptions are caught upstream and converted into messages
     Log(warning,"Stop Run failed. ACK bit still high.");
     throw PTBexception("Stop Run failed. No ACK received.");
   }
 
   reader_->StopDataTaking();
+  msgs_ << "<run_statistics num_microslices=";
+  msgs_ << reader_->GetNumMicroslices();
+  msgs_ << " num_word_counter=" << reader_->GetNumCounterWords();
+  msgs_ << " num_word_trigger=" << reader_->GetNumTriggerWords();
+  msgs_ << " num_word_tstamp=" << reader_->GetNumTimestampWords();
+  msgs_ << " num_word_fifo_warn=" << reader_->GetNumFIFOWarnings();
+  msgs_ << " num_bytes=" << reader_->GetBytesSent();
+  msgs_ << " time_run_board=" <<  reader_->GetRunTime();
+  msgs_ << " />";
 
-  // -- Get the run statistics from the reader and add them to the answers
-  answers[std::string("num_microslices")] = reader_->GetNumMicroslices();
-  answers[std::string("num_word_counter")] = reader_->GetNumCounterWords();
-  answers[std::string("num_word_trigger")] = reader_->GetNumTriggerWords();
-  answers[std::string("num_word_tstamp")] = reader_->GetNumTimestampWords();
-  answers[std::string("num_word_selftest")] = reader_->GetNumSelftestWords();
-  answers[std::string("num_bytes")] = reader_->GetBytesSent();
-  answers[std::string("time_run_board")] = reader_->GetRunTime();
+  //-- Soft Reset
+  //-- Also send a soft reset to make sure that when the next start run comes
+  // things are just as if we were starting anew.
+  // Particularly important is to clear the buffers
+  SetResetBit(true);
+  // Sleep for 10 microseconds to make sure that reset has taken place
+  std::this_thread::sleep_for (std::chrono::microseconds(10));
+  SetResetBit(false);
+  // -- Re-commit the configuration
+  RestoreConfigurationRegisters();
+  SetConfigBit(true);
 
+  msgs_ << "<success>true</success>";
   status_ = IDLE;
   run_start_time_ = 0;
 }
@@ -323,8 +346,8 @@ void PTBManager::SetupRegisters() {
     SetupTimeRegisters();
     mapped_time_base_addr_ = MapPhysMemory(time_reg.base_addr,time_reg.high_addr);
     Log(debug,"Received virtual address for run start timestamp : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_time_base_addr_));
-    ptb_start_ts_low_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + time_reg.addr_offset[0]);
-    ptb_start_ts_high_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + time_reg.addr_offset[1]);
+    ptb_start_ts_high_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + time_reg.addr_offset[0]);
+    ptb_start_ts_low_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + time_reg.addr_offset[1]);
 
 #endif /*ARM*/
   }
@@ -349,7 +372,8 @@ void PTBManager::FreeRegisters() {
   } else {
     Log(info,"Clearing the registers.");
 #ifdef ARM
-    munmap(mapped_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
+    munmap(mapped_conf_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
+    munmap(mapped_time_base_addr_,time_reg.high_addr-time_reg.base_addr);
 #endif /*ARM*/
     Log(debug,"Configuration registers unmapped.");
   }
@@ -364,10 +388,13 @@ void PTBManager::FreeRegisters() {
   Log(info,"Memory released!");
 }
 
-void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::string> &answers) {
+void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
+  msgs_.clear();
+  msgs_.str("");
   // Only accept a new configuration if we are not running.
   // NFB: Not sure if I shouldn't always accept a config but simply place it in the cache.
   if (status_ == RUNNING) {
+    msgs_ << "<warning>Attempted to pass a new configuration during a run. Ignoring the new configuration.</warning>";
     Log(warning,"Attempted to pass a new configuration during a run. Ignoring the new configuration." );
     return;
   }
@@ -387,11 +414,12 @@ void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::s
   // First zero out all registers
   // Load the children nodes by parts.
   // Could use a iterator but then
+  std::stringstream strVal;
 
   ///!
   ///! DataBuffer
   ///!
-  char *pEnd = NULL;
+  //char *pEnd = NULL;
 
   for (pugi::xml_node_iterator it = config.begin(); it != config.end(); ++it) {
     Log(verbose," Child name : %s",it->name());
@@ -404,34 +432,47 @@ void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::s
       //-- Get the host
       std::string host = it->child("DaqHost").child_value();
       reader_->setTcpHost(host);
-      unsigned short port = atoi(it->child("DaqPort").child_value());
+
+      strVal << it->child("DaqPort").child_value();
+      unsigned short port;
+      strVal >> port;
+      strVal.clear();
+      strVal.str("");
+      //      unsigned short port = atoi(it->child("DaqPort").child_value());
       Log(debug,"DaqPort port %hu",port );
       reader_->setTcpPort(port);
       Log(debug,"Setting data transmission channel to [%s:%hu]",host.c_str(),port);
 
-      //FIXME: ELiminate this from the code.
-      uint32_t rollOver = atoi(it->child("RollOver").child_value());
+
+      uint32_t rollOver;
+      strVal << it->child("RollOver").child_value();
+      strVal >> rollOver;
+      strVal.clear();
+      strVal.str("");
+      //      //FIXME: ELiminate this from the code.
+      //      uint32_t rollOver = atoi(it->child("RollOver").child_value());
       Log(debug,"Packet Rollover %u",rollOver);
       reader_->setPacketRollover(rollOver);
 
-      uint32_t duration = atoi(it->child("MicroSliceDuration").child_value());
+      uint32_t duration;
+      strVal <<it->child("MicroSliceDuration").child_value();
+      strVal >> duration;
+      strVal.clear();
+      strVal.str("");
+      //      uint32_t duration = atoi(it->child("MicroSliceDuration").child_value());
       // Microslice duration is now a full number...check if it fits into 28 bits
       Log(debug,"MicroSlice Duration %u [%X][%s]",duration,duration, std::bitset<28>(duration).to_string().c_str());
-      if (duration > pow(2,28)) {
-        Log(warning,"Input value of [%u] above maximum rollover [28]. Truncating to maximum.",duration);
-        duration = pow(2,28)-1;
+      if (duration >= pow(2,27)) {
+        msgs_ << "<warning>Input value of [" << duration << "] above the allowed limit of 27 bits. Setting to maximum allowed.";
+        Log(warning,"Input value of [%u] above maximum rollover [27]. Truncating to maximum.",duration);
+        duration = pow(2,27)-1;
       }
       uint64_t timeRollOver = (uint64_t)duration;
       //Log(debug,"MicroSlice time rollover : [%u] --> %lu clock ticks. [%X][%s]",duration,timeRollOver,duration,std::bitset<28>(duration).to_string().c_str());
       reader_->setTimeRollover(timeRollOver);
 
-      SetBitRangeRegister(35,duration,0,28);
+      SetBitRangeRegister(35,duration,0,27);
 
-//      uint64_t timeRollOver = (uint64_t)duration;//(1 << duration);
-//      //Log(debug,"MicroSlice time rollover : [%u] --> %lu clock ticks. [%X][%s]",duration,timeRollOver,duration,std::bitset<28>(duration).to_string().c_str());
-//      reader_->setTimeRollover(timeRollOver);
-////      SetBitRange(35,duration,0,28);
-//      register_map_[35].value() = SetBitRange(register_map_[1].value(),duration,0,28);
 
       Log(debug,"Register 35 : [0x%X]", register_map_[35].value() );
 
@@ -439,79 +480,98 @@ void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::s
     if (!strcmp(it->name(),"ChannelMask")) {
       // Deal directly with the childs.
 
-      uint64_t bsu = strtoull(it->child("BSU").child_value(),&pEnd,16);
+
+      uint64_t bsu;
+      strVal <<std::hex << it->child("BSU").child_value();
+      strVal >> bsu;
+      strVal.clear();
+      strVal.str("");
+
+      //      uint64_t bsu = strtoull(it->child("BSU").child_value(),&pEnd,16);
       // Now I want to get the first 32 bits into a register
       Log(debug,"BSU mask [0x%" PRIX64 "]",bsu );
-      Log(debug,"BSU mask [%s]",std::bitset<49>(bsu).to_string().c_str());
+      Log(debug,"BSU mask [%s]",std::bitset<50>(bsu).to_string().c_str());
       // Make the assignments that I had decided before:
       // Catch the lowest 32 bits of the word
       ////// ------
-      ////// REG 34 (LSB OF CHANNEL MASK)
+      ////// REG 1 (LSB OF CHANNEL MASK)
       ////// BSU[31-0]
       ////// ------
 
-//      *(volatile uint32_t*)(register_map_[34].address) = bsu & 0xFFFFFFFF;
-      register_map_[34].value() = bsu & 0xFFFFFFFF;
-      Log(debug,"Register 34 : [0x%X]", register_map_[34].value() );
+      //      *(volatile uint32_t*)(register_map_[34].address) = bsu & 0xFFFFFFFF;
+      register_map_[1].value() = bsu & 0xFFFFFFFF;
+      Log(debug,"Register 1 : [0x%X]", register_map_[1].value() );
 
       ////// ------
-      ////// REG 1 (MSB of BSU channel mask + LSB of TSU channel mask)
-      ////// TSU[14-0] + BSU[48-32]
+      ////// REG 2 (MSB of BSU channel mask + LSB of TSU channel mask)
+      ////// TSU[13-0] + BSU[49-32]
       ////// ------
       // The remaining 17 bits (49-32) go into the lower 17 bits of the next word
       // [0-16]
-//      *(volatile uint32_t*)(register_map_[1].address) = (bsu >> 32 ) & 0x1FFFF;
-      register_map_[1].value() = (bsu >> 32 ) & 0x1FFFF;
-      Log(debug,"Register 1 (tmp) : [0x%X]",register_map_[1].value() );
+      //      *(volatile uint32_t*)(register_map_[1].address) = (bsu >> 32 ) & 0x1FFFF;
+      register_map_[2].value() = (bsu >> 32 ) & 0x3FFFF;
+      Log(debug,"Register 2 (tmp) : [0x%X]",register_map_[2].value() );
 
       // Now grab the TSU part to complete the mask of this register
-      uint64_t tsu = strtoull(it->child("TSU").child_value(),&pEnd,16);
+      uint64_t tsu;
+      strVal <<std::hex << it->child("TSU").child_value();
+      strVal >> tsu;
+      strVal.clear();
+      strVal.str("");
+
+      //      uint64_t tsu = strtoull(it->child("TSU").child_value(),&pEnd,16);
       Log(debug,"TSU mask [0x%" PRIX64 "]",tsu );
       Log(debug,"TSU mask [%s]",std::bitset<48>(tsu).to_string().c_str());
 
 
       // The lowest 15 bits go into the upper bits of the previous register
       // [17-31]
-//      *(volatile uint32_t*)(register_map_[1].address) |= ((tsu & 0x7FFF) << 17);
-      SetBitRangeRegister(1,(tsu & 0x7FFF),17,15);
-//      register_map_[1].value() |= ((tsu & 0x7FFF) << 17);
-      Log(debug,"Register 1 : [0x%X]", register_map_[1].value() );
+      //      *(volatile uint32_t*)(register_map_[1].address) |= ((tsu & 0x7FFF) << 17);
+      SetBitRangeRegister(2,(tsu & 0x3FFF),18,14);
+      //      register_map_[1].value() |= ((tsu & 0x7FFF) << 17);
+      Log(debug,"Register 2 : [0x%X]", register_map_[2].value() );
 
       ////// ------
-      ////// REG 2   (MSB of channel mask)
-      ////// TSU[46-15]
+      ////// REG 3   (MSB of channel mask)
+      ////// TSU[45-14]
       ////// ------
 
       // The remaining 33 (47-15) bits go into the next registers
-//      *(volatile uint32_t*)(register_map_[2].address) = ((tsu >> 15) & 0xFFFFFFFF);
-      register_map_[2].value() = ((tsu >> 15) & 0xFFFFFFFF);
-//      Log(debug,"Register 2 : [0x%X]",*(volatile uint32_t*)(register_map_[2].address) );
-      Log(debug,"Register 2 : [0x%X]",register_map_[2].value() );
+      //      *(volatile uint32_t*)(register_map_[2].address) = ((tsu >> 15) & 0xFFFFFFFF);
+      register_map_[3].value() = ((tsu >> 14) & 0xFFFFFFFF);
+      //      Log(debug,"Register 2 : [0x%X]",*(volatile uint32_t*)(register_map_[2].address) );
+      Log(debug,"Register 3 : [0x%X]",register_map_[3].value() );
 
       ////// ------
-      ////// REG 3
-      ////// TSU[47] (LSB)
+      ////// REG 4
+      ////// TSU[47-46] (LSB)
       ////// ------
 
-      // The final bit goes into the lsb of register 4
-//      *(volatile uint32_t*)(register_map_[3].address) |= ((tsu >> 47) & 0x1);
-      SetBitRangeRegister(3,((tsu >> 47) & 0x1),0,1);
-//      Log(debug,"Register 3 (CHMASK): [0x%X]",*(volatile uint32_t*)(register_map_[3].address) );
+      // The final 2 bits go into the lsb of register 4
+      //      *(volatile uint32_t*)(register_map_[3].address) |= ((tsu >> 47) & 0x1);
+      SetBitRangeRegister(4,((tsu >> 46) & 0x3),0,2);
+      //      Log(debug,"Register 3 (CHMASK): [0x%X]",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((tsu >> 47) & 0x1);
-      Log(debug,"Register 3 (CHMASK): [0x%X]",register_map_[3].value() );
+      Log(debug,"Register 4 (CHMASK): [0x%X]",register_map_[4].value() );
     }
 
 
     if (!strcmp(it->name(),"ExtTriggers")) {
       // External triggers go into register 4
       // to bits [26-30]
-      uint32_t TRIGEX = strtoul(it->child("Mask").child_value(),&pEnd,16);
-      Log(debug,"TRIGEX [0x%05X] [%s]",TRIGEX,std::bitset<5>(TRIGEX).to_string().c_str());
+      uint32_t TRIGEX;
+      strVal <<std::hex << it->child("Mask").child_value();
+      strVal >> TRIGEX;
+      strVal.clear();
+      strVal.str("");
 
-//      *(volatile uint32_t*)(register_map_[3].address) |= ((TRIGEX & 0x1F) << 26);
-      SetBitRangeRegister(3,((TRIGEX & 0x1F) << 26),26,5);
-            Log(debug,"Register 3 (TRIGEX) : 0x%X",register_map_[3].value());
-//      Log(debug,"Register 3 (TRIGEX) : 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
+      //      uint32_t TRIGEX = strtoul(it->child("Mask").child_value(),&pEnd,16);
+      Log(debug,"TRIGEX [0x%04X] [%s]",TRIGEX,std::bitset<4>(TRIGEX).to_string().c_str());
+
+      //      *(volatile uint32_t*)(register_map_[3].address) |= ((TRIGEX & 0x1F) << 26);
+      SetBitRangeRegister(4,((TRIGEX & 0xF) << 2),2,4);
+      Log(debug,"Register 4 (TRIGEX) : 0x%X",register_map_[4].value());
+      //      Log(debug,"Register 3 (TRIGEX) : 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((TRIGEX & 0x1F) << 26);
       //      Log(debug,"Fourth register (TRIGEX) 0x%X",register_map_[3].value() );
     }
@@ -520,12 +580,18 @@ void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::s
       // M_PULSEWIDTH - Number of clock cycles to keep the any outgoing pulse (out high)
       // Width of the outgoing pulses
       // TrigOutWidth : [25-27]
-      uint32_t M_PULSEWIDTH = strtoul(it->child("PulseWidth").child_value(),&pEnd,16);
-      Log(debug,"M_PULSEWIDTH [0x%03X] [%s]",M_PULSEWIDTH,std::bitset<3>(M_PULSEWIDTH).to_string().c_str());
+      uint32_t M_PULSEWIDTH;
+      strVal <<std::dec << it->child("PulseWidth").child_value();
+      strVal >> M_PULSEWIDTH;
+      strVal.clear();
+      strVal.str("");
 
-//      *(volatile uint32_t*)(register_map_[4].address) |= ((M_PULSEWIDTH & 0x7) << 25);
-      SetBitRangeRegister(4,((M_PULSEWIDTH & 0x7) << 25),25,3);
-//      Log(debug,"Register 4 (M_PULSEWIDTH) : [0x%X]", *(volatile uint32_t*)(register_map_[4].address) );
+      //      uint32_t M_PULSEWIDTH = strtoul(it->child("PulseWidth").child_value(),&pEnd,16);
+      Log(debug,"M_PULSEWIDTH [0x%03X] [%s]",M_PULSEWIDTH,std::bitset<6>(M_PULSEWIDTH).to_string().c_str());
+
+      //      *(volatile uint32_t*)(register_map_[4].address) |= ((M_PULSEWIDTH & 0x7) << 25);
+      SetBitRangeRegister(4,((M_PULSEWIDTH & 0x3F) << 18),18,6);
+      //      Log(debug,"Register 4 (M_PULSEWIDTH) : [0x%X]", *(volatile uint32_t*)(register_map_[4].address) );
       Log(debug,"Register 4 (M_PULSEWIDTH) : [0x%X]", register_map_[4].value());
       //      register_map_[4].value() |= ((M_TRIGOUT & 0x7) << 25);
       //      Log(debug,"Fourth register (M_PULSEWIDTH) 0x%X", register_map_[4].value() );
@@ -538,28 +604,37 @@ void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::s
 
       // The lockout window goes into register 3
       // LockoutWindow : [1-5]
-      uint32_t MT_LOCKDOWN = strtoul(it->child("LockdownWindow").child_value(),&pEnd,16);
-      Log(debug,"MT_LOCKDOWN [0x%05X] [%s]",MT_LOCKDOWN,std::bitset<5>(MT_LOCKDOWN).to_string().c_str());
+      uint32_t MT_LOCKDOWN;
+      strVal << it->child("LockdownWindow").child_value();
+      strVal >> MT_LOCKDOWN;
+      strVal.clear();
+      strVal.str("");
 
-      SetBitRangeRegister(3,((MT_LOCKDOWN & 0x1F) << 1),1,5);
-//      *(volatile uint32_t*)(register_map_[3].address) |= ((MT_LOCKDOWN & 0x1F) << 1);
-//      Log(debug,"Register 3 (MT_LOCKDOWN) 0x%X 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
+      //      uint32_t MT_LOCKDOWN = strtoul(it->child("LockdownWindow").child_value(),&pEnd,16);
+      Log(debug,"MT_LOCKDOWN [0x%05X] [%s]",MT_LOCKDOWN,std::bitset<6>(MT_LOCKDOWN).to_string().c_str());
+
+      SetBitRangeRegister(4,((MT_LOCKDOWN & 0x3F) << 10),10,6);
+      //      *(volatile uint32_t*)(register_map_[3].address) |= ((MT_LOCKDOWN & 0x1F) << 1);
+      //      Log(debug,"Register 3 (MT_LOCKDOWN) 0x%X 0x%X",*(volatile uint32_t*)(register_map_[3].address) );
       //      register_map_[3].value() |= ((MT_LOCKDOWN & 0x1F) << 1);
-            Log(debug,"Register 3 (MT_LOCKDOWN) [0x%X]",register_map_[3].value() );
+      Log(debug,"Register 4 (MT_LOCKDOWN) [0x%X]",register_map_[4].value() );
 
       // The remaining configuration words go into register 5
 
       // M_LOCKHI - Number of clock cycles to extend the input signal
       // Width of the trigger window
       // TriggerWindow : [22-24]
-      uint32_t M_LOCKHI = strtoul(it->child("TriggerWindow").child_value(),&pEnd,16);
-      Log(debug,"M_LOCKHI [0x%03X] [%s]",M_LOCKHI,std::bitset<3>(M_LOCKHI).to_string().c_str());
+      uint32_t M_LOCKHI;
+      strVal << it->child("TriggerWindow").child_value();
+      strVal >> M_LOCKHI;
+      strVal.clear();
+      strVal.str("");
 
-//      *(volatile uint32_t*)(register_map_[4].address) |= ((M_LOCKHI & 0x7) << 22);
-//      Log(debug,"Register 4 (M_LOCKHI) 0x%X", *(volatile uint32_t*)(register_map_[4].address) );
+      //      uint32_t M_LOCKHI = strtoul(it->child("TriggerWindow").child_value(),&pEnd,16);
+      Log(debug,"M_LOCKHI [0x%03X] [%s]",M_LOCKHI,std::bitset<4>(M_LOCKHI).to_string().c_str());
 
-      SetBitRangeRegister(4,((M_LOCKHI & 0x7) << 22),22,3);
-//      register_map_[4].value() |= ((M_LOCKHI & 0x7) << 22);
+      SetBitRangeRegister(4,((M_LOCKHI & 0xF) << 25),25,4);
+      //      register_map_[4].value() |= ((M_LOCKHI & 0x7) << 22);
       Log(verbose,"Fourth register (M_LOCKHI) 0x%X", register_map_[4].value() );
 
       // Now it is specific trigger codes...
@@ -571,43 +646,47 @@ void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::s
       pugi::xml_node mtrigger_node = it->find_child_by_attribute("TriggerMask","id","A");
       if (mtrigger_node.empty()){
         Log(warning,"Couldn't find the configuration for trigger A.");
+        msgs_ << "<warning>Couldn't find the configuration for trigger A. Trigger A will be disabled.</warning>";
         // If it doesn't find, disable this trigger
-        ParseMuonTrigger(empty_node,4,1);
+        ParseMuonTrigger(empty_node,5,11);
         //continue;
       } else {
-    	  Log(debug,"Parsing configuration for trigger A");
+        Log(debug,"Parsing configuration for trigger A");
         // -- The operations go into register 5
-        ParseMuonTrigger(mtrigger_node,4,1);
+        ParseMuonTrigger(mtrigger_node,5,11);
       }
 
       mtrigger_node = it->find_child_by_attribute("TriggerMask","id","B");
       if (mtrigger_node.empty()){
+        msgs_ << "<warning>Couldn't find the configuration for trigger B. Trigger will be disabled.</warning>";
         Log(warning,"Couldn't find the configuration for trigger B." );
-        ParseMuonTrigger(empty_node,4,1);
+        ParseMuonTrigger(empty_node,12,11);
       } else {
         // -- The operations go into register 6
-    	  Log(debug,"Parsing configuration for trigger B");
-        ParseMuonTrigger(mtrigger_node,5,7);
+        Log(debug,"Parsing configuration for trigger B");
+        ParseMuonTrigger(mtrigger_node,12,11);
       }
 
       mtrigger_node = it->find_child_by_attribute("TriggerMask","id","C");
       if (mtrigger_node.empty()){
+        msgs_ << "<warning>Couldn't find the configuration for trigger C. Trigger C will be disabled.</warning>";
         Log(warning,"Couldn't find the configuration for trigger C." );
-        ParseMuonTrigger(empty_node,4,1);
+        ParseMuonTrigger(empty_node,18,24);
       } else {
         // -- The operations go into register 18
-    	  Log(debug,"Parsing configuration for trigger C");
-        ParseMuonTrigger(mtrigger_node,17,1);
+        Log(debug,"Parsing configuration for trigger C");
+        ParseMuonTrigger(mtrigger_node,18,24);
       }
 
       mtrigger_node = it->find_child_by_attribute("TriggerMask","id","D");
       if (mtrigger_node.empty()){
+        msgs_ << "<warning>Couldn't find the configuration for trigger D. Trigger D will be disabled.</warning>";
         Log(warning,"Couldn't find the configuration for trigger D." );
-        ParseMuonTrigger(empty_node,4,1);
+        ParseMuonTrigger(empty_node,25,24);
       } else {
         // -- The operations go into register 19
-    	  Log(debug,"Parsing configuration for trigger D");
-        ParseMuonTrigger(mtrigger_node,17,7);
+        Log(debug,"Parsing configuration for trigger D");
+        ParseMuonTrigger(mtrigger_node,25,24);
       }
 
     }
@@ -617,26 +696,30 @@ void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::s
       std::string enable;
       uint32_t period  = 0;
       uint32_t reg = 0;
-      uint32_t reg_init = 30;
+      uint32_t reg_init = 31;
       const char *channel_id[] = {"C1","C2","C3","C4"};
       // this can be hardcoded since we don't have any more than that.
       for (uint32_t i = 0; i < 4; ++i) {
         pugi::xml_node node = it->find_child_by_attribute("CalibrationMask","id",channel_id[i]);
         if (node.empty()){
+          msgs_ << "<warning>Couldn't find the configuration for calibration channel " << channel_id[i] << ". Disabling (default).</warning>";
           Log(warning,"Couldn't find the configuration for calibration channel %s. Disabling it.",channel_id[i]);
           enable = "false";
           period = 0x0;
         } else {
           enable = node.child("enabled").child_value();
-//          Log(debug,"Calibration channel %u enable : %s(%s)",i+1,enable.c_str(),node.child("enable").child_value());
+          //          Log(debug,"Calibration channel %u enable : %s(%s)",i+1,enable.c_str(),node.child("enable").child_value());
           Log(debug,"Calibration channel %u enable : %s",i+1,enable.c_str());
-          period = strtoul(node.child("period").child_value(),&pEnd,16);
+          strVal << std::dec << node.child("period").child_value();
+          strVal >> period;
+//          period = strtoul(node.child("period").child_value(),&pEnd,16);
           Log(debug,"%s PERIOD [0x%X] [%s]",channel_id[i],period,std::bitset<30>(period).to_string().c_str());
 
         }
 
         reg = reg_init + i;
         if (period > 0x7FFFFFFF) {
+          msgs_ << "<warning>Period larger than maximum allowable size. Truncating to max value ( 2147483647 : 0x7FFFFFFF)</warning>";
           Log(warning,"Period larger than maximum allowable size. Truncating to max value ( 2147483647 : 0x7FFFFFFF)");
           period = 0x7FFFFFFF;
         }
@@ -669,7 +752,6 @@ void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::s
   Log(debug,"Control register after config commit 0x%08X", register_map_[0].value() );
   if (!GetConfigBitACK() && emu_mode_ == false) {
     Log(error,"Failed set to set the configuration bit. ACK not received");
-    answers[std::string("error")] = std::string("Configuration failed to acknowledge.");
     throw PTBexception("Configuration failed to commit. ACK not received.");
   }
 
@@ -703,10 +785,11 @@ void PTBManager::ProcessConfig(pugi::xml_node config,std::map<std::string,std::s
     reader_->InitConnection(true);
   }
   catch(SocketException &e) {
-    answers[std::string("warning")] = std::string("Failed to open connection to board reader.");
-	  Log(warning,"Connection failed to establish. This might cause troubles later.");
+    msgs_ << "<warning>Failed to open connection to board reader.</warning>";
+    Log(warning,"Connection failed to establish. This might cause troubles later.");
   }
 
+  msgs_ << "<status>success</status>";
   // Most likely the connection will fail at this point. Not a big problem.
 }
 
@@ -749,20 +832,202 @@ void PTBManager::RestoreConfigurationRegisters() {
 
 
 
-void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_offset) {
+void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_reg) {
 
-  Log(verbose,"Processing muon trigger with conf reg %u and offset %u",reg,reg_offset );
+  Log(verbose,"Processing muon trigger starting at reg %u and conf_reg  %u",reg,conf_reg );
 
+  // NFB - Dec-04-2015
+  // Remapped the whole thing
+
+  bool reverse_order = (conf_reg<reg)?true:false;
+  uint32_t prsc_pos;
+  uint32_t lreg;
+  uint32_t mask, bit_offset, input_word;
+  uint64_t input_longword;
+  std::string field_name;
+  std::stringstream strVal;
+
+  // -- First thing, is to grab the mask and fill it.
+  // This is the same for all pieces of firmware
+
+  ////////////////////////////////////////////////////////////////
+  /// M_?_EXT_OP - External logic to be applied between the groups
+  /// ExtLogic : reg_offset[bit_offset - bit_offset+1]
+  ////////////////////////////////////////////////////////////////
+  mask = 0x3;
+  bit_offset = (reverse_order)?8:22;
+  field_name = "ExtLogic";
+  if (T.empty()) {
+    input_word = 0x0;
+  } else {
+    strVal << std::hex << T.child(field_name.c_str()).child_value();
+    strVal >> input_word;
+    strVal.clear();
+    strVal.str("");
+  }
+
+  // Assign the value to the register
+  Log(verbose,"ExtLogic [0x%X] [%s]",input_word,std::bitset<2>(input_word).to_string().c_str());
+  SetBitRangeRegister(conf_reg,((input_word & mask) << (bit_offset)),bit_offset,2);
+
+  // The prescale is a different matter
+  // All the prescales go into the same register (36)
+  ////////////////////////////////////////////////////////////////
+  /// M_?_PRESC - Prescale of a given trigger
+  /// ExtLogic : reg_offset[bit_offset - bit_offset+7]
+  ////////////////////////////////////////////////////////////////
+  // First find where in the register the prescale must go:
+  uint32_t prscl_reg = 36;
+  if (reg < conf_reg) {
+    if (reg < 18) {
+      bit_offset = 0;
+    } else {
+      bit_offset = 8;
+    }
+  } else {
+    if (reg < 18) {
+      bit_offset = 16;
+    } else {
+      bit_offset = 24;
+    }
+  }
+  mask = 0xFF;
+  field_name = "Prescale";
+  if (T.empty()) {
+    input_word = 0x0;
+  } else {
+    strVal << std::dec << T.child(field_name.c_str()).child_value();
+    strVal >> input_word;
+    strVal.clear();
+    strVal.str("");
+  }
+  Log(verbose,"Prescale [0x%X] [%s]",input_word,std::bitset<8>(input_word).to_string().c_str());
+  SetBitRangeRegister(prscl_reg,((input_word & mask) << bit_offset),bit_offset,8);
+  Log(debug,"Prescale register %u (%s) %X",prscl_reg,field_name.c_str(),register_map_[prscl_reg].value());
+
+  ////////////////////////////////////////////////////////////////
+  ///
+  /// Group entries
+  ///
+  ////////////////////////////////////////////////////////////////
+
+  const unsigned int ngroups = 2;
+  const char*groups[] = {"group1","group2"};
+
+  for (uint32_t i = 0; i < ngroups; ++i) {
+    pugi::xml_node G;
+
+    if (!T.empty()) {
+      G = T.child(groups[i]);
+    }
+    // Now the more messy part of using a long register
+    Log(verbose,"Processing group [%s]",groups[i]);
+
+    // Intra group logic:
+    mask = 0x3;
+    // trig. A:: g1=4, g2=6
+    // trig. B:: g1=24, g2=26
+    bit_offset = (reverse_order)?(24+(2*i)):(4+(2*i));
+    field_name = "Logic";
+
+    if (T.empty()) {
+      msgs_ << "<warning>Couldn't find internal logic for group " << groups[i]+1 << ". Assuming OR.</warning>";
+      input_word = 0x01;
+    } else {
+      strVal << std::hex << G.child(field_name.c_str()).child_value();
+      strVal >> input_word;
+      strVal.clear();
+      strVal.str("");
+    }
+    Log(verbose,"Logic [0x%X] [%s]",input_word,std::bitset<2>(input_word).to_string().c_str());
+    SetBitRangeRegister(conf_reg,((input_word & mask) << bit_offset),bit_offset,2);
+    Log(debug,"Conf register %u (%s) %X",conf_reg,field_name.c_str(),register_map_[conf_reg].value() );
+
+    ////////////////////////////////////////
+    ///
+    /// -- Now the masks
+    ///
+    ////////////////////////////////////////
+    field_name = "TSU";
+    if (T.empty()) {
+      msgs_ << "<warning>Couldn't find mask for TSU in group " << groups[i]+1 << ". Assuming 0x0.</warning>";
+      input_longword = 0x0;
+    } else {
+      strVal << std::hex << G.child(field_name.c_str()).child_value();
+      strVal >> input_longword;
+      strVal.clear();
+      strVal.str("");
+    }
+    Log(verbose,"TSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<48>(input_longword).to_string().c_str());
+
+    // -- This part now could probably be made a bit more iterative
+    // I know that the TSU's go into the lower registers, followed by the BSU's
+    // tsu[31:0]
+    // Trig. A
+    // g1: 5,6,7,8    g2: 8,9,10,11
+    // Trig. B
+    // g1: 12,13,14,15 g2: 15,16,17,11
+    mask = 0xFFFFFFFF;
+    lreg = reg+(i*3);
+    register_map_[lreg].value() = (input_longword & mask);
+    Log(debug,"Mask register %u (W1) %X",lreg,register_map_[lreg].value() );
+    // The rest of the TSU's go into the next register
+    //tsu[47:32] : 16 bits --> word[15:0]
+    mask = 0xFFFF;
+    bit_offset = 0;
+    lreg += 1; // reg = 6
+    SetBitRangeRegister(lreg,((input_longword >> 32) & mask)<< bit_offset,bit_offset,16);
+    Log(debug,"Mask register %u (W2) %X",lreg,register_map_[lreg].value() );
+
+
+    // Now the BSU's
+    field_name = "BSU";
+    if (T.empty()) {
+      msgs_ << "<warning>Couldn't find mask for BSU in group " << groups[i]+1 << ". Assuming 0x0.</warning>";
+      input_longword = 0x0;
+    } else {
+      strVal << std::hex << G.child(field_name.c_str()).child_value();
+      strVal >> input_longword;
+      strVal.clear();
+      strVal.str("");
+    }
+    Log(verbose,"BSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<50>(input_longword).to_string().c_str());
+
+    // bsu[15-0] (16 bits) -> word[31:16]
+    mask = 0xFFFF;
+    bit_offset = 16;
+    SetBitRangeRegister(lreg,(input_longword & mask) << bit_offset,bit_offset,16);
+    Log(debug,"Mask register %u (W2) %X",lreg,register_map_[lreg].value() );
+
+    lreg += 1; // reg=7
+    mask = 0xFFFFFFFF;
+    // bsu[47:16] (31 bits) --> word[31:0]
+    register_map_[lreg].value() = (input_longword >> 16) & mask;
+
+    // The last bits are a bit more special.
+    // For group 1, they are the first 2 bits in the configuration register
+    // For group 2, they are the next 2
+    lreg = conf_reg;
+    mask = 0x3;
+    if (i==0) {
+      bit_offset = (reverse_order)?28:0;
+    } else {
+      bit_offset = (reverse_order)?30:2;
+    }
+    SetBitRangeRegister(lreg,((input_longword >> 48) & mask) << bit_offset,bit_offset,2);
+
+  }
+  /**
   // First thing to do is identify the offset in the bins of the configuration register
-  uint32_t word_offset = (reg_offset>1)?0:11;
+  //  uint32_t word_offset = (reg_offset>1)?0:11;
   char *pEnd;
   // == First deal with the global parameters:
   // variables that are used repeatedly below
-  uint32_t mask;
-  uint32_t bit_offset;
-  std::string field_name;
-  uint32_t input_word;
-  uint64_t input_longword;
+  //  uint32_t mask;
+  //  uint32_t bit_offset;
+  //  std::string field_name;
+  //  uint32_t input_word;
+  //  uint64_t input_longword;
 
 
   // M_?_EXT_OP - External logic to be applied between the groups
@@ -780,13 +1045,13 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
   } else {
     input_word = strtoul(T.child(field_name.c_str()).child_value(),&pEnd,16);
   }
-//  *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
+  //  *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
   Log(verbose,"ExtLogic [0x%X] [%s]",input_word,std::bitset<2>(input_word).to_string().c_str());
 
-//  Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
+  //  Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
   SetBitRangeRegister(reg,((input_word & mask) << (word_offset+bit_offset)),word_offset+bit_offset,2);
-//  register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
-    Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),register_map_[reg].value() );
+  //  register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
+  Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),register_map_[reg].value() );
 
   // M_?_PRESC - Prescale of a given trigger
   // Prescale : [word_offset+2 - word_offset+4]
@@ -801,14 +1066,14 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
   }
   // For trigger A this translates into
   // input_word & 0x7 << 13 ==> [13-15]
-//  *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
+  //  *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
   Log(verbose,"Prescale [0x%X] [%s]",input_word,std::bitset<3>(input_word).to_string().c_str());
 
-//  Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
+  //  Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
 
   SetBitRangeRegister(reg,((input_word & mask) << (word_offset+bit_offset)),word_offset+bit_offset,3);
   //    register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
-    Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),register_map_[reg].value() );
+  Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),register_map_[reg].value() );
 
 
   // Loop over the groups
@@ -837,9 +1102,9 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     //    input_word & 0x3 << 18 ==> [18-19]
     // i = 1 : [20-21]
     //    input_word & 0x3 << 20 ==> [20-21]
-//    *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
+    //    *(volatile uint32_t*)(register_map_[reg].address) |= ((input_word & mask) << (word_offset+bit_offset));
     Log(verbose,"Logic [0x%X] [%s]",input_word,std::bitset<2>(input_word).to_string().c_str());
-//    Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
+    //    Log(debug,"Conf register %u (%s) %X",reg,field_name.c_str(),*(volatile uint32_t*)(register_map_[reg].address) );
     //    register_map_[reg].value() |= ((input_word & mask) << (word_offset+bit_offset));
     SetBitRangeRegister(reg,((input_word & mask) << (word_offset+bit_offset)),word_offset+bit_offset,2);
 
@@ -860,10 +1125,10 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     //       map[5] = input_longword & 0xFFFFFFFF;
     // i = 1: [Reg8] : [0-31]
     //       map[8] : input_longword & 0xFFFFFFFF;
-//    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) = (input_longword & mask);
+    //    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) = (input_longword & mask);
     register_map_[reg+reg_offset+(i*3)].value() = (input_longword & mask);
     Log(verbose,"BSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<48>(input_longword).to_string().c_str());
-//    Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) );
+    //    Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)].address) );
     //    register_map_[reg+reg_offset+(i*3)].value() = (input_longword & mask);
 
     Log(debug,"Mask register %u (W1) %X",reg+reg_offset+(i*3),register_map_[reg+reg_offset+(i*3)].value() );
@@ -879,16 +1144,16 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // i = 1: [Reg9] : [0-16]
     //       map[9] : input_longword & 0x1FFFF;
     // Reset the bits to zeros to avoid ghost bits
-//    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) = 0x0;
+    //    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) = 0x0;
     register_map_[reg+reg_offset+(i*3)+1].value() = 0x0;
 
     //register_map_[reg+reg_offset+(i*3)+1].value() = 0x0;
 
     // Now do the assignments
-//    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) = (input_longword >> 32 ) & mask;
-//    Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) );
-        register_map_[reg+reg_offset+(i*3)+1].value() = (input_longword >> 32 ) & mask;
-        Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,register_map_[reg+reg_offset+(i*3)+1].value() );
+    //    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) = (input_longword >> 32 ) & mask;
+    //    Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) );
+    register_map_[reg+reg_offset+(i*3)+1].value() = (input_longword >> 32 ) & mask;
+    Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,register_map_[reg+reg_offset+(i*3)+1].value() );
 
 
 
@@ -908,8 +1173,8 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     //       map[6] = input_longword & 0x1FFFF;
     // i = 1: [Reg9] : [17-31]
     //       map[9] : input_longword & 0x1FFFF;
-//    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) |= (input_longword & mask ) << bit_offset;
-//    Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) );
+    //    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) |= (input_longword & mask ) << bit_offset;
+    //    Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+1].address) );
     //    register_map_[reg+reg_offset+(i*3)+1].value() |= (input_longword & mask ) << bit_offset;
     SetBitRangeRegister(reg+reg_offset+(i*3)+1,((input_longword & mask ) << bit_offset),bit_offset,16);
     Log(debug,"Mask register %u (W2) %X",reg+reg_offset+(i*3)+1,register_map_[reg+reg_offset+(i*3)+1].value() );
@@ -922,10 +1187,10 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     //       map[7] = input_longword & 0xFFFFFFFF;
     // i = 1: [Reg10] : [0-31]
     //       map[10] : input_longword & 0xFFFFFFFF;
-//    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) = (input_longword >> bit_offset) & mask;
-//    Log(debug,"Mask register %u (W3) %X",reg+reg_offset+(i*3)+2,*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) );
-        register_map_[reg+reg_offset+(i*3)+2].value() = (input_longword >> bit_offset) & mask;
-        Log(debug,"Mask register %u (W3) %X",reg+reg_offset+(i*3)+2,register_map_[reg+reg_offset+(i*3)+2].value());
+    //    *(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) = (input_longword >> bit_offset) & mask;
+    //    Log(debug,"Mask register %u (W3) %X",reg+reg_offset+(i*3)+2,*(volatile uint32_t*)(register_map_[reg+reg_offset+(i*3)+2].address) );
+    register_map_[reg+reg_offset+(i*3)+2].value() = (input_longword >> bit_offset) & mask;
+    Log(debug,"Mask register %u (W3) %X",reg+reg_offset+(i*3)+2,register_map_[reg+reg_offset+(i*3)+2].value());
 
 
     // The final bit (48) goes into the lsb of the configuration register
@@ -937,13 +1202,13 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t reg_o
     // i = 1: [Reg4] : [12]
     //       map[10] : input_longword >> 47 & 0x1 << 12;
 
-//    *(volatile uint32_t*)(register_map_[reg].address) |= ((input_longword >> 47) && mask) << bit_offset;
-//    Log(debug,"Mask register %u (MASK) %X",reg,*(volatile uint32_t*)(register_map_[reg].address) );
+    //    *(volatile uint32_t*)(register_map_[reg].address) |= ((input_longword >> 47) && mask) << bit_offset;
+    //    Log(debug,"Mask register %u (MASK) %X",reg,*(volatile uint32_t*)(register_map_[reg].address) );
     SetBitRangeRegister(reg,((input_longword >> 47) && mask) << bit_offset,bit_offset,1);
     //        register_map_[reg].value() |= ((input_longword >> 47) && mask) << bit_offset;
-        Log(debug,"Mask register %u (MASK) %X",reg,register_map_[reg].value() );
+    Log(debug,"Mask register %u (MASK) %X",reg,register_map_[reg].value() );
   }
-
+   **/
 }
 
 
@@ -965,21 +1230,21 @@ bool PTBManager::GetBit(uint32_t reg, uint32_t bit) {
 void PTBManager::SetBit(uint32_t reg, uint32_t bit, bool status) {
   // Things are more complicated than this. We want to set a single bit, regardless of what is around
   //register_map_[reg].value() ^= ((status?0x1:0x0) ^ register_map_[reg].value()) & ( 1 << bit);
-	Log(debug,"Reading the bit %u from reg %u",bit,reg);
+  Log(debug,"Reading the bit %u from reg %u",bit,reg);
 #ifdef ARM
-	uint32_t value = Xil_In32((uint32_t)register_map_[reg].address);
-	uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
+  uint32_t value = Xil_In32((uint32_t)register_map_[reg].address);
+  uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
 
-	Log(debug,"Got %08X -> %08X",value,new_value);
-	Xil_Out32((uint32_t)register_map_[reg].address,new_value);
+  Log(debug,"Got %08X -> %08X",value,new_value);
+  Xil_Out32((uint32_t)register_map_[reg].address,new_value);
 #else
-	// -- force making a copy
-	uint32_t value = register_map_[reg].value();
-	uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
+  // -- force making a copy
+  uint32_t value = register_map_[reg].value();
+  uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
   Log(debug,"Got %08X -> %08X",value,new_value);
   register_map_[reg].value() = new_value;
 #endif
-	Log(debug,"Final register value %08X",register_map_[reg].value());
+  Log(debug,"Final register value %08X",register_map_[reg].value());
   //  uint32_t tmp_reg = register_map_[reg].value();
   //  (tmp_reg >> bit) = status?0x1:0x0;
   //  register_map_[reg].value() = tmp_reg;

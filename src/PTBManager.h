@@ -10,6 +10,8 @@
 
 #include <map>
 #include <cstdint>
+#include <sstream>
+
 #include "pugixml.hpp"
 
 // -- Forward declarations
@@ -64,10 +66,10 @@ public:
     this->status_ = status;
   }
 
-  void ExecuteCommand(const char* cmd,std::map<std::string,std::string> &answers);
+  void ExecuteCommand(const char* cmd,char*&answers);
   // Receive the configuration as
   // Passed by copy to keep locally
-  void ProcessConfig(pugi::xml_node config,std::map<std::string,std::string> &answers);
+  void ProcessConfig(pugi::xml_node config,char *&answers);
 
   /**
    * Loops over the registers and dum their contents, both in decimal and Hex.
@@ -84,8 +86,8 @@ public:
    */
   void RestoreConfigurationRegisters();
 
-  void StartRun(std::map<std::string,std::string> &answers);
-  void StopRun(std::map<std::string,std::string> &answers);
+  void StartRun();
+  void StopRun();
 
   void FreeRegisters();
   void ClearCommands() {
@@ -200,6 +202,8 @@ private:
   LocalRegister ptb_start_ts_low_;
   LocalRegister ptb_start_ts_high_;
   uint64_t run_start_time_;
+  std::ostringstream msgs_;
+  std::string msgs_str_;
 };
 
 #endif /* PTBMANAGER_H_ */
