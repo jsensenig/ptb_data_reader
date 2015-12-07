@@ -263,17 +263,11 @@ public:
     //the size of the payloads (neglecting the Payload_Header)
     // FIXME: Since everythig is being worked in bytes the sizes can be trimmed
     static microslice_size_t const payload_size_counter   = 4*sizeof(uint32_t); //128 bit payload.
-    // Otherwise there are troubles with the casting into the structures on the size of the board
-    // reader
     static microslice_size_t const payload_size_trigger   = 1 * sizeof(uint32_t); //32-bit payload
     static microslice_size_t const payload_size_timestamp = 2 * sizeof(uint32_t); //64-bit payload
     static microslice_size_t const payload_size_selftest  = 1 * sizeof(uint32_t); //32-bit payload
     static microslice_size_t const payload_size_checksum  = 0 * sizeof(uint32_t); //32-bit payload
-    /* static microslice_size_t const payload_size_counter   = 4 * sizeof(uint32_t); //96-bit payload */
-    /* static microslice_size_t const payload_size_trigger   = 1 * sizeof(uint32_t); //32-bit payload */
-    /* static microslice_size_t const payload_size_timestamp = 2 * sizeof(uint32_t); //64-bit payload */
-    /* static microslice_size_t const payload_size_selftest  = 1 * sizeof(uint32_t); //32-bit payload */
-    /* static microslice_size_t const payload_size_checksum  = 0 * sizeof(uint32_t); //32-bit payload */
+    static microslice_size_t const payload_size_warning   = 0 * sizeof(uint32_t); //32-bit payload
 
     //The types of data words
     static const Word_Header::data_packet_type_t DataTypeWarning  = 0x0; //0b000

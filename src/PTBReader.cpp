@@ -586,6 +586,9 @@ void PTBReader::ClientTransmiter() {
     // This discounts the headers and the checksum, only keeps useful data
     // to be directly comparable to the value reported by the board reader
     bytes_sent_ += ipck;
+    // Is this correct? I would have thought that it already has the size
+    // needed. The packet_size should not include the header, since that
+    // is a fixed part of it
     uint32_t packet_size = ipck+sizeof(uint32_t);
 
     // Log(verbose,"Size was calculated to be %u",packet_size);
