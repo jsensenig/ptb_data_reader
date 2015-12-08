@@ -223,6 +223,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
         catch (...) {
           sprintf(instBuffer,"<error>Unknown</error>");
         }
+	Log(verbose,"Returning answer : %s",instBuffer);
         sock->send(instBuffer,strlen(instBuffer));
 
       } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
@@ -321,7 +322,7 @@ void ConfigServer::ProcessTransmission(const char* buffer,char*& answer) {
   // been registered. If not simply queue the command into a list and wait
   // Careful if the client connection in the meantime is lost, the memory will disappear.
   // Have to copy the string into the queue
-  printf("In ProcessTransmission\n");
+
   if (data_manager_ == NULL) {
     Log(warning,"Attempting to process a transmission without a valid data Manager. Queueing.");
     Log(verbose,"[%s]",buffer);
@@ -360,6 +361,7 @@ void ConfigServer::ProcessTransmission(const char* buffer,char*& answer) {
     Log(verbose,"Processing config %s : %s ",config.name(),config.child_value());
     //
     ProcessConfig(config,answer);
+    Log(verbose,"Config processed with answer [%s]",answer);
   } else if (command != NULL){
     Log(verbose,"Processing command [%s] : [%s]",command.name(),command.child_value());
     ProcessCommand(command,answer);
@@ -436,6 +438,7 @@ void ConfigServer::RegisterDataManager(PTBManager *manager)  {
       Log(verbose,"Processing an entry");
       char *answer = NULL;
       ProcessTransmission(queue_.front(),answer);
+      Log(verbose,"Transmission processed. Answer: %s",answer);
       // In this case ignore the answers, since we don't know if they already timed out upstream
       delete [] answer;
       queue_.pop_front();
@@ -467,6 +470,7 @@ void ConfigServer::Shutdown(bool force) {
       Log(verbose,"Processing an entry");
       char * answer;
       ProcessTransmission(queue_.front(), answer);
+      Log(verbose,"Transmission processed. Answer: %s",answer);
       delete [] answer;
       queue_.pop_front();
     }

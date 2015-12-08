@@ -44,7 +44,8 @@ public:
   enum Command {STARTRUN=0,
                 STOPRUN = 1,
                 SOFTRESET = 2,
-                HARDRESET = 3
+                HARDRESET = 3,
+		GETSTARTTIME = 4
                };
 
   PTBManager(bool emu_mode = false);
@@ -94,7 +95,7 @@ public:
 	  commands_.clear();
   }
 
-  uint64_t GetRunStartTime() {return run_start_time_;} ;
+  uint64_t GetRunStartTime();
 
 protected:
   // Commands that need to be implemented

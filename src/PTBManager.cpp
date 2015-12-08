@@ -52,6 +52,7 @@ PTBManager::PTBManager(bool emu_mode) : reader_(0), cfg_srv_(0),status_(IDLE),em
   commands_.insert(std::map<std::string, Command>::value_type("StopRun",STOPRUN));
   commands_.insert(std::map<std::string, Command>::value_type("SoftReset",SOFTRESET));
   commands_.insert(std::map<std::string, Command>::value_type("HardReset",HARDRESET));
+  commands_.insert(std::map<std::string, Command>::value_type("GetStartRunTime",GETSTARTTIME));
 
   // Setup the registers first, to make sure that if the data manager receives something
   // we are ready to deliver.
@@ -104,6 +105,10 @@ void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
         break;
       }
       break;
+    case GETSTARTTIME:
+      GetRunStartTime();
+      msgs_ << "<success>true</success>";
+      break;
       // -- Send reset. In both cases there is a hardware reset sent
       // The soft reset is just a reset of the hardware. And let the SW remain as it is.
       // Essencially it clears the hardware, recommits the configuration and restart the run
@@ -116,8 +121,10 @@ void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
       SetResetBit(false);
       // -- Re-commit the configuration
       // Not sure if this is going to work as intended
+      // TODO: Only restore if the registers actually have something in them.
       RestoreConfigurationRegisters();
       SetConfigBit(true);
+      msgs_ << "<success>true</success>";
       break;
     case HARDRESET:
       // A hard reset should sent the whole thing to zeros
@@ -134,6 +141,7 @@ void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
       // Reset the configuration buggers to an enable state
       // Reassign the configuration (was kept in memory before)
       //SetConfigBit(true);
+      msgs_ << "<success>true</success>";
       break;
     case STOPRUN:
       if (getStatus() != PTBManager::RUNNING) {
@@ -221,9 +229,17 @@ void PTBManager::StartRun() {
   //    throw std::string("Start Run failed. No ACK received.");
   //  }
   status_ = RUNNING;
+  // NFB Dec-06-2015
+  // This does not work. The TDU manager waits for the boardReader to give the go-ahead
+  // And this waits for the TDU manager to send the sync.
+  // Better to implement a specific command to get the value after the run has started
   Log(info,"Run Start requested...");
-  // Get the run start time before considering itself done
-  // Also take the oportunity and check the run start ACK
+
+  msgs_ << "<success>true</success>";
+}
+
+uint64_t PTBManager::GetRunStartTime() {
+  
   uint32_t n_tries = 0;
   static const uint32_t max_tries = 50;
   do {
@@ -241,7 +257,7 @@ void PTBManager::StartRun() {
   } else {
     msgs_ << "<run_start>" << run_start_time_<< "</run_start>";
   }
-  msgs_ << "<success>true</success>";
+  return run_start_time_;
 }
 
 void PTBManager::StopRun() {
@@ -789,8 +805,13 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
     Log(warning,"Connection failed to establish. This might cause troubles later.");
   }
 
-  msgs_ << "<status>success</status>";
+  msgs_ << "<success>true</success>";
+  msgs_str_ = msgs_.str();
+  answers = new char[msgs_str_.size()+1];
+  sprintf(answers,"%s",msgs_str_.c_str());
+    
   // Most likely the connection will fail at this point. Not a big problem.
+  Log(verbose,"Returning from SetConfig with answer [%s]",answers);
 }
 
 void PTBManager::DumpConfigurationRegisters() {
@@ -840,7 +861,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_
   // Remapped the whole thing
 
   bool reverse_order = (conf_reg<reg)?true:false;
-  uint32_t prsc_pos;
+  //uint32_t prsc_pos;
   uint32_t lreg;
   uint32_t mask, bit_offset, input_word;
   uint64_t input_longword;
@@ -1275,7 +1296,7 @@ void PTBManager::GetSyncStartTime() {
   uint64_t ts_low = (uint64_t)ptb_start_ts_low_.value();
   uint64_t ts_high = (uint64_t)ptb_start_ts_high_.value();
 
-  run_start_time_ = (ts_high << 32) | (ts_low & 0xFFFFFFFF);
+  run_start_time_ = ((ts_high &0xFFFFFFFF) << 32) | (ts_low & 0xFFFFFFFF);
 
 }
 

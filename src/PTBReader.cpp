@@ -242,7 +242,7 @@ void PTBReader::InitConnection(bool force) {
     socket_ = NULL;
     throw;
   }
-
+  Log(verbose,"Connection opened successfully");
 }
 
 void PTBReader::ClientCollector() {
@@ -296,8 +296,11 @@ void PTBReader::ClientCollector() {
       // the bits within a byte are correct, though
       /// -- NOTE: The size of the pointer and the frame size in the call below must match
       //Log(debug,"Performing transaction with a pointer %u long and %d bytes",sizeof(reinterpret_cast<uint32_t*>(&frame[pos])[0]),frame_size_uint);
-      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&frame[pos]),frame_size_uint);
-      Log(verbose,"Received contents [%s]",display_bits(&frame[pos],frame_size_bytes).c_str());
+      uint32_t* data = reinterpret_cast_checked<uint32_t*>(&frame[pos]);
+      //      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&frame[pos]),frame_size_uint);
+      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,data,frame_size_uint);
+      Log(verbose,"Received contents (hex): [%08X %08X %08X %08X]",data[0],data[1],data[2],data[3]);
+      Log(verbose,"%s",display_bits(&frame[pos],frame_size_bytes).c_str());
 
       if (status == -1) {
         Log(warning,"Reached a timeout in the DMA transfer.");
@@ -308,8 +311,9 @@ void PTBReader::ClientCollector() {
         }
       } else {
         timeout_cnt_ = 0;
-        debug_ptr = reinterpret_cast<uint32_t*>(frame);
-        Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3]);
+        // debug_ptr = reinterpret_cast<uint32_t*>(frame);
+        // Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3])
+	  ;
 
         // Usual output data[31-0],data[63-32],data[95-64],data[127-96]
         // In little endian this means:
@@ -377,7 +381,7 @@ void PTBReader::ClientTransmiter() {
   first_timestamp_ = 0;
   last_timestamp_ = 0;
 
-  static uint32_t ipck = 0,iframe = 0;
+  static uint32_t ipck = 0;//,iframe = 0;
   static bool carry_on = true;
   //uint8_t frame[16];
   //uint8_t *frame_raw = NULL;
@@ -419,7 +423,7 @@ void PTBReader::ClientTransmiter() {
     // ipck   : Counter of bytes
     // iframe : Frame counter.
     // FIXME: Move all these variables out of the loop
-    ipck = 0,iframe = 0;
+    ipck = 0;//,iframe = 0;
     carry_on = true;
 
     // FIXME: Move part of this assigment out of the loop.
@@ -562,7 +566,7 @@ void PTBReader::ClientTransmiter() {
 
       // Log(verbose, "Frame processed\n");
       // Frame completed. check if we can wait for another or keep collecting
-      iframe += 1;
+      //iframe += 1;
 
       // The check for size rollover should use ipck instead of iframe
       // If we reach dangerously close to the max size of a payload then we should definitely close it and fragment it
