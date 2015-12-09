@@ -23,7 +23,7 @@ ifeq ($(MACHINE), armv7l)
    DEF      := -DARM
 #   CFLAGS   := -g -O0 $(DEF_CFLAGS)
 #   CFLAGS   := -O3 -march=armv7-a -mcpu=cortex-a9 -mfpu=neon-fp16 $(DEF_CFLAGS)
-   CFLAGS   := -O0 $(DEF_CFLAGS)
+   CFLAGS   := -march=armv7-a -O0 $(DEF_CFLAGS)
 #   CFLAGS   := -O1 -march=armv7-a -mcpu=cortex-a9 $(DEF_CFLAGS)
    LFLAGS   := $(DEF_LFLAGS) -L/usr/local/lib -lxdma
    EXT_TARS := 

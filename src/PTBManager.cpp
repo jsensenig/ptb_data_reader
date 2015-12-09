@@ -208,8 +208,18 @@ void PTBManager::StartRun() {
     throw PTBexception("Data reader not ready yet.");
     return;
   }
-  reader_->StartDataTaking();
-
+  try {
+    reader_->StartDataTaking();
+  }
+  catch(PTBexception &e) {
+    msgs_ << "<error>" << e.what() << "</error>";
+    return;
+  }
+  catch (...) {
+    msgs_ << "<error> Unknown error starting reader.</error>"; 
+    return;
+  }
+  
   // The GLB_EN is located in bin 31 of register 30
   SetEnableBit(true);
 
@@ -407,6 +417,7 @@ void PTBManager::FreeRegisters() {
 void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
   msgs_.clear();
   msgs_.str("");
+  
   // Only accept a new configuration if we are not running.
   // NFB: Not sure if I shouldn't always accept a config but simply place it in the cache.
   if (status_ == RUNNING) {
