@@ -52,6 +52,7 @@ public:
 class PTBReader {
 public:
 
+    // Bunch of structures that help manipulating the data
     struct Header {
 
       typedef uint32_t data_t;
@@ -116,7 +117,9 @@ public:
       short_nova_timestamp_t short_nova_timestamp : 27;
       data_packet_type_t     data_packet_type     : 3;
 
-      static size_t const size_words = sizeof(data_t);
+      static size_t const size_bytes = sizeof(data_t);
+      static size_t const size_u32 = sizeof(data_t)/sizeof(uint32_t);
+
       static data_size_t const num_bits_padding 		= 2;
       static data_size_t const num_bits_short_tstamp	= 27;
       static data_size_t const num_bits_packet_type	= 3;
@@ -165,9 +168,21 @@ public:
       static data_size_t const num_bits_bsu_rl     = 10;
       static data_size_t const num_bits_padding   = 30;
 
-      static size_t const size_words = 2*sizeof(uint64_t);
-      static size_t const size_words_ptb = 3*sizeof(uint32_t);
-      static size_t const ptb_offset = 0;
+      static size_t const size_bytes = 2*sizeof(uint64_t);
+      static size_t const size_u32 = size_bytes/sizeof(uint32_t);
+
+      // The size that arrives from the PTB
+      // NOTE: Not sure what this is for.
+      static size_t const size_words_ptb_u32 = 3;
+      static size_t const size_words_ptb_bytes = size_words_ptb_u32*sizeof(uint32_t);
+      // The offset to grab the data
+      static size_t const ptb_offset_u32 = 0;
+      static size_t const ptb_offset_bytes = ptb_offset_u32*sizeof(uint32_t);
+
+      // The payload position offset from the top of the frame (header + discard)
+      static size_t const payload_offset_u32 = 1+ptb_offset_u32;
+      static size_t const payload_offset_bytes = payload_offset_u32*sizeof(uint32_t);
+
 
     };
 
@@ -201,9 +216,17 @@ public:
         static trigger_type_t const rce_bc = 0x06;
         static trigger_type_t const rce_abc = 0x07;
 
-        static size_t const size_words = sizeof(uint32_t);
-        // payload offset from the DMA transition
-        static size_t const ptb_offset = 2*sizeof(uint32_t);
+        static size_t const size_bytes = sizeof(uint32_t);
+        static size_t const size_u32 = size_bytes/sizeof(uint32_t);
+
+        // The number of u32 that have to offset from the PTB packet to grab the data that matters
+        // In this case the two lsInts are empty and can be offset
+        static size_t const ptb_offset_u32 = 2;
+        static size_t const ptb_offset_bytes = ptb_offset_u32*sizeof(uint32_t);
+
+        // The payload position offset from the top of the frame (header + discard)
+        static size_t const payload_offset_u32 = 1;
+        static size_t const payload_offset_bytes = payload_offset_u32*sizeof(uint32_t);
 
         // Add a function that can be used to parse the trigger payload
         static std::string getTriggerName(trigger_type_t trigger_type) {
@@ -252,9 +275,15 @@ public:
         timestamp_t nova_timestamp : 64;
 
         static data_size_t const num_bits_timestamp = 64;
-        static size_t const size_words = sizeof(uint64_t);
+        static size_t const size_bytes = sizeof(uint64_t);
+        static size_t const size_u32 = size_bytes/sizeof(uint32_t);
+        // drop 1 int
+        static size_t const ptb_offset_u32 = 1;
+        static size_t const ptb_offset_bytes = ptb_offset_u32*sizeof(uint32_t);
+        // The payload position offset from the top of the frame (header + discard)
 
-        static size_t const ptb_offset = sizeof(uint32_t);
+        static size_t const payload_offset_u32 = 1+ptb_offset_u32;
+        static size_t const payload_offset_bytes = payload_offset_u32*sizeof(uint32_t);
 
     };
 
@@ -391,8 +420,8 @@ private:
   bool ready_;
 
   // Keeps frames stored
-  std::queue<uint8_t*> buffer_queue_; 
-  uint8_t *memory_pool_; 
+  std::queue<uint32_t*> buffer_queue_;
+  //uint8_t *memory_pool_;
   //std::queue<uint32_t*> buffer_queue_; 
   //  uint32_t *memory_pool_;
   
@@ -400,8 +429,17 @@ private:
   static const uint32_t max_packet_size = 0xFFFF;
   static const uint32_t frame_size_bits = 0x80; // the buffer is 128 bits
   static const uint32_t frame_size_bytes = 0x10; // 16 bytes
-  static const uint32_t frame_size_uint = 0x4; // 4xuint32_t
-  
+  static const uint32_t frame_size_u32 = 0x4; // 4xuint32_t
+  // This is the buffer size in number of frames
+  static const uint32_t buffer_size = 1024*1024;
+
+
+  // Warning pre_computed words
+  static const uint32_t WARN_TIMEOUT = 0x04000000;
+  static const uint32_t WARN_UNKNOWN_DATA = 0x02000000;
+
+  uint32_t *dma_buffer_;
+
   // A few more constants that are important
   // This is actually
   static const uint32_t fw_version_ = 0x4;
@@ -435,8 +473,8 @@ const uint32_t timeout_cnt_threshold_ = 1000;
   uint32_t first_timestamp_;
   uint32_t last_timestamp_;
 
-
-
+// Status flags to collect errors
+  bool status_failed_readout_;
 };
 
 #endif /* PTBREADER_H_ */

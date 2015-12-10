@@ -15,6 +15,7 @@ extern "C" {
 #include <pthread.h>         // For POSIX threads
 };
 #include <csignal>
+#include <thread>
 
 using namespace std;
 
@@ -34,15 +35,9 @@ void handler(int signal) {
   }
 }
 
-int main() {
-  //Logger::SetSeverity(Logger::verbose);
-  Logger::SetSeverity(Logger::warning);
 
-  // Register a signal handler
-  std::signal(SIGINT,handler);
-  // This doesn't work since the thread gets stuck in the constructor of ConfigServer
-  // Need to make the acceptance of the client into a separate thread.
-  try {
+void run() {
+
     ConfigServer*cfg = ConfigServer::get();
 
     //Log(debug) << "Going to sleep" <<endlog;
@@ -63,10 +58,26 @@ int main() {
       Log(info,"Waiting for thread %d",cfg->getThreadId());
       pthread_join(cfg->getThreadId(),NULL);
     }
+}
+
+int main() {
+  //Logger::SetSeverity(Logger::verbose);
+  Logger::SetSeverity(Logger::warning);
+  bool relaunch = true;
+  while(relaunch) {
+    try{
+      run();
+    } catch(...) {
+      // Nope. This is a terrible idea. What you want to do is wait for a few seconds and relaunch
+      //return -1;
+      Log(fatal,"An exception was caught. Waiting for 10 s and relaunching.");
+      std::this_thread::sleep_for (std::chrono::seconds(10));
+      relaunch = true;
+    }
   }
-  catch(...) {
-    return -1;
-  }
+
+  // Register a signal handler
+  std::signal(SIGINT,handler);
   return 0;
 }
 

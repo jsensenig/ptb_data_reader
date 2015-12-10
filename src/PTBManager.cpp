@@ -65,8 +65,6 @@ PTBManager::PTBManager(bool emu_mode) : reader_(0), cfg_srv_(0),status_(IDLE),em
 
 }
 
-
-
 PTBManager::~PTBManager() {
   Log(debug,"Destroying manager..." );
   FreeRegisters();

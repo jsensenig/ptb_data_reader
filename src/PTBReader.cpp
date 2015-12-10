@@ -282,12 +282,9 @@ void PTBReader::ClientCollector() {
     // First setup the DMA:
     ///FIXME: Maybe this code could be moved elsewhere to speed up initialization
     static int status = 0;
-#ifdef DEBUG
-    Log(debug,"Allocating the DMA buffer.");
-#endif
-    
-    uint8_t *frame = NULL;
-    uint32_t *data = NULL;
+//    Log(debug,"Allocating the DMA buffer.");
+      static const buffer_end = buffer_size*frame_size_u32
+    dma_buffer_ = nullptr;
     
     // -- Can easily increase this to avoid overlaps?
     // NOTE: This can be increased to bigger values but have to check
@@ -296,24 +293,20 @@ void PTBReader::ClientCollector() {
     // CDMA is only allocating 64 MB. On the other hand this buffer is only 16 MB long
     // The trick is going to be grabbing as much data as I can at once
     // Grab all this p
-    const uint32_t buffer_size = 1024*1024;
-    
-    uint32_t pos = 0;
-    
+
+    static uint32_t pos = 0;
+    // Start the timeout_cnt_ to catch too many timeouts.
     timeout_cnt_ = 0;
 
     // The bus is 16 bytes, and that should be the size of each frame
     // So this is allocating 16 MBytes. I should not need this much
-    frame = reinterpret_cast<uint8_t*>(xdma_alloc(buffer_size,frame_size_bytes));
-    //data = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,frame_size_uint));
+    dma_buffer_ = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,frame_size_u32));
     
     // I will copy the memory here immediately
-    memory_pool_ = new uint8_t[buffer_size*frame_size_bytes];
-#ifdef DEBUG
-    uint32_t* debug_ptr = NULL;
-#endif
+    //memory_pool_ = new uint32_t[buffer_size*frame_size_u32];
+
     // FIXME:Do we really need to zero the data?
-    std::memset(frame,0,buffer_size*frame_size_bytes);
+    //    std::memset(frame,0,buffer_size*frame_size_bytes);
     
     while (keep_collecting_) {
       //        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
@@ -323,7 +316,7 @@ void PTBReader::ClientCollector() {
       //Log(debug,"Performing transaction with a pointer %u long and %d bytes",sizeof(reinterpret_cast<uint32_t*>(&frame[pos])[0]),frame_size_uint);
       //uint32_t* data = reinterpret_cast_checked<uint32_t*>(&frame[pos]);
       
-      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&frame[pos]),frame_size_bytes);
+      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&dma_buffer_[pos]),frame_size_u32);
 
       //      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&data[pos],frame_size_uint);
       // Log(verbose,"Received contents (hex): [%08X %08X %08X %08X]",data[0],data[1],data[2],data[3]);
@@ -331,19 +324,27 @@ void PTBReader::ClientCollector() {
       //frame = reinterpret_cast<uint8_t*>(data);
       
       if (status == -1) {
-#ifdef DEBUG
-        Log(warning,"Reached a timeout in the DMA transfer.");
-#endif
+//#ifdef DEBUG
+//        Log(warning,"Reached a timeout in the DMA transfer.");
+//#endif
         timeout_cnt_++;
         if (timeout_cnt_ > timeout_cnt_threshold_) {
           Log(error,"Received too many timeouts. Failing the run.");
-          throw std::string("Reached timeout counter limit.");
+          // Artificially generate a warning packet
+            dma_buffer_[pos] = WARN_TIMEOUT;
+          // Actually, a goo way to work this out would be to send a warning word here indicating a timeout
+          // And let the run stopping be handled dowstream
+
+          // Don't throw. Actually this does not work at all since the thread has nothing that collects it
+          //throw std::string("Reached timeout counter limit.");
         }
-      } else {
+      }
+      /** Removed this but need to be careful that the timeout counter is reset when a new run is started
+      else {
+        // Would like to avoid this assignment
         timeout_cnt_ = 0;
-	std::memcpy(&memory_pool_[pos],&frame[pos],frame_size_bytes);
-	//std::memcpy(&memory_pool_[pos],&data[pos],frame_size_bytes)
-	// debug_ptr = reinterpret_cast<uint32_t*>(frame);
+        //std::memcpy(&memory_pool_[pos],&frame[pos],frame_size_bytes);
+        // debug_ptr = reinterpret_cast<uint32_t*>(frame);
         // Log(debug,"Received %08X %08X %08X %08X",frame[pos],frame[pos+1],frame[pos+2],frame[pos+3])
 	
         // Usual output data[31-0],data[63-32],data[95-64],data[127-96]
@@ -354,31 +355,27 @@ void PTBReader::ClientCollector() {
         // data[103-96],data[111-104],data[119-112],data[127-120]
 
         // If I reverse completely the byte assignment then I would be getting
-        /**
-	   data[103-96],data[111-104],data[119-112],data[127-120]
-                data[71-64],data[79-72],data[87-80],data[95-88]
-                data[39-32],data[47-40],data[55-48],data[63-56]
-                data[7-0],data[15-8],data[23-16],data[31-24],
-                in integers this means:
-                data[127-96],data[95-64],data[63-32],data[31-24]
-        **/
       }
+      **/
+
       // DMA transaction was successful.
       pthread_mutex_lock(&lock_);
-      buffer_queue_.push(&memory_pool_[pos]);
+      buffer_queue_.push(&dma_buffer_[pos]);
       //buffer_queue_.push(&frame[pos]);
       pthread_mutex_unlock(&lock_);
       //Log(debug,"Done storing the buffer");
-      pos += frame_size_bytes;
+      pos += frame_size_u32;
       //pos_pool += frame_size_bytes; 
-      if (pos+frame_size_bytes >= buffer_size*frame_size_bytes) {
-#ifdef DEBUG
-        Log(info,"Reached buffer size.Resetting to start.\n");
-#endif
+      if (pos+frame_size_u32 > buffer_end) {
+//#ifdef DEBUG
+//        Log(info,"Reached buffer size.Resetting to start.\n");
+//#endif
         pos = 0;
-      }
-    }
-    Log(warning,"Stopped collecting data.");
+      } // pos check
+    } // keep_collecting_
+//#ifdef DEBUG
+//    Log(warning,"Stopped collecting data.");
+//#endif
     /// We can't exit the engine here otherwise the memory mapped registers disappear and the queue vanishes causing a crash
     // Log(debug,"Shutting down the DMA engine.");
     // xdma_exit();
@@ -405,7 +402,7 @@ void PTBReader::ClientTransmiter() {
   // This should never happen. Sending a 64kB packet would be way overkill
   // It would be preferable to fragment the packet, b
   //FIXME: Implement fragmentation
-  uint8_t *eth_buffer = new uint8_t[max_packet_size]();
+  uint32_t *eth_buffer = new uint32_t[max_packet_size]();
 
   // this is not strictly accurate but it is close enough
   num_microslices_ = 0;
@@ -416,18 +413,22 @@ void PTBReader::ClientTransmiter() {
   first_timestamp_ = 0;
   last_timestamp_ = 0;
 
-  static uint32_t ipck = 0;//,iframe = 0;
+  // This will keep track on the number of u32 words
+  // In the end the size of the buffer will be ipck*sizeof(uint32_t);
+  static uint32_t ipck = 0;
   static bool carry_on = true;
+  static bool ts_arrived = false;
   //uint8_t frame[16];
   //uint8_t *frame_raw = NULL;
-  uint8_t* frame = NULL;
+  uint32_t* frame = NULL;
   //uint32_t frame_header = 0;
 #ifdef DEBUG
   uint32_t* frame_casted = NULL;
 #endif
   //uint64_t start_run_time_ = ClockGetTime();
-  static size_t offset_ts = Word_Header::size_words+TimestampPayload::ptb_offset;
+  static const size_t offset_ts = Word_Header::size_bytes+TimestampPayload::ptb_offset_bytes;
 
+  ts_arrived = false;
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
   while(keep_transmitting_) {
@@ -461,7 +462,7 @@ void PTBReader::ClientTransmiter() {
     // ipck   : Counter of bytes
     // iframe : Frame counter.
     // FIXME: Move all these variables out of the loop
-    ipck = 0;//,iframe = 0;
+    ipck = 0;
     carry_on = true;
 
     // FIXME: Move part of this assigment out of the loop.
@@ -483,14 +484,25 @@ void PTBReader::ClientTransmiter() {
 
 
       // Grab a frame...if there is one to grab
+      // There should be a better way to set up this wait
+      // Ideally we would love to have a inerrupt sending a callback the moment that there
+      // buffer_queue_ is not empty
+
       if (buffer_queue_.size() == 0) {
         continue;
       }
+
       //Log(debug,"Grabbing from queue");
       pthread_mutex_lock(&lock_);
       frame = buffer_queue_.front();
       buffer_queue_.pop();
       pthread_mutex_unlock(&lock_);
+
+      // FIXME: If the PTBreader is still slow after these changes modify the
+      // software to simply send the while thing at once without resizing the packets
+
+      // All packets become 16 bytes long and send everything as collected
+
 #ifdef DEBUG
       frame_casted = reinterpret_cast_checked<uint32_t*>(frame);
       Log(debug,"Grabbed : %08X %08X %08X %08X",frame_casted[0],frame_casted[1],frame_casted[2],frame_casted[3]);
@@ -527,6 +539,8 @@ void PTBReader::ClientTransmiter() {
       // between the sync pulse and the timestamps starting to be populated in the NOvA firmware.
       // Unfortunately it doesn't seem that anything can be done about it
 
+      // Ghost frames are a mess. For the moment keep them but need to set up something more reliable.
+      // Most likely on the firmware side
       if ((frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
 #ifdef DEBUG
         Log(warning,"Dropping ghost frame");
@@ -535,21 +549,25 @@ void PTBReader::ClientTransmiter() {
       }
 
       // FIXME: THis is just temporary. Have to fix the firmware to grab the proper data
-      if ((first_timestamp_ == 0) && (frame_header->data_packet_type != DataTypeTimestamp)) {
+      // This problem is strongly related with the previous. Will have to fix it on the firmware side
+      if (!ts_arrived && (frame_header->data_packet_type != DataTypeTimestamp)) {
 #ifdef DEBUG
+      if ((first_timestamp_ == 0) && (frame_header->data_packet_type != DataTypeTimestamp)) {
 	Log(warning,"Dropping frames until a timestamp shows up.");
 #endif
-	continue;
+	      continue;
       }
+
       /// -- Check if it is a TS frame
       if(frame_header->data_packet_type == DataTypeTimestamp) {
+        ts_arrived = true;
         // This is a timestamp word.
         // Check if this is the first TS after StartRun
         // Log(verbose, "Timestamp frame...\n");
         // Log(verbose, "Sending the packet\n");
 	// Log(verbose,"Offset %u ",offset);
 #ifdef DEBUG
-        TimestampPayload *t = reinterpret_cast_checked<TimestampPayload *>(&(frame[offset_ts]));
+        TimestampPayload *t = reinterpret_cast<TimestampPayload *>(&(frame[TimestampPayload::payload_offset_u32]));
 	Log(verbose,"Timestamp first estimate  %" PRIX64 " (%" PRIu64 ")",t->nova_timestamp,t->nova_timestamp);
 	std::cout << "Just to make sure: " << t->nova_timestamp << std::endl;
 
@@ -570,18 +588,21 @@ void PTBReader::ClientTransmiter() {
           last_timestamp_ = t->nova_timestamp;
         }
 #endif
-        std::memcpy(&eth_buffer[ipck],frame,Word_Header::size_words);
-        ipck += Word_Header::size_words;
+        std::memcpy(&eth_buffer[ipck],frame,Word_Header::size_bytes);
+        ipck += Word_Header::size_u32;
 
         // Don't forget to apply the ptb_offset!!
-        std::memcpy(&eth_buffer[ipck],&(frame[offset_ts]),TimestampPayload::size_words);
-        ipck += TimestampPayload::size_words;
-	//Log(verbose,"Intermediate packet:");
-	//print_bits(eth_buffer,ipck);
-        carry_on = false;
+        std::memcpy(&eth_buffer[ipck],&(frame[TimestampPayload::payload_offset_u32]),TimestampPayload::size_bytes);
+        ipck += TimestampPayload::size_u32;
+#ifdef DEBUG
+        //Log(verbose,"Intermediate packet:");
+        //print_bits(eth_buffer,ipck);
+        // No support for
         fragmented_ = false;
         num_word_tstamp_++;
+#endif
         // break out of the cycle
+        carry_on = false;
         break;
       }
 
@@ -589,8 +610,8 @@ void PTBReader::ClientTransmiter() {
       // -- Grab the header (valid for all situations
       // Log(verbose, "Grabbing the header\n");
 
-      std::memcpy(&eth_buffer[ipck],frame,Word_Header::size_words);
-      ipck += Word_Header::size_words;
+      std::memcpy(&eth_buffer[ipck],frame,Word_Header::size_bytes);
+      ipck += Word_Header::size_u32;
 
       switch(frame_header->data_packet_type) {
         case DataTypeCounter:
@@ -600,13 +621,12 @@ void PTBReader::ClientTransmiter() {
 #endif
           // The data that is in the header is from the BSU's, so we can simply copy the payload
           // and then just add the 2 additional bits from the header at the end
-          std::memcpy(&eth_buffer[ipck],&(frame[Word_Header::size_words]),CounterPayload::size_words_ptb);
+	    // I put it hardcoded so that I don't end up messing up with it
+          std::memcpy(&eth_buffer[ipck],&(frame[CounterPayload::payload_offset_u32]),CounterPayload::size_words_ptb_bytes);
           // Now add the remaining 2 bits to the lsb of the next byte and pad the rest with zeros
-          ipck += CounterPayload::size_words_ptb;
+          ipck += CounterPayload::size_words_ptb_u32;
           eth_buffer[ipck] = 0x2 & frame_header->padding;
           ipck+=1;
-          // There's 3 more bytes that have to be padded
-	  eth_buffer[ipck] = eth_buffer[ipck+1] = eth_buffer[ipck+2] = 0x00;
 	  
 #ifdef DEBUG
 	  //  for (uint32_t i = 0; i < 3; ++i) {
@@ -621,8 +641,8 @@ void PTBReader::ClientTransmiter() {
           break;
         case DataTypeTrigger:
           // Log(verbose, "Trigger word\n");
-          std::memcpy(&eth_buffer[ipck],&frame[Word_Header::size_words+TriggerPayload::ptb_offset],TriggerPayload::size_words);
-          ipck += TriggerPayload::size_words;
+          std::memcpy(&eth_buffer[ipck],&frame[TriggerPayload::payload_offset_u32],TriggerPayload::size_bytes);
+          ipck += TriggerPayload::size_u32;
 	  // Log(verbose,"Intermediate packet:");
 	  // print_bits(eth_buffer,ipck);
 #ifdef DEBUG
@@ -640,16 +660,21 @@ void PTBReader::ClientTransmiter() {
 #endif
           break;
         default:
+          eth_buffer[ipck] = WARN_UNKNOWN_DATA;
+          ipck += 1;
 #ifdef DEBUG
 	  Log(warning,"Unknown data type [%X] (%s)",frame[0] & 0xFF, display_bits(&frame_header,sizeof(frame_header)).c_str());
 #endif
+
+	    // Another warning word
+
 	  // char msg[100];
 	  
           // sprintf(msg,"Unknown data type [%X] (%s)",frame[0] & 0xFF, display_bits(&frame_header,sizeof(frame_header)).c_str());
           // throw PTBexception(msg);
-	  keep_transmitting_ = false;
-	  keep_collecting_ = false;
-      }
+	  //	  keep_transmitting_ = false;
+	  //	  keep_collecting_ = false;
+      } // case
 
       // Log(verbose, "Frame processed\n");
       // Frame completed. check if we can wait for another or keep collecting

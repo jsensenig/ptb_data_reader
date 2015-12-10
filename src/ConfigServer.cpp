@@ -86,6 +86,8 @@ void* ConfigServer::listen(void *arg) {
     }
   }
   catch(SocketException &e) {
+    // The problem is that from here there is nothing else that can be done
+    // return to main and main will make sure to clean up and relaunch
     Log(error,"Socket exception caught : %s",e.what());
     throw;
     //std::abort();
