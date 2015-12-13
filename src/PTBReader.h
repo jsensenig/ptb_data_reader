@@ -40,6 +40,11 @@ public:
 };
 
 
+struct DMABuffer {
+    void *address;
+    size_t size;
+};
+
 /**
  * This class is responsible for reading the DMA and transferring the data to the server.
  * \class PTBReader
@@ -419,12 +424,16 @@ private:
 
   bool ready_;
 
+
+#ifdef ARM_XDMA
   // Keeps frames stored
   std::queue<uint32_t*> buffer_queue_;
   //uint8_t *memory_pool_;
   //std::queue<uint32_t*> buffer_queue_; 
   //  uint32_t *memory_pool_;
-  
+#elif ARM_POTHOS
+  std::queue<DMABuffer> buffer_queue_;
+#endif
   // A few auxiliary constants
   static const uint32_t max_packet_size = 0xFFFF;
   static const uint32_t frame_size_bits = 0x80; // the buffer is 128 bits
