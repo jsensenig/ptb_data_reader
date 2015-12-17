@@ -70,7 +70,7 @@ int main() {
     } catch(...) {
       // Nope. This is a terrible idea. What you want to do is wait for a few seconds and relaunch
       //return -1;
-      Log(fatal,"An exception was caught. Waiting for 10 s and relaunching.");
+      Log(warning,"An exception was caught. Waiting for 10 s and relaunching.");
       std::this_thread::sleep_for (std::chrono::seconds(10));
       relaunch = true;
     }

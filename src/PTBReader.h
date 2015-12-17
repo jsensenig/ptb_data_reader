@@ -19,6 +19,10 @@ extern "C" {
 
 #include <cstdlib>
 #include <cstring>
+
+#ifdef ARM_POTHOS
+#include "pothos_zynq_dma_driver.h"
+#endif
 class TCPSocket;
 
 /** Auxiliary classes
@@ -41,8 +45,9 @@ public:
 
 
 struct DMABuffer {
-    void *address;
+    uint32_t *data_ptr;
     size_t size;
+    int handle;
 };
 
 /**
@@ -425,14 +430,11 @@ private:
   bool ready_;
 
 
-#ifdef ARM_XDMA
+#ifdef ARM_POTHOS
+  std::queue<DMABuffer*> buffer_queue_;
+#else
   // Keeps frames stored
   std::queue<uint32_t*> buffer_queue_;
-  //uint8_t *memory_pool_;
-  //std::queue<uint32_t*> buffer_queue_; 
-  //  uint32_t *memory_pool_;
-#elif ARM_POTHOS
-  std::queue<DMABuffer> buffer_queue_;
 #endif
   // A few auxiliary constants
   static const uint32_t max_packet_size = 0xFFFF;
@@ -484,6 +486,9 @@ const uint32_t timeout_cnt_threshold_ = 1000;
 
 // Status flags to collect errors
   bool status_failed_readout_;
+#ifdef ARM_POTHOS
+  pzdud_t *s2mm_;
+#endif
 };
 
 #endif /* PTBREADER_H_ */
