@@ -14,6 +14,12 @@ uint32_t CreateMask(uint32_t begin, uint32_t end);
 uint32_t SetBitRange(uint32_t content, uint32_t value, uint32_t pos, uint32_t len);
 const std::string currentDateTime();
 
+typedef struct LocalRegister {
+  void      *address;
+  // Should use this method to access the value held in address
+  // since it shortens the command
+  volatile uint32_t& value () {return *(static_cast<volatile uint32_t*>(address));}
+} LocalRegister;
 
 // JCF, Jul-16-2015
 
@@ -39,5 +45,16 @@ template <typename S, typename T>
   return outptr;
 }
 
+// PTBregisters declarations
+void *MapPhysMemory(uint32_t base_addr, uint32_t high_addr);
+void UnmapPhysMemory(void * address, size_t size, bool close_file = false);
+uint32_t Xil_In32(uint32_t Addr);
+void Xil_Out32(uint32_t OutAddress, uint32_t Value);
+
+#define WriteReg(BaseAddress, RegOffset, Data) \
+    Xil_Out32((BaseAddress) + (RegOffset), (uint32_t)(Data))
+
+#define ReadReg(BaseAddress, RegOffset) \
+    Xil_In32((BaseAddress) + (RegOffset))
 
 #endif /* UTIL_H_ */

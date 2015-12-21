@@ -13,17 +13,12 @@
 #include <sstream>
 
 #include "pugixml.hpp"
+#include "util.h"
 
 // -- Forward declarations
 class PTBReader;
 class ConfigServer;
 
-typedef struct LocalRegister {
-  void      *address;
-  // Should use this method to access the value held in address
-  // since it shortens the command
-  volatile uint32_t& value () {return *(static_cast<volatile uint32_t*>(address));}
-} LocalRegister;
 
 /**
  * \class PTBManager

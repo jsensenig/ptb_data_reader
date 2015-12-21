@@ -34,92 +34,13 @@ typedef struct mapped_register {
     uint32_t *addr_offset;
 } mapped_register;
 
-uint32_t g_n_registers_;
+//uint32_t g_n_registers_;
+extern int g_mem_fd;
 
-mapped_register conf_reg;
-mapped_register time_reg;
-
-void SetupConfRegisters() {
-	conf_reg.dev_id = 0;
-	conf_reg.base_addr = 0x43C00000;
-	conf_reg.high_addr = 0x43C0FFFF;
-	conf_reg.n_registers = 40;
-	conf_reg.addr_offset = new uint32_t[conf_reg.n_registers];
-	unsigned int i = 0;
-	for (i = 0; i < conf_reg.n_registers; ++i) {
-	 conf_reg.addr_offset[i] = i*4;
-		Log(debug,
-				"Setting configuration register (%u) to address 0x%08X + 0x%08X =  [0x%08X].",
-				i,
-				conf_reg.base_addr,
-				conf_reg.addr_offset[i],
-				conf_reg.base_addr+conf_reg.addr_offset[i]);
-	}
-	Log(debug,"Configuration registers set.");
-}
+extern mapped_register conf_reg;
 
 
-void SetupTimeRegisters() {
-  time_reg.dev_id = 0;
-  // FIXME: Update this to the IP address
-  time_reg.base_addr = 0x43C10000;
-  time_reg.high_addr = 0x43C1FFFF;
-  time_reg.n_registers = 4;
-  time_reg.addr_offset = new uint32_t[time_reg.n_registers];
-  unsigned int i = 0;
-  for (i = 0; i < time_reg.n_registers; ++i) {
-   time_reg.addr_offset[i] = i*4;
-    Log(debug,
-        "Setting timestamp register (%u) to address 0x%08X + 0x%08X =  [0x%08X].",
-        i,
-        time_reg.base_addr,
-        time_reg.addr_offset[i],
-        time_reg.base_addr+time_reg.addr_offset[i]);
-  }
-  Log(debug,"Time registers set.");
-}
-
-/**
- * MapPhysMemory
- */
-
-void *MapPhysMemory(uint32_t base_addr, uint32_t high_addr) {
-  int memfd;
-  void *mapped_addr;
-  off_t dev_base = base_addr;
-  memfd = open("/dev/mem",O_RDWR | O_SYNC);
-  if (memfd == -1) {
-    Log(error,"Failed to map register [0x%08X 0x%08X].",base_addr,high_addr);
-    return NULL;
-  }
-  // Map into user space the area of memory containing the device
-  mapped_addr = mmap(0, (high_addr-base_addr), PROT_READ | PROT_WRITE, MAP_SHARED, memfd, dev_base & ~(high_addr-base_addr-1));
-  if ( reinterpret_cast<int32_t>(mapped_addr) == -1) {
-    Log(error,"Failed to map register [0x%08X 0x%08X] into virtual address.",base_addr,high_addr);
-    mapped_addr = NULL;
-  }
-
-  close(memfd);
-
-  return mapped_addr;
-
-}
-uint32_t Xil_In32(uint32_t Addr)
-{
-	return *(volatile uint32_t *) Addr;
-}
-
-
-void Xil_Out32(uint32_t OutAddress, uint32_t Value)
-{
-	*(volatile uint32_t *) OutAddress = Value;
-}
-
-#define WriteReg(BaseAddress, RegOffset, Data) \
-  	Xil_Out32((BaseAddress) + (RegOffset), (uint32_t)(Data))
-
-#define ReadReg(BaseAddress, RegOffset) \
-    Xil_In32((BaseAddress) + (RegOffset))
+extern mapped_register data_reg;
 
 
 

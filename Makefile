@@ -4,11 +4,17 @@ CC         := g++
 BIN        := $(PWD)/bin
 DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket 
 DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src 
+#DMA_TYPE	:= -DARM_XDMA
+DMA_TYPE	:= -DARM_MMAP
+#DMA_TYPE	:= -DARM_POTHOS
+
+
 ifeq (($MACHINE),armv7l)
    $(info Adding extra flags for uZed compilation...)
-   DEF_CFLAGS += -DDATA_READER 
-   DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/zynq-xdma/dev
-   DEF_CFLAGS += -I$(PWD)/src -I$(PWD)/contrib/linux_dma/zynq-xdma/lib 
+   DEF_CFLAGS += -DDATA_READER
+   DEF_CFLAGS += -I$(PWD)/src 
+#   DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/zynq-xdma/dev
+#   DEF_CFLAGS += -I$(PWD)/src -I$(PWD)/contrib/linux_dma/zynq-xdma/lib 
 endif
 DEF_LFLAGS := -lpthread  
 #-lrt
@@ -22,12 +28,12 @@ ifeq ($(MACHINE), armv7l)
    $(info ======================)
 #   DEF      := -DARM_XDMA
 #   LFLAGS   := $(DEF_LFLAGS) -L/usr/local/lib -lxdma
-    DEF	:= -DARM_POTHOS
+#    DEF	:= -DARM_POTHOS
     LFLAGS   := $(DEF_LFLAGS) -static
 #   CFLAGS   := -g -O0 $(DEF_CFLAGS)
 #   CFLAGS   := -O3 -march=armv7-a -mcpu=cortex-a9 -mfpu=neon-fp16 $(DEF_CFLAGS)
 #   CFLAGS   := -O1 -march=armv7-a -mcpu=cortex-a9 $(DEF_CFLAGS)
-   CFLAGS   := -march=armv7-a -O0 $(DEF_CFLAGS)
+   CFLAGS   := -march=armv7-a -O0 $(DEF_CFLAGS) $(DMA_TYPE)
    EXT_TARS := 
    CLN      := 
    UTL_DIR  := $(PWD)/util/ptb
@@ -37,8 +43,8 @@ else
    $(info +++ Compiling for Server) 
    DEF      := 
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
-   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 -m32 -DARM_POTHOS
-   LFLAGS   := $(DEF_LFLAGS)
+   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 -m32 $(DMA_TYPE)
+   LFLAGS   := $(DEF_LFLAGS) 
    EXT_TARS := 
    CLN      := server_clean
    UTL_DIR  := $(PWD)/util/server

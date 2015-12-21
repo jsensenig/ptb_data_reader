@@ -11,9 +11,9 @@
 #include "ConfigServer.h"
 #include "PTBexception.h"
 #include "PracticalSocket.h"
-//#include "util.h"
+#include "util.h"
 
-#ifdef ARM
+#if defined(ARM_XDMA) || defined(ARM_MMAP) || defined(ARM_POTHOS)
 #include "ptb_registers.h"
 #endif /*ARM*/
 
@@ -40,6 +40,13 @@ extern "C" {
  */
 
 #define CTL_BASE_REG_VAL 0x00000000
+
+
+mapped_register conf_reg;
+
+
+
+
 
 
 // Init with a new reader attached
@@ -366,12 +373,12 @@ void PTBManager::SetupRegisters() {
       register_map_[i].value() = 0;
     }
 
-    //-- Now repeat for the time registers
-    SetupTimeRegisters();
-    mapped_time_base_addr_ = MapPhysMemory(time_reg.base_addr,time_reg.high_addr);
-    Log(debug,"Received virtual address for run start timestamp : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_time_base_addr_));
-    ptb_start_ts_high_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + time_reg.addr_offset[0]);
-    ptb_start_ts_low_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + time_reg.addr_offset[1]);
+//    //-- Now repeat for the time registers
+//    SetupTimeRegisters();
+//    mapped_time_base_addr_ = MapPhysMemory(data_reg.base_addr,data_reg.high_addr);
+//    Log(debug,"Received virtual address for run start timestamp : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_time_base_addr_));
+//    ptb_start_ts_high_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + data_reg.addr_offset[0]);
+//    ptb_start_ts_low_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_time_base_addr_) + data_reg.addr_offset[1]);
 
 #endif /*ARM*/
   }
@@ -397,7 +404,7 @@ void PTBManager::FreeRegisters() {
     Log(info,"Clearing the registers.");
 #ifdef ARM
     munmap(mapped_conf_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
-    munmap(mapped_time_base_addr_,time_reg.high_addr-time_reg.base_addr);
+    munmap(mapped_time_base_addr_,data_reg.high_addr-data_reg.base_addr);
 #endif /*ARM*/
     Log(debug,"Configuration registers unmapped.");
   }
@@ -1261,7 +1268,7 @@ void PTBManager::SetBit(uint32_t reg, uint32_t bit, bool status) {
   // Things are more complicated than this. We want to set a single bit, regardless of what is around
   //register_map_[reg].value() ^= ((status?0x1:0x0) ^ register_map_[reg].value()) & ( 1 << bit);
   Log(debug,"Reading the bit %u from reg %u",bit,reg);
-#ifdef ARM
+#if defined(ARM_XDMA) || defined(ARM_MMAP)
   uint32_t value = Xil_In32((uint32_t)register_map_[reg].address);
   uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
 

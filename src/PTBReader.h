@@ -23,6 +23,12 @@ extern "C" {
 #ifdef ARM_POTHOS
 #include "pothos_zynq_dma_driver.h"
 #endif
+#ifdef ARM_XDMA
+#include "xdma.h"
+#endif
+#ifdef ARM_MMAP
+#include "util.h"
+#endif
 class TCPSocket;
 
 /** Auxiliary classes
@@ -430,19 +436,34 @@ private:
   bool ready_;
 
 
-#ifdef ARM_POTHOS
-  std::queue<DMABuffer*> buffer_queue_;
-#else
-  // Keeps frames stored
+//#ifdef ARM_POTHOS
+//  std::queue<DMABuffer*> buffer_queue_;
+//endif
+#ifdef ARM_XDMA
+// declare a bunch of variables that are common to the program
   std::queue<uint32_t*> buffer_queue_;
+  struct xdma_dev xdma_device;
+  struct xdma_chan_cfg xdma_dst_cfg;
+  struct xdma_buf_info xdma_buf;
+  struct xdma_transfer xdma_trans;
 #endif
+
+#ifdef ARM_MMAP
+  // Keeps frames stored
+  LocalRegister control_register_;
+  LocalRegister data_register_;
+  std::queue<uint32_t*> buffer_queue_;
+  uint32_t * memory_pool_;
+  void * mapped_data_base_addr_;
+#endif
+
   // A few auxiliary constants
   static const uint32_t max_packet_size = 0xFFFF;
   static const uint32_t frame_size_bits = 0x80; // the buffer is 128 bits
   static const uint32_t frame_size_bytes = 0x10; // 16 bytes
   static const uint32_t frame_size_u32 = 0x4; // 4xuint32_t
   // This is the buffer size in number of frames
-  static const uint32_t buffer_size = 1024*1024;
+  static const uint32_t buffer_size = 2*1024*1024;//1024*1024;
 
 
   // Warning pre_computed words
@@ -486,9 +507,11 @@ const uint32_t timeout_cnt_threshold_ = 1000;
 
 // Status flags to collect errors
   bool status_failed_readout_;
-#ifdef ARM_POTHOS
-  pzdud_t *s2mm_;
-#endif
+
+
+  //#ifdef ARM_POTHOS
+//  pzdud_t *s2mm_;
+//#endif
 };
 
 #endif /* PTBREADER_H_ */

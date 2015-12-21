@@ -10,12 +10,17 @@
 #include "PracticalSocket.h"
 #include "PTBexception.h"
 #include "util.h"
+#include "ptb_registers.h"
 
 extern "C" {
 #include <sys/time.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
+
 };
 
 #include <cstdint>
@@ -28,12 +33,17 @@ extern "C" {
 #include <cstring>
 
 #ifdef ARM_XDMA
-#include "libxdma.h"
-#elif ARM_POTHOS
-#include "pothos_zynq_dma_driver.h"
-#endif /*ARM*/
+// declare a bunch of variables that are used by the DMA driver
 
+static int g_dma_fd; // mmapped file descriptor
+static uint8_t *g_dma_mem_map;    /* mmapped array of bytes representing the transferred memory */
+#define DMA_BUFFER_SIZE 33554432 // 32 MB buffer for the DMA trasaction. Should give plenty of
+                                  // contigency for the CPU
+//#elif ARM_POTHOS
+//#include "pothos_zynq_dma_driver.h"
+#endif /*ARM_XDMA*/
 
+mapped_register data_reg;
 
 void print_bits(void* memstart, size_t nbytes) {
 
@@ -140,22 +150,34 @@ void PTBReader::StopDataTaking() {
   //FIXME: There is a risk that the thread is killed before
   // the execution reaches this point.
   Log(warning,"Shutting down the DMA engine.");
-  xdma_exit();
-#endif
-#ifdef ARM_POTHOS
-  // All this below should only be done after not only the DMA  is finished
-  // but the waiting buffers are done as well.
-  int ret = pzdud_halt(s2mm_);
-  if (ret != PZDUD_OK) {
-    Log(warning,"Failed to halt the DMA engine");
+  //xdma_exit();
+  if (munmap(g_dma_mem_map, DMA_BUFFER_SIZE) == -1) {
+    Log(error,"Error un-mmapping the DMA file");
   }
+  /* Un-mmaping doesn't close the file.
+   */
+  close(g_dma_fd);
 
-  // Free the DMA channel
-  pzdud_free(s2mm_);
-
-  // cleanup the DMA channel
-  pzdud_destroy(s2mm_);
 #endif
+
+#ifdef ARM_MMAP
+  // Release the mmapped memory for the data
+  UnmapPhysMemory(mapped_data_base_addr_,(data_reg.high_addr-data_reg.base_addr));
+#endif /*ARM_MMAP*/
+//#ifdef ARM_POTHOS
+//  // All this below should only be done after not only the DMA  is finished
+//  // but the waiting buffers are done as well.
+//  int ret = pzdud_halt(s2mm_);
+//  if (ret != PZDUD_OK) {
+//    Log(warning,"Failed to halt the DMA engine");
+//  }
+//
+//  // Free the DMA channel
+//  pzdud_free(s2mm_);
+//
+//  // cleanup the DMA channel
+//  pzdud_destroy(s2mm_);
+//#endif
 
   Log(debug,"DMA engine done.");
 
@@ -164,14 +186,79 @@ void PTBReader::StopDataTaking() {
 void PTBReader::StartDataTaking() {
   //FIXME: Migrate this to C++11 constructs
   if (ready_) {
-# ifdef ARM
-    int status = xdma_init();
+#ifdef ARM_XDMA
+    int status = 0;
+
+    g_dma_fd = open("/dev/xdma", O_RDWR | O_CREAT | O_TRUNC, (mode_t) 0600);
+    if (g_dma_fd == -1) {
+      Log(error,"Error opening DMA mem file for writing");
+      status = -1;
+    }
+
+    /* mmap the file to get access to the memory area.
+       */
+    // Map 32 MB (to allow for a circular buffer of 8192 pages
+    g_dma_mem_map = (uint8_t*)mmap(0, DMA_BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, g_dma_fd, 0);
+    if (g_dma_mem_map == MAP_FAILED) {
+      close(g_dma_fd);
+      Log(error,"Error mmapping the DMA file");
+      status = -2;
+    }
+    // get number of DMA devices
+    int num_devices = 0;
+    if (ioctl(g_dma_fd, XDMA_GET_NUM_DEVICES, &num_devices) < 0) {
+      Log(error,"Error ioctl getting device num");
+      status = -3;
+    }
+    // I know that we only have 1 device
+    if (num_devices <= 0) {
+      Log(error,"Couldn't find DMA devices (expected 1).");
+      status = -4;
+    } else {
+      Log(info,"Found %d DMA devices (1 expected)",num_devices);
+    }
+
+    // Fill up the structure
+    xdma_device.tx_chan = 0;
+    xdma_device.rx_chan = 0;
+    xdma_device.tx_cmp = 0;
+    xdma_device.rx_cmp = 0;
+    xdma_device.device_id = 0;
+
+    // Get device info
+    if (ioctl(g_dma_fd, XDMA_GET_DEV_INFO, &xdma_device) < 0) {
+      Log(error,"Error ioctl getting device info");
+      status = -5;
+    }
+    // Print the addresses
+    Log(info,"Device info: tx chan: %x, tx cmp:%x, rx chan: %x, rx cmp: %x",
+         xdma_device.tx_chan, xdma_device.tx_cmp, xdma_device.rx_chan, xdma_device.rx_cmp);
+
+    // Set up the destination channel
+    xdma_dst_cfg.chan = xdma_device.rx_chan;
+    xdma_dst_cfg.dir = XDMA_DEV_TO_MEM;
+    xdma_dst_cfg.coalesc = 1;
+    xdma_dst_cfg.delay = 0;
+    xdma_dst_cfg.reset = 0;
+
+    if (ioctl(g_dma_fd, XDMA_DEVICE_CONTROL, &xdma_dst_cfg) < 0) {
+      Log(error,"Error ioctl config dst (rx) chan");
+      status = -6;
+    }
+
     if (status < 0) {
-      Log(error,"Failed to initialize the DMA engine for data collection.");
+      Log(error,"Failed to initialize the DMA engine for data collection (status = %d).",status);
       throw PTBexception("Failed to initialize the DMA engine for PTB data collection.");
       return;
     }
 #endif
+
+#ifdef ARM_MMAP
+    // Map the physical addresses
+    mapped_data_base_addr_ = MapPhysMemory(data_reg.base_addr,data_reg.high_addr);
+    control_register_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_data_base_addr_) + data_reg.addr_offset[0]);
+    data_register_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_data_base_addr_) + data_reg.addr_offset[1]);
+#endif /*ARM_MMAP*/
     // We are ready to do business. Start reading the DMA into the queue.
     Log(verbose, "==> Creating collector\n" );
     keep_collecting_ = true;
@@ -298,59 +385,84 @@ void PTBReader::ClientCollector() {
     // Registers should be setup already.
     // First setup the DMA:
     ///FIXME: Maybe this code could be moved elsewhere to speed up initialization
-    static int status = 0;
+    //static int status = 0;
     //    Log(debug,"Allocating the DMA buffer.");
-    static const buffer_end = buffer_size*frame_size_u32
-        dma_buffer_ = nullptr;
-
-    // -- Can easily increase this to avoid overlaps?
-    // NOTE: This can be increased to bigger values but have to check
-    // with the DMA driver to see if the buffer from the DMA is appropriate.
-    // At the moment the map size is set to 256 MB. This doesn't seem right as the
-    // CDMA is only allocating 64 MB. On the other hand this buffer is only 16 MB long
-    // The trick is going to be grabbing as much data as I can at once
-    // Grab all this p
+//    static const buffer_end = buffer_size*frame_size_u32
+    dma_buffer_ = nullptr;
+    // the end of the buffer is the size in number uint32_t
+    static const uint32_t buffer_end = DMA_BUFFER_SIZE/sizeof(uint32_t);
 
     static uint32_t pos = 0;
-    // Start the timeout_cnt_ to catch too many timeouts.
-    timeout_cnt_ = 0;
+    // For the moment let's try to read without timeouts
+//    // Start the timeout_cnt_ to catch too many timeouts.
+//    timeout_cnt_ = 0;
 
-    // The bus is 16 bytes, and that should be the size of each frame
-    // So this is allocating 16 MBytes. I should not need this much
-    dma_buffer_ = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,frame_size_u32));
+    // This is wrong. The alloc should not be necessary.
+    // I just want to grab a buffer that has a specific size
+    //    // The bus is 16 bytes, and that should be the size of each frame
+    //    // So this is allocating 16 MBytes. I should not need this much
+    //    dma_buffer_ = reinterpret_cast<uint32_t*>(xdma_alloc(buffer_size,frame_size_u32));
 
     // I will copy the memory here immediately
     //memory_pool_ = new uint32_t[buffer_size*frame_size_u32];
 
     // FIXME:Do we really need to zero the data?
     //    std::memset(frame,0,buffer_size*frame_size_bytes);
-    std::chrono::high_resolution_clock::time_point t1 = high_resolution_clock::now();
+    int ret = 0;
+    pos = 0; // pos is in units of uint32_t
+
+    // Setup parts of the structure that are common to all transfers
+    xdma_buf.chan = xdma_device.rx_chan;
+    xdma_buf.completion = xdma_device.rx_cmp;
+    xdma_buf.cookie = 0;
+
+    xdma_trans.chan = xdma_device.rx_chan;
+    xdma_trans.completion =  xdma_device.rx_cmp;
+
+    dma_buffer_ = reinterpret_cast<uint32_t*>(g_dma_mem_map);
+    uint64_t total_duration = 0;
+    uint32_t iterations = 0;
+    auto begin = std::chrono::high_resolution_clock::now();
 
     while (keep_collecting_) {
-      //        Log(debug,"Calling for a transaction on position %d %08X",pos,&(frame[pos]));
-      // the DMA passes data in little endian, i.e., the msbyte are in the highest index of the array
-      // the bits within a byte are correct, though
-      /// -- NOTE: The size of the pointer and the frame size in the call below must match
-      //Log(debug,"Performing transaction with a pointer %u long and %d bytes",sizeof(reinterpret_cast<uint32_t*>(&frame[pos])[0]),frame_size_uint);
-      //uint32_t* data = reinterpret_cast_checked<uint32_t*>(&frame[pos]);
+      auto begin_trf = std::chrono::high_resolution_clock::now();
+      // Configure the receiving buffer
+      // offset in bytes
+      xdma_buf.buf_offset = pos*sizeof(uint32_t);
+      xdma_buf.buf_size = 16*sizeof(uint8_t); // Grab a full memory page
+      xdma_buf.dir = XDMA_DEV_TO_MEM;
 
-      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,reinterpret_cast<uint32_t*>(&dma_buffer_[pos]),frame_size_u32);
+      // Prepare the buffer
+      ret = (int)ioctl(g_dma_fd, XDMA_PREP_BUF, &xdma_buf);
 
+      // Now perform the transation
+      xdma_trans.cookie = xdma_buf.cookie;
+      // should implement a wait or not?
+      // Try with a wait fpr now.
+      //FIXME: Try without waiting period (implying that the transfer occurs faster than
+      // the time it takes to go there fetch the memory
+      xdma_trans.wait = 1;
+      ret = (int) ioctl(g_dma_fd, XDMA_START_TRANSFER, &xdma_trans);
+
+      auto end_trf = std::chrono::high_resolution_clock::now();
+      total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();
+      iterations++;
       //      status = xdma_perform_transaction(0,XDMA_WAIT_DST,NULL,0,&data[pos],frame_size_uint);
       // Log(verbose,"Received contents (hex): [%08X %08X %08X %08X]",data[0],data[1],data[2],data[3]);
       // Log(verbose,"%s",display_bits(&frame[pos],frame_size_bytes).c_str());
       //frame = reinterpret_cast<uint8_t*>(data);
 
-      if (status == -1) {
+      if (ret == -1) {
         //#ifdef DEBUG
         //        Log(warning,"Reached a timeout in the DMA transfer.");
         //#endif
         timeout_cnt_++;
         if (timeout_cnt_ > timeout_cnt_threshold_) {
           Log(error,"Received too many timeouts. Failing the run.");
+
           // Artificially generate a warning packet
           dma_buffer_[pos] = WARN_TIMEOUT;
-          // Actually, a goo way to work this out would be to send a warning word here indicating a timeout
+          // Actually, a good way to work this out would be to send a warning word here indicating a timeout
           // And let the run stopping be handled dowstream
 
           // Don't throw. Actually this does not work at all since the thread has nothing that collects it
@@ -384,16 +496,24 @@ void PTBReader::ClientCollector() {
       //Log(debug,"Done storing the buffer");
       pos += frame_size_u32;
       //pos_pool += frame_size_bytes; 
-      if (pos+frame_size_u32 > buffer_end) {
+      if (pos+frame_size_u32 >= buffer_end) {
         //#ifdef DEBUG
         //        Log(info,"Reached buffer size.Resetting to start.\n");
         //#endif
         pos = 0;
       } // pos check
     } // keep_collecting_
-    std::chrono::high_resolution_clock::time_point t2 = high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<microseconds>( t2 - t1 ).count();
-    std::cout << "WARNING: Elapsed time : " << duration
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count();
+    Log(warning,"Stopped collecting data.");
+    std::cout << "Duration " << duration << " us Iterations : "
+        << iterations << ". Flow: "
+        << duration/(double)iterations << " us/iteration" << std::endl;
+    std::cout << "Transfer Duration " << total_duration
+        << " us Iterations : " << iterations << ". Flow: "
+        << total_duration/(double)iterations << " us/iteration" << std::endl;
+
         //#ifdef DEBUG
         //    Log(warning,"Stopped collecting data.");
         //#endif
@@ -401,8 +521,68 @@ void PTBReader::ClientCollector() {
         // Log(debug,"Shutting down the DMA engine.");
         // xdma_exit();
         // Log(debug,"DMA engine done.");
+  } // else
+#endif /*ARM_XDMA*/
+  //#if defined(ARM_XDMA) || defined(ARM_MMAP) || defined(ARM_POTHOS)
+  //#include "ptb_registers.h"
+  //#endif /*ARM*/
+
+#ifdef ARM_MMAP
+  else {
+    // For memory mapped there is no big setup
+    dma_buffer_ = nullptr;
+    // In this case we want to have a local memory buffer and it is there that we
+    // do any manipulations
+    // Also allocate 32 MB
+    memory_pool_ = new uint32_t[buffer_size*frame_size_u32];
+    static uint32_t pos = 0; // position pointer in the memory_pool_ variable
+    // Some memory testing
+    uint64_t total_duration = 0;
+    uint32_t iterations = 0;
+    auto begin = std::chrono::high_resolution_clock::now();
+
+    // force position to always start at 0
+    pos = 0;
+    while(keep_collecting_) {
+      // Set the read_ready bit
+      auto begin_trf = std::chrono::high_resolution_clock::now();
+
+      control_register_.value() = control_register_.value() & 0x1;
+      if ((control_register_.value() >> 1 & 0x1) == 0x1) {
+      // there is data to be collected
+        std::memcpy(&memory_pool_[pos],data_register_.address,frame_size_bytes);
+        auto end_trf = std::chrono::high_resolution_clock::now();
+        total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();
+        iterations++;
+
+        // DMA transaction was successful.
+        pthread_mutex_lock(&lock_);
+        buffer_queue_.push(&memory_pool_[pos]);
+        //buffer_queue_.push(&frame[pos]);
+        pthread_mutex_unlock(&lock_);
+        //Log(debug,"Done storing the buffer");
+
+        pos += frame_size_u32;
+        // set the
+      }
+      if (pos+frame_size_u32 >= buffer_size) {
+        pos = 0;
+      }
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count();
+    Log(warning,"Stopped collecting data.");
+    std::cout << "Duration " << duration << " us Iterations : "
+        << iterations << ". Flow: "
+        << duration/(double)iterations << " us/iteration" << std::endl;
+    std::cout << "Transfer Duration " << total_duration
+        << " us Iterations : " << iterations << ". Flow: "
+        << total_duration/(double)iterations << " us/iteration" << std::endl;
+
   }
-#elif ARM_POTHOS
+#endif /*ARM_MMAP*/
+
+#ifdef ARM_POTHOS
   else {
     // This should be done out of this part
     // Create DMA channel
@@ -433,7 +613,7 @@ void PTBReader::ClientCollector() {
 
     // Create all the buffer containers
 
-    std::map<int,DMABuffer *> buffers;
+    std::g_dma_mem_map<int,DMABuffer *> buffers;
     for (int i = 0; i < 2048; ++i) {
       buffers[i] = new DMABuffer;
       buffers[i]->data_ptr  = static_cast<uint32_t*>(pzdud_addr(s2mm_, i));
@@ -489,7 +669,7 @@ void PTBReader::ClientCollector() {
 #endif /*ARM_POTHOS*/
 }
 
-#ifdef ARM_XDMA
+#if defined(ARM_XDMA) || defined(ARM_MMAP)
 void PTBReader::ClientTransmiter() {
   Log(verbose, "Starting transmitter\n");
   std::ostringstream bitdump;
@@ -532,7 +712,7 @@ void PTBReader::ClientTransmiter() {
   uint32_t* frame_casted = NULL;
 #endif
   //uint64_t start_run_time_ = ClockGetTime();
-  static const size_t offset_ts = Word_Header::size_bytes+TimestampPayload::ptb_offset_bytes;
+  //static const size_t offset_ts = Word_Header::size_bytes+TimestampPayload::ptb_offset_bytes;
 
   ts_arrived = false;
   // The whole method runs on an infinite loop with a control variable
@@ -623,12 +803,6 @@ void PTBReader::ClientTransmiter() {
       // Grab the header, that now should be at the 4 lsB
       Word_Header *frame_header = reinterpret_cast_checked<Word_Header *>(frame);
 
-      //      frame_header
-      //      // Make a new pointer that contains the header. This part we want to always keep it byte swapped
-      //      // FIXME: Use frame_raw instead of new variable
-      //      // THIS IS A TERRIBLE IDEA. SHOULD BYTE-SWAP EVERYTHIG AND ALWAYS USE IT LIKE THAT
-      //      // DEALING WITH THE TIMESTAMPS IS GOING TO BE A NIGHTMARE SINCE THEY SPAN MULTIPLE BYTES
-      //      frame_header = htonl(reinterpret_cast<uint32_t*>(frame)[0]);
 
       // Do some debug showing the header in the different reinterpretations
       // Log(debug,"Header_raw %08X raw_rev %08X byte_swap %08X",
