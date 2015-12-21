@@ -810,20 +810,20 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
   // After parsing everything (and making sure that all the configuration is set)
   // Store the configuration locally
   config_ = config;
-  Log(debug,"Sleeping for 1s prior to init the connection to DAQ upstream.");
-  // Tell the reader to start the connection
-  std::this_thread::sleep_for (std::chrono::seconds(1));
-  //sleep(15);
-
-  Log(verbose,"Initializing connection to DAQ upstream." );
-  //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
-  try {
-    reader_->InitConnection(true);
-  }
-  catch(SocketException &e) {
-    msgs_ << "<warning>Failed to open connection to board reader.</warning>";
-    Log(warning,"Connection failed to establish. This might cause troubles later.");
-  }
+//  Log(debug,"Sleeping for 1s prior to init the connection to DAQ upstream.");
+//  // Tell the reader to start the connection
+//  std::this_thread::sleep_for (std::chrono::seconds(1));
+//  //sleep(15);
+//
+//  Log(verbose,"Initializing connection to DAQ upstream." );
+//  //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
+//  try {
+//    reader_->InitConnection(true);
+//  }
+//  catch(SocketException &e) {
+//    msgs_ << "<warning>Failed to open connection to board reader.</warning>";
+//    Log(warning,"Connection failed to establish. This might cause troubles later.");
+//  }
 
   msgs_ << "<success>true</success>";
   msgs_str_ = msgs_.str();
