@@ -163,6 +163,8 @@ void PTBReader::StopDataTaking() {
 #ifdef ARM_MMAP
   // Release the mmapped memory for the data
   UnmapPhysMemory(mapped_data_base_addr_,(data_reg.high_addr-data_reg.base_addr));
+  delete [] memory_pool_;
+  // The file is closed when the configuration registers are unmapped
 #endif /*ARM_MMAP*/
 //#ifdef ARM_POTHOS
 //  // All this below should only be done after not only the DMA  is finished
@@ -429,7 +431,7 @@ void PTBReader::ClientCollector() {
       // Configure the receiving buffer
       // offset in bytes
       xdma_buf.buf_offset = pos*sizeof(uint32_t);
-      xdma_buf.buf_size = 16*sizeof(uint8_t); // Grab a full memory page
+      xdma_buf.buf_size = 16*sizeof(uint8_t); // Grab a data frame
       xdma_buf.dir = XDMA_DEV_TO_MEM;
 
       // Prepare the buffer
@@ -457,7 +459,7 @@ void PTBReader::ClientCollector() {
         //        Log(warning,"Reached a timeout in the DMA transfer.");
         //#endif
         timeout_cnt_++;
-        if (timeout_cnt_ > timeout_cnt_threshold_) {
+        if (timeout_cnt_ > timeout_cnt_threshold_*10) {
           Log(error,"Received too many timeouts. Failing the run.");
 
           // Artificially generate a warning packet
@@ -547,9 +549,11 @@ void PTBReader::ClientCollector() {
       // Set the read_ready bit
       auto begin_trf = std::chrono::high_resolution_clock::now();
 
-      control_register_.value() = control_register_.value() & 0x1;
+      // enable read_ready to trigger a transaction
+      control_register_.value() = control_register_.value() | 0x1;
       if ((control_register_.value() >> 1 & 0x1) == 0x1) {
-      // there is data to be collected
+	// A transation was completed
+	// there is data to be collected
         std::memcpy(&memory_pool_[pos],data_register_.address,frame_size_bytes);
         auto end_trf = std::chrono::high_resolution_clock::now();
         total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();

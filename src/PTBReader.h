@@ -136,7 +136,7 @@ public:
       static size_t const size_bytes = sizeof(data_t);
       static size_t const size_u32 = sizeof(data_t)/sizeof(uint32_t);
 
-      static data_size_t const num_bits_padding 		= 2;
+      static data_size_t const num_bits_padding 	= 2;
       static data_size_t const num_bits_short_tstamp	= 27;
       static data_size_t const num_bits_packet_type	= 3;
     };

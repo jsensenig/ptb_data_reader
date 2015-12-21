@@ -405,6 +405,9 @@ void PTBManager::FreeRegisters() {
     Log(info,"Clearing the registers.");
 #if defined(ARM_XDMA) || defined(ARM_MMAP)||defined(ARM_POTHOS)
     munmap(mapped_conf_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
+    // Close the file
+    Log(info,"Closing /dev/mem");
+    close(g_mem_fd);
     //    munmap(mapped_time_base_addr_,data_reg.high_addr-data_reg.base_addr);
 #endif /*ARM*/
     Log(debug,"Configuration registers unmapped.");
