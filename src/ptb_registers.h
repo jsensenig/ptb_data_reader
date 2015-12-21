@@ -42,7 +42,8 @@ extern mapped_register conf_reg;
 
 extern mapped_register data_reg;
 
-
+void SetupConfRegisters();
+void SetupDataRegisters();
 
 //void WriteRegister()
 

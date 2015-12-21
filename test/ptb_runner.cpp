@@ -61,8 +61,12 @@ void run() {
 }
 
 int main() {
-  //Logger::SetSeverity(Logger::verbose);
-  Logger::SetSeverity(Logger::warning);
+  Logger::SetSeverity(Logger::verbose);
+  // Logger::SetSeverity(Logger::debug);
+  // Logger::SetSeverity(Logger::info);
+  // Logger::SetSeverity(Logger::warning);
+  // Logger::SetSeverity(Logger::error);
+  
   bool relaunch = true;
   while(relaunch) {
     try{

@@ -355,8 +355,9 @@ void PTBManager::SetupRegisters() {
       register_map_[i].address = new uint32_t();
     }
   } else {
-    Log(warning,"Memory mapped registers are not yet tested. This might, or might not, fail." );
-#ifdef ARM
+    //Log(warning,"Memory mapped registers are not yet tested. This might, or might not, fail." );
+    Log(info,"Setting up memory mapped registers");
+#if defined(ARM_XDMA) || defined(ARM_MMAP)||defined(ARM_POTHOS)
     SetupConfRegisters();
     // First get the virtual address for the mapped physical address
     mapped_conf_base_addr_ = MapPhysMemory(conf_reg.base_addr,conf_reg.high_addr);
@@ -402,9 +403,9 @@ void PTBManager::FreeRegisters() {
 
   } else {
     Log(info,"Clearing the registers.");
-#ifdef ARM
+#if defined(ARM_XDMA) || defined(ARM_MMAP)||defined(ARM_POTHOS)
     munmap(mapped_conf_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
-    munmap(mapped_time_base_addr_,data_reg.high_addr-data_reg.base_addr);
+    //    munmap(mapped_time_base_addr_,data_reg.high_addr-data_reg.base_addr);
 #endif /*ARM*/
     Log(debug,"Configuration registers unmapped.");
   }
