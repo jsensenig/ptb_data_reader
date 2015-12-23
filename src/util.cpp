@@ -5,10 +5,7 @@
  *      Author: nbarros
  */
 
-extern "C" {
-#include <stdint.h>
-};
-
+#include <cstdint>
 #include <ctime>
 #include <string>
 

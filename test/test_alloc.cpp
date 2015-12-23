@@ -2,7 +2,7 @@
 #include <queue>
 extern "C" {
 #include <stdint.h>
-};
+}
 
 
 int main() {

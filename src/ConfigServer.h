@@ -16,14 +16,14 @@
 #include <list>
 #include <stdexcept>
 #include <sstream>
+#include <cstdint>
 
 #include "pugixml.hpp"
 
 // -- C headers
 extern "C" {
 #include <pthread.h>         // For POSIX threads
-#include <stdint.h>
-};
+}
 
 class TCPSocket;
 class PTBManager;

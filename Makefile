@@ -2,7 +2,7 @@
 MACHINE    := $(shell uname -m)
 CC         := g++
 BIN        := $(PWD)/bin
-DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket 
+DEF_CFLAGS := -std=c++11 -Wall -pedantic -I$(PWD)/contrib/PracticalSocket 
 DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src 
 #DMA_TYPE	:= -DARM_XDMA
 DMA_TYPE	:= -DARM_MMAP

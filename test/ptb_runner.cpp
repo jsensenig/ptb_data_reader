@@ -13,7 +13,7 @@
 #include "PracticalSocket.h"
 extern "C" {
 #include <pthread.h>         // For POSIX threads
-};
+}
 #include <csignal>
 #include <thread>
 
@@ -43,9 +43,8 @@ void run() {
     //Log(debug) << "Going to sleep" <<endlog;
     //std::this_thread::sleep_for (std::chrono::seconds(10));
     Log(info,"Starting manager");
-    bool emulate = false;
     // Start in emulating mode.
-    PTBManager manager(emulate);
+    PTBManager manager;
     manager.DumpConfigurationRegisters();
 
     // Get the reader

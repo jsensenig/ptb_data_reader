@@ -17,7 +17,7 @@ extern "C" {
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-};
+}
 #include <new>
 
 #include "Logger.h"

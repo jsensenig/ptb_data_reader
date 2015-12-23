@@ -43,7 +43,7 @@ public:
 		GETSTARTTIME = 4
                };
 
-  PTBManager(bool emu_mode = false);
+  PTBManager();
   virtual ~PTBManager();
 
   const PTBReader* getReader() const {
@@ -189,7 +189,6 @@ private:
   std::map<std::string, Command> commands_;
 
   Status status_;
-  bool emu_mode_;
 
   static const uint8_t num_registers_ = 40;
   static const char *default_config_;

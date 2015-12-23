@@ -16,7 +16,7 @@ extern "C" {
 #include<pthread.h>
 #include <stdint.h>
 #include <stdio.h>
-};
+}
 
 #include <cstdlib>
 #include <cstring>
@@ -302,7 +302,7 @@ class PTBReader {
    * Implementation of the PTBReader class
    **/
 
-  PTBReader(bool emu = false);
+  PTBReader();
   
   virtual ~PTBReader();
   
@@ -365,14 +365,6 @@ class PTBReader {
   
   /** Start the connection to the board reader **/
   void InitConnection(bool force = false);
-
-  bool isEmuMode() const {
-    return emu_mode_;
-  }
-  
-  void setEmuMode(bool emuMode) {
-    emu_mode_ = emuMode;
-  }
 
   bool getConnectionValid() const {
     // This might not be necessarily the best option
@@ -457,7 +449,6 @@ private:
   // Frame sequence number
   uint32_t seq_num_;
 
-  bool emu_mode_;
   bool fragmented_;
   bool keep_transmitting_;
   //bool ready_to_send_;
@@ -483,13 +474,14 @@ const uint32_t timeout_cnt_threshold_ = 1000;
   uint32_t first_timestamp_;
   uint32_t last_timestamp_;
 
-// Status flags to collect errors
+  // Status flags to collect errors
   bool status_failed_readout_;
-
+  
+  bool dry_run_; // Run the PTB without collecting data
 
   //#ifdef ARM_POTHOS
-//  pzdud_t *s2mm_;
-//#endif
+  //  pzdud_t *s2mm_;
+  //#endif
 };
 
 /// 

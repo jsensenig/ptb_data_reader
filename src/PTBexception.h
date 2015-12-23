@@ -13,7 +13,7 @@
 
 class PTBexception: public std::exception {
   public:
-    PTBexception(const char *msg)  {msg_ = msg;};;
+    PTBexception(const char *msg)  {msg_ = msg;};
     PTBexception(std::string msg) {msg_ = msg;};
 
     PTBexception();

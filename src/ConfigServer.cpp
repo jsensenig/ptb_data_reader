@@ -32,7 +32,7 @@
 extern "C" {
 #include <stdio.h>
 #include <signal.h>
-};
+}
 using std::string;
 
 //-- Assignment of the static variables

@@ -16,7 +16,7 @@
 extern "C" {
 #include <stdio.h>
 #include <unistd.h>
-};
+}
 
 
 static struct nullstream:

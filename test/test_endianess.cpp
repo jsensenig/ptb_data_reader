@@ -32,7 +32,7 @@ int main() {
 
 
   struct Payload_Header {
-      typedef uint32_t data_t;
+    //typedef uint32_t data_t;
 
       typedef uint8_t  data_packet_type_t;
       typedef uint32_t short_nova_timestamp_t;
@@ -50,7 +50,7 @@ int main() {
   };
 
   struct Payload_Header2 {
-      typedef uint32_t data_t;
+    //typedef uint32_t data_t;
 
       typedef uint8_t  data_packet_type_t;
       typedef uint32_t short_nova_timestamp_t;

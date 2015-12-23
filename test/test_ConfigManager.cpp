@@ -14,7 +14,7 @@
 
 extern "C" {
 #include <pthread.h>         // For POSIX threads
-};
+}
 
 void* shutdown(void *arg) {
 
