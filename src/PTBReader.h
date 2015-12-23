@@ -381,6 +381,10 @@ class PTBReader {
   uint64_t GetRunTime() {return (last_timestamp_ - first_timestamp_);};
 
 
+  void SetDryRun(bool status) {dry_run_ = status;};
+
+  bool GetDryRun() {return dry_run_;};
+
 protected:
   /** Data collector function into the queue. Runs on it's own thread**/
   void ClientCollector();
