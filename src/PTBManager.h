@@ -87,11 +87,9 @@ public:
 
   void FreeRegisters();
   void ClearCommands() {
-	  commands_.clear();
+    commands_.clear();
   }
-
-  uint64_t GetRunStartTime();
-
+  
 protected:
   // Commands that need to be implemented
   void SetupRegisters();
@@ -171,8 +169,6 @@ private:
    */
   void SetBitRangeRegister(uint32_t reg, uint32_t pos, uint32_t len, uint32_t value);
 
-  // Read the memory mapped registers that contain the run start time
-  void GetSyncStartTime();
 
   // The class responsible for the data reading.
   PTBReader *reader_;
