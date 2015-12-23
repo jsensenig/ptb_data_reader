@@ -35,16 +35,17 @@ extern "C" {
 #ifdef ARM_XDMA
 // declare a bunch of variables that are used by the DMA driver
 
-static int g_dma_fd; // mmapped file descriptor
+static int g_dma_fd;              // mmapped file descriptor
 static uint8_t *g_dma_mem_map;    /* mmapped array of bytes representing the transferred memory */
-#define DMA_BUFFER_SIZE 33554432 // 32 MB buffer for the DMA trasaction. Should give plenty of
+#define DMA_BUFFER_SIZE 33554432  // 32 MB buffer for the DMA trasaction. Should give plenty of
                                   // contigency for the CPU
-//#elif ARM_POTHOS
-//#include "pothos_zynq_dma_driver.h"
 #endif /*ARM_XDMA*/
 
+#ifdef ARM_MMAP
+// This contains the data register
 mapped_register data_reg;
 
+#endif
 void print_bits(void* memstart, size_t nbytes) {
 
   std::cout << "The " << nbytes << "-byte chunk of memory beginning at " << static_cast<void*>(memstart) << " is : [" << std::endl;
@@ -70,14 +71,6 @@ std::string display_bits(void* memstart, size_t nbytes) {
 }
 
 
-// Completely auxiliary clock function
-uint64_t ClockGetTime() {
-
-  struct timeval tv;
-  gettimeofday(&tv,NULL);
-  return (uint64_t)tv.tv_sec*1000000LL + (uint64_t)tv.tv_usec;
-
-}
 
 PTBReader::PTBReader(bool emu) : tcp_port_(0), tcp_host_(""),
     packet_rollover_(0),socket_(NULL),
@@ -675,7 +668,7 @@ void PTBReader::ClientCollector() {
 
 #if defined(ARM_XDMA) || defined(ARM_MMAP)
 void PTBReader::ClientTransmiter() {
-  Log(verbose, "Starting transmitter\n");
+  Log(verbose, "Starting data transmitter\n");
   std::ostringstream bitdump;
 
   seq_num_ = 1;
@@ -1052,15 +1045,12 @@ void PTBReader::ClientTransmiter() {
         keep_collecting_ = false;
       }
 
-      // if we didn't have a fragmented block, update the sequence number
-      // and update the timestamp to the latest one
-#ifdef DEBUG
+      // FIXME: Add support for fragmented blocks. Require the board reader to hold the data 
+      // in a buffer until the whole microslice is parsed
+#ifdef ENABLE_FRAG_BLOCKS
       if (!fragmented_) {
-#endif      
         seq_num_++;
         fragmented_ =false;
-
-#ifdef DEBUG
       } else {
         seq_num_ = seq_num_;
         Log(error,"Fragmented packets are not currently supported.");
@@ -1068,21 +1058,30 @@ void PTBReader::ClientTransmiter() {
         keep_transmitting_ = false;
         keep_collecting_ = false;
       }
+#else 
+      seq_num_++;
+      fragmented_ =false;
 #endif
-      // if (seq_num_ >= 5) {
-      //   Log(warning,"FIXME: Forcing to stop after the first packet being generated");
-      //   keep_collecting_ = false;
-      //   keep_transmitting_ = false;
-      //   // sleep for a while waiting for the generators to stop
-      //   std::this_thread::sleep_for (std::chrono::seconds(5));
-      // }
-    } // -- while(keep_transmitting_)
+    // if (seq_num_ >= 5) {
+    //   Log(warning,"FIXME: Forcing to stop after the first packet being generated");
+    //   keep_collecting_ = false;
+    //   keep_transmitting_ = false;
+    //   // sleep for a while waiting for the generators to stop
+    //   std::this_thread::sleep_for (std::chrono::seconds(5));
+
+  } // -- while(keep_transmitting_)
     // Exited the  run loop. Return.
-    Log(info,"Exited transmission loop.");
-    // Deallocate the memory
-    delete [] eth_buffer;
-  }
+  
+  Log(info,"Exited transmission loop.");
+  // Deallocate the memory
+  delete [] eth_buffer;
+  // Should be safe to delete the memory_pool here as well.
+}
 #endif
+
+
+
+
 #ifdef  ARM_POTHOS
   void PTBReader::ClientTransmiter() {
     Log(verbose, "Starting transmitter\n");
@@ -1450,6 +1449,17 @@ void PTBReader::ClientTransmiter() {
     // Deallocate the memory
     delete [] eth_buffer;
   }
+
+
+
 #endif
 
+// Completely auxiliary clock function
+uint64_t ClockGetTime() {
+
+  struct timeval tv;
+  gettimeofday(&tv,NULL);
+  return (uint64_t)tv.tv_sec*1000000LL + (uint64_t)tv.tv_usec;
+
+}
 

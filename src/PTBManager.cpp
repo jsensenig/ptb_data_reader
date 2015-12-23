@@ -496,16 +496,13 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
       strVal.clear();
       strVal.str("");
       //      uint32_t duration = atoi(it->child("MicroSliceDuration").child_value());
-      // Microslice duration is now a full number...check if it fits into 28 bits
-      Log(debug,"MicroSlice Duration %u [%X][%s]",duration,duration, std::bitset<28>(duration).to_string().c_str());
-      if (duration >= pow(2,27)) {
+      // Microslice duration is now a full number...check if it fits into 27 bits
+      Log(debug,"MicroSlice Duration %u [%X][%s]",duration,duration, std::bitset<27>(duration).to_string().c_str());
+      if (duration >= (1<<27)) {
         msgs_ << "<warning>Input value of [" << duration << "] above the allowed limit of 27 bits. Setting to maximum allowed.";
         Log(warning,"Input value of [%u] above maximum rollover [27]. Truncating to maximum.",duration);
-        duration = pow(2,27)-1;
+        duration = (1<<27)-1;
       }
-      uint64_t timeRollOver = (uint64_t)duration;
-      //Log(debug,"MicroSlice time rollover : [%u] --> %lu clock ticks. [%X][%s]",duration,timeRollOver,duration,std::bitset<28>(duration).to_string().c_str());
-      reader_->setTimeRollover(timeRollOver);
 
       SetBitRangeRegister(35,duration,0,27);
 
