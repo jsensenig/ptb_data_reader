@@ -465,8 +465,10 @@ void PTBReader::ClientCollector() {
   // Some memory testing
   uint64_t total_duration = 0;
   uint32_t iterations = 0;
+  // this should only be done after the first frame actually comes in
+  // otherwise most of the time is spent in waiting
   auto begin = std::chrono::high_resolution_clock::now();
-
+  bool first = true;
   // force position to always start at 0
   pos = 0;
   while(keep_collecting_) {
@@ -477,6 +479,10 @@ void PTBReader::ClientCollector() {
     control_register_.value() =  0x1;
     // Check if there is valid data in the register
     if (((control_register_.value() >> 1 ) & 0x1) == 0x1) {
+      if (first) {
+        begin = std::chrono::high_resolution_clock::now();
+        first = false;
+      }
       // A transation was completed
       // there is data to be collected
       std::memcpy(&memory_pool_[pos],data_register_.address,frame_size_bytes);
@@ -492,8 +498,8 @@ void PTBReader::ClientCollector() {
       pthread_mutex_unlock(&lock_);
       pos += frame_size_u32;
     } else {
-      printf("There is nothing\n");
-      control_register_.value() = 0x0;
+//      printf("There is nothing\n");
+//      control_register_.value() = 0x0;
       continue;
 
     }
@@ -888,11 +894,11 @@ void PTBReader::ClientTransmiter() {
     std::memcpy(&eth_buffer[ipck],&eth_checksum,sizeof(eth_checksum));
     ipck += 1;
     packet_size = ipck*sizeof(uint32_t);
-#ifdef DEBUG
+//#ifdef DEBUG
     Log(debug,"Sending packet with %u bytes (including header)",packet_size);
     print_bits(eth_buffer,packet_size);
 
-#endif
+//#endif
     try {
       socket_->send(eth_buffer,packet_size);
     }
