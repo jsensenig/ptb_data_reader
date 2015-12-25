@@ -16,6 +16,7 @@ extern "C" {
 }
 #include <csignal>
 #include <thread>
+#include <chrono>
 
 using namespace std;
 
@@ -23,7 +24,7 @@ using namespace std;
 
 void handler(int signal) {
   if (signal == SIGINT) {
-    Log(warning,"Found a SIGINT request. Attempting a clean stop.");
+    Log(warning,"Received a SIGINT request. Attempting a clean stop.");
     ConfigServer*cfg = ConfigServer::get();
     cfg->Shutdown(false);
     cfg->CheckInstances();
@@ -60,6 +61,9 @@ void run() {
 }
 
 int main() {
+  // Register a signal handler
+  std::signal(SIGINT,handler);
+
   Logger::SetSeverity(Logger::verbose);
   // Logger::SetSeverity(Logger::debug);
   // Logger::SetSeverity(Logger::info);
@@ -79,8 +83,6 @@ int main() {
     }
   }
 
-  // Register a signal handler
-  std::signal(SIGINT,handler);
   return 0;
 }
 

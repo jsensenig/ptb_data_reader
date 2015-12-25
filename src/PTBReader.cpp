@@ -73,11 +73,22 @@ std::string display_bits(void* memstart, size_t nbytes) {
 
 
 PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
-    packet_rollover_(0),socket_(NULL),
-    client_thread_collector_(0),client_thread_transmitor_(0),ready_(false),
+    packet_rollover_(0),socket_(nullptr),
+    client_thread_collector_(0),client_thread_transmitter_(0),ready_(false),
+#ifdef ARM_MMAP
+    memory_pool_(nullptr),mapped_data_base_addr_(0),
+#endif
+#ifdef ARM_XDMA
+    dma_buffer_(nullptr),
+#endif
+    seq_num_(0),
     fragmented_(false),keep_transmitting_(true),
-    keep_collecting_(true),timeout_cnt_(0),num_microslices_(0),
-    num_word_counter_(0),num_word_trigger_(0),num_word_tstamp_(0),bytes_sent_(0),
+    keep_collecting_(true),time_rollover_(0),
+    // below this point all these are debugging variables
+    timeout_cnt_(0),dry_run_(false),
+    num_microslices_(0),
+    num_word_counter_(0),num_word_trigger_(0),num_word_fifo_warning_(0),
+    num_word_tstamp_(0),bytes_sent_(0),
     first_timestamp_(0),last_timestamp_(0)
 {
 
@@ -109,18 +120,22 @@ void PTBReader::ClearThreads() {
     Log(debug,"Killing the daughter threads.\n");
     // First stop the loops
     keep_collecting_ = false;
-    std::this_thread::sleep_for (std::chrono::seconds(1));
+    std::this_thread::sleep_for (std::chrono::milliseconds(100));
     Log(info,"Killing collector thread.");
     // Kill the collector thread first
     // Ideally we would prefer to join the thread
-    pthread_cancel(client_thread_collector_);
+    if (client_thread_collector_ != 0) {
+      pthread_join(client_thread_collector_,NULL);
+    }
     // Kill the transmittor thread.
 
     keep_transmitting_ = false;
     std::this_thread::sleep_for (std::chrono::seconds(2));
     // -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
-    Log(info,"Killing transmiter thread.");
-    pthread_cancel(client_thread_transmitor_);
+    Log(info,"Killing transmitter thread.");
+    if (client_thread_transmitter_) {
+      pthread_join(client_thread_transmitter_,NULL);
+    }
   }
 }
 
@@ -166,7 +181,7 @@ void PTBReader::StopDataTaking() {
   //  pzdud_destroy(s2mm_);
   //#endif
 
-  Log(debug,"Data taking stopped.");
+  Log(info,"Data taking stopped.");
 }
 
 void PTBReader::StartDataTaking() {
@@ -262,7 +277,7 @@ void PTBReader::StartDataTaking() {
       // We are ready to do business. Start reading the DMA into the queue.
       Log(verbose, "==> Creating transmitter\n" );
       keep_transmitting_ = true;
-      if (pthread_create(&client_thread_transmitor_,NULL,&(PTBReader::ClientTransmitorFunc),this) != 0) {
+      if (pthread_create(&client_thread_transmitter_,NULL,&(PTBReader::ClientTransmitterFunc),this) != 0) {
         Log(error,"Unable to create client thread. Failing..." );
         throw PTBexception("Unable to create transmitter thread.");
         return;
@@ -455,8 +470,6 @@ void PTBReader::ClientCollector() {
 
 #ifdef ARM_MMAP
 
-  // For memory mapped there is no big setup
-  dma_buffer_ = nullptr;
   // In this case we want to have a local memory buffer and it is there that we
   // do any manipulations
   // Also allocate 32 MB
@@ -604,7 +617,7 @@ void PTBReader::ClientCollector() {
 }
 
 #if defined(ARM_XDMA) || defined(ARM_MMAP)
-void PTBReader::ClientTransmiter() {
+void PTBReader::ClientTransmitter() {
   Log(debug, "Starting data transmitter\n");
 
 
@@ -697,7 +710,7 @@ void PTBReader::ClientTransmiter() {
         continue;
       }
 
-      // FIXME: Migrate this by a lock free queue
+      // FIXME: Replace this by a lock free queue
       //Log(debug,"Grabbing from queue");
       pthread_mutex_lock(&lock_);
       frame = buffer_queue_.front();
@@ -949,7 +962,7 @@ void PTBReader::ClientTransmiter() {
 
 
 #ifdef  ARM_POTHOS
-void PTBReader::ClientTransmiter() {
+void PTBReader::ClientTransmitter() {
   Log(verbose, "Starting transmitter\n");
 
   seq_num_ = 1;

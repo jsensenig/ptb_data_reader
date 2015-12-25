@@ -13,10 +13,9 @@ ifeq (($MACHINE),armv7l)
    $(info Adding extra flags for uZed compilation...)
    DEF_CFLAGS += -DDATA_READER
    DEF_CFLAGS += -I$(PWD)/src 
-#   DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/zynq-xdma/dev
-#   DEF_CFLAGS += -I$(PWD)/src -I$(PWD)/contrib/linux_dma/zynq-xdma/lib 
 endif
-DEF_LFLAGS := -lpthread  
+
+DEF_LFLAGS := -lpthread -lrt
 #-lrt
 #DEF_LFLAGS := -lpthread -lrt -lbz2 
 
@@ -74,6 +73,13 @@ PTB_SRC := $(wildcard $(PTB_DIR)/*.cpp)
 PTB_HDR := $(wildcard $(PTB_DIR)/*.h)
 PTB_OBJ := $(patsubst $(PTB_DIR)/%.cpp,$(OBJ)/%.o,$(PTB_SRC))
 
+# Application
+APP_DIR := $(PWD)/bin
+APP_SRC := $(wildcard $(APP_DIR)/*.cpp)
+APP_HDR := $(wildcard $(APP_DIR)/*.h)
+APP_OBJ := $(patsubst $(APP_DIR)/%.cpp,$(OBJ)/%.o,$(APP_SRC))
+APP_BIN := $(patsubst $(APP_DIR)/%.cpp,$(APP_DIR)/%,$(APP_SRC))
+
 # Tests
 TEST_DIR := $(PWD)/test
 TEST_SRC := $(wildcard $(TEST_DIR)/*.cpp)
@@ -85,7 +91,7 @@ TEST_BIN := $(patsubst $(TEST_DIR)/%.cpp,$(TEST_DIR)/%,$(TEST_SRC))
 UTL_SRC := $(wildcard $(UTL_DIR)/*.cpp)
 UTL_BIN := $(patsubst $(UTL_DIR)/%.cpp,$(BIN)/%,$(UTL_SRC))
 
-all: dir $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ) $(TEST_BIN)
+all: dir $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ) $(TEST_BIN) $(APP_BIN)
 
 dir:
 	test -d $(OBJ) || mkdir $(OBJ)
@@ -94,7 +100,8 @@ clean: $(CLN)
 	rm -rf $(OBJ)
 	rm -f $(UTL_BIN)
 	rm -f $(TEST_BIN)
-
+	rm -rf $(APP_BIN)
+	
 server_clean:
 	echo ""
 
@@ -115,6 +122,9 @@ $(OBJ)/%.o: $(PTB_DIR)/%.cpp $(PTB_DIR)/%.h
 #$(BIN)/%: $(UTL_DIR)/%.cpp $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ)
 #	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
 
+# Compile tests
+$(APP_DIR)/%: $(APP_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)
+	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
 
 # Compile tests
 $(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)

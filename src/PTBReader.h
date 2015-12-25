@@ -390,13 +390,13 @@ protected:
   void ClientCollector();
 
   /** Data transmitter **/
-  void ClientTransmiter();
+  void ClientTransmitter();
 
   void DumpPacket(uint32_t* buffer, uint32_t tot_size);
 
 private:
   static void * ClientCollectorFunc(void * This) {((PTBReader *)This)->ClientCollector(); return NULL;}
-  static void * ClientTransmitorFunc(void * This) {((PTBReader *)This)->ClientTransmiter(); return NULL;}
+  static void * ClientTransmitterFunc(void * This) {((PTBReader *)This)->ClientTransmitter(); return NULL;}
 
   unsigned short tcp_port_;
   std::string tcp_host_;
@@ -404,7 +404,7 @@ private:
 
   TCPSocket *socket_;
   pthread_t client_thread_collector_;
-  pthread_t client_thread_transmitor_;
+  pthread_t client_thread_transmitter_;
   pthread_mutex_t lock_;
 
   bool ready_;
@@ -420,6 +420,8 @@ private:
   struct xdma_chan_cfg xdma_dst_cfg;
   struct xdma_buf_info xdma_buf;
   struct xdma_transfer xdma_trans;
+  uint32_t *dma_buffer_;
+
 #endif
 
 #ifdef ARM_MMAP
@@ -444,7 +446,6 @@ private:
   static const uint32_t WARN_TIMEOUT = 0x04000000;
   static const uint32_t WARN_UNKNOWN_DATA = 0x02000000;
 
-  uint32_t *dma_buffer_;
 
   // A few more constants that are important
   // This is actually
@@ -458,15 +459,13 @@ private:
   //bool ready_to_send_;
   //bool first_ts_;
   bool keep_collecting_;
-  // Previous timestamp
-  //uint64_t previous_ts_;
   uint64_t time_rollover_;
-  //uint64_t current_ts_;
-
 
   // Debugging and control variables
 uint32_t timeout_cnt_;
-const uint32_t timeout_cnt_threshold_ = 1000;
+const uint32_t timeout_cnt_threshold_ = 10000;
+
+bool dry_run_; // Run the PTB without collecting data
 
   // -- Internal run statistics
   uint32_t num_microslices_;
@@ -477,11 +476,7 @@ const uint32_t timeout_cnt_threshold_ = 1000;
   uint32_t bytes_sent_;
   uint32_t first_timestamp_;
   uint32_t last_timestamp_;
-
-  // Status flags to collect errors
-  bool status_failed_readout_;
   
-  bool dry_run_; // Run the PTB without collecting data
 
   //#ifdef ARM_POTHOS
   //  pzdud_t *s2mm_;
