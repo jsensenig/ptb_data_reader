@@ -5,7 +5,7 @@ BIN        := $(PWD)/bin
 DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket 
 DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src 
 #DMA_TYPE	:= -DARM_XDMA
-DMA_TYPE	:= -DARM_MMAP
+DMA_TYPE	:= -DARM_MMAP -DLOCKFREE
 #DMA_TYPE	:= -DARM_POTHOS
 
 

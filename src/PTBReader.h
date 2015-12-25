@@ -10,7 +10,12 @@
 
 #include <string>
 #include <iostream>
+#if defined(LOCKFREE)
+#include "atomicops.h"
+#include "readerwriterqueue.h"
+#else
 #include <queue>
+#endif
 
 extern "C" {
 #include<pthread.h>
@@ -415,7 +420,11 @@ private:
 //endif
 #ifdef ARM_XDMA
 // declare a bunch of variables that are common to the program
+#if defined(LOCKFREE)
+  moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
+  #else
   std::queue<uint32_t*> buffer_queue_;
+#endif
   struct xdma_dev xdma_device;
   struct xdma_chan_cfg xdma_dst_cfg;
   struct xdma_buf_info xdma_buf;
@@ -428,7 +437,11 @@ private:
   // Keeps frames stored
   LocalRegister control_register_;
   LocalRegister data_register_;
+#if defined(LOCKFREE)
+  moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
+  #else
   std::queue<uint32_t*> buffer_queue_;
+#endif
   uint32_t * memory_pool_;
   void * mapped_data_base_addr_;
 #endif

@@ -32,6 +32,7 @@ extern "C" {
 
 #include <cstring>
 
+
 #ifdef ARM_XDMA
 // declare a bunch of variables that are used by the DMA driver
 
@@ -93,6 +94,7 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
 {
 
 
+#ifndef LOCKFREE
   // Init the mutex for the queue
   // FIXME: Replace mutex by lock free queue
   if (pthread_mutex_init(&lock_, NULL) != 0)
@@ -100,14 +102,16 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
     Log(error,"\n Failed to create the mutex for the data queue\n" );
     throw std::string("Failed to create the mutex for the data queue.");
   }
+#endif
 
 }
 
 PTBReader::~PTBReader() {
   Log(debug,"Destroying the reader." );
+#ifndef LOCKFREE
   //FIXME: Replace mutex by lock free queue
   pthread_mutex_destroy(&lock_);
-
+#endif
   ready_ = false;
 }
 
@@ -295,6 +299,10 @@ void PTBReader::ResetBuffers() {
   // FIXME: Replace mutex by lock free queue
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
+#if defined(LOCKFREE)
+  buffer_queue_.pop();
+  counter++;
+#else
   pthread_mutex_lock(&lock_);
 
   while (!buffer_queue_.empty()) {
@@ -302,6 +310,7 @@ void PTBReader::ResetBuffers() {
     counter++;
   }
   pthread_mutex_unlock(&lock_);
+#endif
   Log(info,"Popped %u entries from the buffer queue.",counter);
 }
 
@@ -433,10 +442,14 @@ void PTBReader::ClientCollector() {
 
     // DMA transaction was successful.
     // FIXME: Replace this by lock free queue
+  #if defined(LOCKFREE)
+    buffer_queue_.enqueue(&dma_buffer_[pos]);
+  #else
     pthread_mutex_lock(&lock_);
     buffer_queue_.push(&dma_buffer_[pos]);
     //buffer_queue_.push(&frame[pos]);
     pthread_mutex_unlock(&lock_);
+  #endif
     //Log(debug,"Done storing the buffer");
     pos += frame_size_u32;
     //pos_pool += frame_size_bytes; 
@@ -506,9 +519,13 @@ void PTBReader::ClientCollector() {
       printf("%08X %08X %08X %08X\n",memory_pool_[pos],memory_pool_[pos+1],memory_pool_[pos+2],memory_pool_[pos+3]);
 
       // DMA transaction was successful.
+#if defined(LOCKFREE)
+      buffer_queue_.enqueue(&memory_pool_[pos]);
+#else
       pthread_mutex_lock(&lock_);
       buffer_queue_.push(&memory_pool_[pos]);
       pthread_mutex_unlock(&lock_);
+#endif
       pos += frame_size_u32;
     } else {
 //      printf("There is nothing\n");
@@ -597,10 +614,14 @@ void PTBReader::ClientCollector() {
     }
 
     buffers[handle]->size = len;
+#if defined(LOCKFREE)
+    buffer_queue_.enqueue(buffers[handle]);
+    #else
     // DMA transaction was successful.
     pthread_mutex_lock(&lock_);
     buffer_queue_.push(buffers[handle]);
     pthread_mutex_unlock(&lock_);
+#endif
   }
 
   // Loop is done
@@ -704,18 +725,21 @@ void PTBReader::ClientTransmitter() {
       // There should be a better way to set up this wait
       // Ideally we would love to have a inerrupt sending a 
       // callback the moment that there
-      // buffer_queue_ is not empty
-
+#if defined(LOCKFREE)
+      while (!buffer_queue_.try_dequeue(frame)) {
+        continue;
+      }
+#else
       if (buffer_queue_.size() == 0) {
         continue;
       }
-
       // FIXME: Replace this by a lock free queue
       //Log(debug,"Grabbing from queue");
       pthread_mutex_lock(&lock_);
       frame = buffer_queue_.front();
       buffer_queue_.pop();
       pthread_mutex_unlock(&lock_);
+#endif
 
       // FIXME: If the PTBreader is still slow after these changes modify the
       // software to simply send the while thing at once without resizing the packets
@@ -956,12 +980,7 @@ void PTBReader::ClientTransmitter() {
   delete [] eth_buffer;
   // Should be safe to delete the memory_pool here as well.
 }
-#endif
-
-
-
-
-#ifdef  ARM_POTHOS
+#elif defined(ARM_POTHOS)
 void PTBReader::ClientTransmitter() {
   Log(verbose, "Starting transmitter\n");
 
@@ -1034,6 +1053,7 @@ void PTBReader::ClientTransmitter() {
       // buffer_queue_ is not empty
 
       if (buffer_page == NULL) {
+
         if (buffer_queue_.size() == 0) {
           continue;
         }
