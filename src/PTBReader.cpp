@@ -479,9 +479,7 @@ void PTBReader::ClientCollector() {
   // xdma_exit();
   // Log(debug,"DMA engine done.");
 
-#endif /*ARM_XDMA*/
-
-#ifdef ARM_MMAP
+#elif defined(ARM_MMAP)
 
   // In this case we want to have a local memory buffer and it is there that we
   // do any manipulations
@@ -497,14 +495,27 @@ void PTBReader::ClientCollector() {
   bool first = true;
   // force position to always start at 0
   pos = 0;
+  static uint32_t test_val = 0x0;
   while(keep_collecting_) {
     auto begin_trf = std::chrono::high_resolution_clock::now();
 
     // Set the read_ready bit
     // enable read_ready to trigger a transaction
+    // There is an issue here. If the transaction is not done by the time
+    // that the test of the bit is done, we will miss a transaction and another
+    // one will happen. The idea is to keep polling until a frame comes
     control_register_.value() =  0x1;
-    // Check if there is valid data in the register
-    if (((control_register_.value() >> 1 ) & 0x1) == 0x1) {
+    // poll for the data to be released
+    do {
+      test_val = control_register_.value();
+    } while (((test_val >> 1) & 0x1 == 0x0) && keep_collecting_);
+    // -- Data arrived or cancel request arrived
+    if (keep_collecting_) {
+      break;
+    }
+
+    //    // Check if there is valid data in the register
+    //    if (((control_register_.value() >> 1 ) & 0x1) == 0x1) {
       if (first) {
         begin = std::chrono::high_resolution_clock::now();
         first = false;
@@ -527,16 +538,16 @@ void PTBReader::ClientCollector() {
       pthread_mutex_unlock(&lock_);
 #endif
       pos += frame_size_u32;
-    } else {
-//      printf("There is nothing\n");
-//      control_register_.value() = 0x0;
-      continue;
-
-    }
+    //}
+    //  else {
+    //      printf("There is nothing\n");
+    //      control_register_.value() = 0x0;
+    //      continue;
+    //    }
     if (pos+frame_size_u32 >= buffer_size) {
       pos = 0;
     }
-  }
+  } // while keep_collecting
   auto end = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count();
   Log(warning,"Stopped collecting data.");
@@ -546,9 +557,7 @@ void PTBReader::ClientCollector() {
   std::cout << "Transfer Duration " << total_duration
       << " us Iterations : " << iterations << ". Flow: "
       << total_duration/(double)iterations << " us/iteration" << std::endl;
-#endif /*ARM_MMAP*/
-
-#ifdef ARM_POTHOS
+#elif defined(ARM_POTHOS)
   // This should be done out of this part
   // Create DMA channel
   s2mm_ = pzdud_create(0, PZDUD_S2MM);
