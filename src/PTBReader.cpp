@@ -46,6 +46,19 @@ static uint8_t *g_dma_mem_map;    /* mmapped array of bytes representing the tra
 // This contains the data register
 mapped_register data_reg;
 
+struct read_status {
+  typedef uint8_t state_t;
+  typedef uint8_t index_t;
+  index_t idx : 1;
+  state_t state :2;
+  static const state_t  states[2];
+  state_t get_next_read() {
+    return states[idx++];
+  }
+};
+
+const read_status::state_t  read_status::states[2] = {0x1,0x2};
+
 #endif
 void print_bits(void* memstart, size_t nbytes) {
 
@@ -496,6 +509,8 @@ void PTBReader::ClientCollector() {
   // force position to always start at 0
   pos = 0;
   static uint32_t test_val = 0x0;
+  read_status stat;
+
   while(keep_collecting_) {
     auto begin_trf = std::chrono::high_resolution_clock::now();
 
@@ -504,13 +519,13 @@ void PTBReader::ClientCollector() {
     // There is an issue here. If the transaction is not done by the time
     // that the test of the bit is done, we will miss a transaction and another
     // one will happen. The idea is to keep polling until a frame comes
-    control_register_.value() =  0x1;
+    control_register_.value() =  stat.get_next_read();
     // poll for the data to be released
     do {
       test_val = control_register_.value();
-    } while (((test_val >> 1) & 0x1 == 0x0) && keep_collecting_);
+    } while ((((test_val >> 2) & 0x1) == 0x0) && keep_collecting_);
     // -- Data arrived or cancel request arrived
-    if (keep_collecting_) {
+    if (!keep_collecting_) {
       break;
     }
 
@@ -518,6 +533,7 @@ void PTBReader::ClientCollector() {
     //    if (((control_register_.value() >> 1 ) & 0x1) == 0x1) {
       if (first) {
         begin = std::chrono::high_resolution_clock::now();
+        begin_trf = std::chrono::high_resolution_clock::now();
         first = false;
       }
       // A transation was completed
