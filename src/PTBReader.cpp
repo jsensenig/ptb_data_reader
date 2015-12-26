@@ -52,8 +52,9 @@ struct read_status {
   index_t idx : 1;
   state_t state :2;
   static const state_t  states[2];
-  state_t get_next_read() {
-    return states[idx++];
+  uint32_t get_next_read() {
+    state = states[++idx];
+    return static_cast<uint32_t>(state);
   }
 };
 
@@ -510,7 +511,11 @@ void PTBReader::ClientCollector() {
   pos = 0;
   static uint32_t test_val = 0x0;
   read_status stat;
-
+  // Initialize the index
+  stat.idx = 0x0;
+  static uint32_t new_state = 0x0;
+  static uint32_t loop_counter = 0x0;
+  static uint32_t test_val2 = 0x0;
   while(keep_collecting_) {
     auto begin_trf = std::chrono::high_resolution_clock::now();
 
@@ -519,10 +524,19 @@ void PTBReader::ClientCollector() {
     // There is an issue here. If the transaction is not done by the time
     // that the test of the bit is done, we will miss a transaction and another
     // one will happen. The idea is to keep polling until a frame comes
-    control_register_.value() =  stat.get_next_read();
+    Log(debug,"Initial control : %08X",control_register_.value());
+    new_state = stat.get_next_read();
+    control_register_.value() = new_state;
+    Log(debug,"new_state 0x%X reg 0x%X idx %u state 0x%X",new_state,control_register_.value(),static_cast<uint32_t>(stat.idx),static_cast<uint32_t>(stat.state));
     // poll for the data to be released
     do {
+      test_val2 = test_val;
       test_val = control_register_.value();
+      if (test_val != test_val2) {
+        Log(debug,"Changed status (%u) : 0x%X -> 0x%X",test_val2,test_val);
+      }
+      loop_counter++;
+
     } while ((((test_val >> 2) & 0x1) == 0x0) && keep_collecting_);
     // -- Data arrived or cancel request arrived
     if (!keep_collecting_) {
