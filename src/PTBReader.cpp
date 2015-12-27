@@ -533,7 +533,7 @@ void PTBReader::ClientCollector() {
       test_val2 = test_val;
       test_val = control_register_.value();
       if (test_val != test_val2) {
-        Log(debug,"Changed status (%u) : 0x%X -> 0x%X",test_val2,test_val);
+        Log(debug,"Changed status (%u) : 0x%X -> 0x%X",loop_counter,test_val2,test_val);
       }
       loop_counter++;
 
@@ -765,9 +765,11 @@ void PTBReader::ClientTransmitter() {
       // Ideally we would love to have a inerrupt sending a 
       // callback the moment that there
 #if defined(LOCKFREE)
-      while (!buffer_queue_.try_dequeue(frame)) {
+      while (!buffer_queue_.try_dequeue(frame) && keep_transmitting_) {
         continue;
       }
+      // break out if a stop was requested while waiting for data to be available.
+      if (!keep_transmitting_) break;
 #else
       if (buffer_queue_.size() == 0) {
         continue;
