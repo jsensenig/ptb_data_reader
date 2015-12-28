@@ -88,7 +88,10 @@ std::string display_bits(void* memstart, size_t nbytes) {
 
 
 PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
-    packet_rollover_(0),socket_(nullptr),
+    socket_(nullptr),
+    #ifdef ENABLE_FRAG_BLOCKS
+    packet_rollover_(0),fragmented_(false),
+#endif
     client_thread_collector_(0),client_thread_transmitter_(0),ready_(false),
 #ifdef ARM_MMAP
     memory_pool_(nullptr),mapped_data_base_addr_(0),
@@ -97,10 +100,10 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
     dma_buffer_(nullptr),
 #endif
     seq_num_(0),
-    fragmented_(false),keep_transmitting_(true),
+    keep_transmitting_(true),
     keep_collecting_(true),time_rollover_(0),
     // below this point all these are debugging variables
-    timeout_cnt_(0),dry_run_(false),
+    dry_run_(false),
     num_microslices_(0),
     num_word_counter_(0),num_word_trigger_(0),num_word_fifo_warning_(0),
     num_word_tstamp_(0),bytes_sent_(0),
@@ -500,23 +503,27 @@ void PTBReader::ClientCollector() {
   // Also allocate 32 MB
   memory_pool_ = new uint32_t[buffer_size*frame_size_u32];
   static uint32_t pos = 0; // position pointer in the memory_pool_ variable
+  static uint32_t test_val = 0x0;
   // Some memory testing
+#if defined(MEASURE_PERFORMANCE)
   uint64_t total_duration = 0;
   uint32_t iterations = 0;
   // this should only be done after the first frame actually comes in
   // otherwise most of the time is spent in waiting
   auto begin = std::chrono::high_resolution_clock::now();
   bool first = true;
-  // force position to always start at 0
+  static uint32_t loop_counter = 0x0;
+  static uint32_t test_val2 = 0x0;
+  static uint32_t new_state = 0x0;
+#endif
+
+   // force position to always start at 0
   pos = 0;
-  static uint32_t test_val = 0x0;
   read_status stat;
   // Initialize the index
   stat.idx = 0x0;
-  static uint32_t new_state = 0x0;
-  static uint32_t loop_counter = 0x0;
-  static uint32_t test_val2 = 0x0;
   while(keep_collecting_) {
+#if defined(MEASURE_PERFORMANCE) || defined(DEBUG)
     auto begin_trf = std::chrono::high_resolution_clock::now();
 
     // Set the read_ready bit
@@ -528,21 +535,28 @@ void PTBReader::ClientCollector() {
     new_state = stat.get_next_read();
     control_register_.value() = new_state;
     Log(debug,"new_state 0x%X reg 0x%X idx %u state 0x%X",new_state,control_register_.value(),static_cast<uint32_t>(stat.idx),static_cast<uint32_t>(stat.state));
+#else
+    control_register_.value() = stat.get_next_read();
+#endif
     // poll for the data to be released
     do {
+#if defined(DEBUG)
       test_val2 = test_val;
       test_val = control_register_.value();
       if (test_val != test_val2) {
         Log(debug,"Changed status (%u) : 0x%X -> 0x%X",loop_counter,test_val2,test_val);
       }
       loop_counter++;
-
+#else
+      test_val = control_register_.value();
+#endif
     } while ((((test_val >> 2) & 0x1) == 0x0) && keep_collecting_);
     // -- Data arrived or cancel request arrived
     if (!keep_collecting_) {
       break;
     }
 
+#if defined(MEASURE_PERFORMANCE)
     //    // Check if there is valid data in the register
     //    if (((control_register_.value() >> 1 ) & 0x1) == 0x1) {
       if (first) {
@@ -550,15 +564,17 @@ void PTBReader::ClientCollector() {
         begin_trf = std::chrono::high_resolution_clock::now();
         first = false;
       }
+#endif
       // A transation was completed
       // there is data to be collected
       std::memcpy(&memory_pool_[pos],data_register_.address,frame_size_bytes);
+#if defined(MEASURE_PERFORMANCE)
       auto end_trf = std::chrono::high_resolution_clock::now();
       total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();
       iterations++;
 
       printf("%08X %08X %08X %08X\n",memory_pool_[pos],memory_pool_[pos+1],memory_pool_[pos+2],memory_pool_[pos+3]);
-
+#endif
       // DMA transaction was successful.
 #if defined(LOCKFREE)
       buffer_queue_.enqueue(&memory_pool_[pos]);
@@ -578,6 +594,7 @@ void PTBReader::ClientCollector() {
       pos = 0;
     }
   } // while keep_collecting
+#if defined(MEASURE_PERFORMANCE)
   auto end = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count();
   Log(warning,"Stopped collecting data.");
@@ -587,6 +604,10 @@ void PTBReader::ClientCollector() {
   std::cout << "Transfer Duration " << total_duration
       << " us Iterations : " << iterations << ". Flow: "
       << total_duration/(double)iterations << " us/iteration" << std::endl;
+#else
+  Log(info,"Stopped collecting data.");
+  #endif
+
 #elif defined(ARM_POTHOS)
   // This should be done out of this part
   // Create DMA channel
@@ -851,7 +872,9 @@ void PTBReader::ClientTransmitter() {
         //Log(verbose,"Intermediate packet:");
         //print_bits(eth_buffer,ipck);
         // No support for
+#ifdef ENABLE_FRAG_BLOCKS
         fragmented_ = false;
+#endif
         num_word_tstamp_++;
 #endif
         // break out of the cycle
@@ -1003,8 +1026,6 @@ void PTBReader::ClientTransmitter() {
     }
 #else 
     seq_num_++;
-    fragmented_ =false;
-
 #endif
     // if (seq_num_ >= 5) {
     //   Log(warning,"FIXME: Forcing to stop after the first packet being generated");

@@ -8,8 +8,11 @@
 #ifndef PTBREADER_H_
 #define PTBREADER_H_
 
+#include "CompilerOptions.h"
+
 #include <string>
 #include <iostream>
+
 #if defined(LOCKFREE)
 #include "atomicops.h"
 #include "readerwriterqueue.h"
@@ -39,7 +42,7 @@ struct DMABuffer {
 #ifdef ARM_XDMA
 #include "xdma.h"
 #endif
-#ifdef ARM_MMAP // why?
+#ifdef ARM_MMAP // needed to use the LocalRegister structure
 #include "util.h"
 #endif
 
@@ -61,12 +64,15 @@ class TCPSocket;
 class PTBReader {
  public:
   
-  /// Bunch of structures that help manipulating the data
-  // ethernet packet header
-  struct Header {
+  /// Bunch of structures that help manipulating the data.
+  /// These must be in sync with lbne-raw-data
+
+    /// Header of ethernet packet
+    struct Header {
     
     typedef uint32_t data_t;
-    
+    typedef uint16_t data_size_t;
+
     typedef uint8_t  format_version_t;
     typedef uint8_t  sequence_id_t;
     typedef uint16_t block_size_t;
@@ -77,25 +83,22 @@ class PTBReader {
     
     static size_t const size_words = sizeof(data_t);
     
-    //static const size_t raw_header_words = 1;
-    //data_t raw_header_data[raw_header_words];
+    static data_size_t const num_bits_size        = 16;
+    static data_size_t const num_bits_sequence_id = 8;
+    static data_size_t const num_bits_format      = 8;
   };
-  
-  struct Word_warning {
+
+  /// Internal warning word
+  struct Word_Warning {
     typedef uint32_t data_t;
     typedef uint16_t data_size_t;
     
     typedef uint8_t  warning_type_t;
     typedef uint8_t  data_packet_type_t;
-    
-    // The order of the data packet type and the timestamp have been
-    // swapped to reflect that it's the MOST significant three bits in
-    // the payload header which contain the type. I've also added a
-    // 1-bit pad to reflect that the least significant bit is unused.
-    
+
     uint32_t padding                        : 24;
     warning_type_t warning_type             : 5;
-    data_packet_type_t     data_packet_type : 3;
+    data_packet_type_t data_packet_type     : 3;
     
     static size_t const size_words = sizeof(data_t);
     static data_size_t const num_bits_padding     = 24;
@@ -103,7 +106,7 @@ class PTBReader {
     static data_size_t const num_bits_packet_type = 3;
   };
 
-  // Common header to everything except warning words
+  /// Frame header : Common header to everything except warning words
   struct Word_Header {
     typedef uint32_t data_t;
     typedef uint16_t data_size_t;
@@ -116,18 +119,19 @@ class PTBReader {
     // the payload header which contain the type. I've also added a
     // 2-bit pad to reflect that the 2 least significant bits are unused.
     
-    uint8_t padding : 2;
+    uint8_t padding                             : 2;
     short_nova_timestamp_t short_nova_timestamp : 27;
     data_packet_type_t     data_packet_type     : 3;
     
     static size_t const size_bytes = sizeof(data_t);
     static size_t const size_u32 = sizeof(data_t)/sizeof(uint32_t);
     
-    static data_size_t const num_bits_padding 	= 2;
-    static data_size_t const num_bits_short_tstamp	= 27;
-    static data_size_t const num_bits_packet_type	= 3;
+    static data_size_t const num_bits_padding       = 2;
+    static data_size_t const num_bits_short_tstamp  = 27;
+    static data_size_t const num_bits_packet_type   = 3;
   };
 
+  /// Counter payload description
   struct CounterPayload {
     typedef uint64_t counter_set_t;
     typedef uint16_t data_size_t;
@@ -144,15 +148,13 @@ class PTBReader {
     // -- BSU mappings
     counter_set_t bsu_rm     : 16;//end of first counter_set_t==uint64_t
     counter_set_t bsu_cu     : 10;
+    //FIXME: The panels should be remapped so that bsu_cl would be all together
     counter_set_t bsu_cl1    : 6;
     counter_set_t extra      : 1;
     counter_set_t bsu_cl2    : 7;
     counter_set_t bsu_rl     : 10;
     // Just ignore the rest of the word
     counter_set_t padding    : 30;
-    
-    // Not sure of what is this exactly
-    //static data_size_t num_bytes_padding_ptb = 2*sizeof(uint32_t);
     
     static data_size_t const num_bits_tsu_wu    = 10;
     static data_size_t const num_bits_tsu_el    = 10;
@@ -173,7 +175,6 @@ class PTBReader {
     static size_t const size_u32 = size_bytes/sizeof(uint32_t);
     
     // The size that arrives from the PTB
-    // NOTE: Not sure what this is for.
     static size_t const size_words_ptb_u32 = 3;
     static size_t const size_words_ptb_bytes = size_words_ptb_u32*sizeof(uint32_t);
     // The offset to grab the data
@@ -183,8 +184,12 @@ class PTBReader {
     // The payload position offset from the top of the frame (header + discard)
     static size_t const payload_offset_u32 = 1+ptb_offset_u32;
     static size_t const payload_offset_bytes = payload_offset_u32*sizeof(uint32_t);
+
+    counter_set_t get_bsu_cl() {return ((bsu_cl2 << 10) | (bsu_cl1));};
   };
 
+  /// Trigger description
+  /// FIXME: Review these
   struct TriggerPayload {
     typedef uint32_t trigger_type_t;
     typedef uint16_t data_size_t;
@@ -192,13 +197,19 @@ class PTBReader {
     // The 23 lsb are padding. No information is passed there
     trigger_type_t padding : 19; 
 
+    // This is to be remapped so that calib words can be OR-ed with
+    // calibration words
+    // [8 : t_type][4 : muon_type][4 : calib type]
     trigger_type_t trigger_id_calib: 4; // which of the calibration channels 
-    trigger_type_t trigger_id_muon : 4;
+    trigger_type_t trigger_id_muon : 4; // which of the muon triggers
     trigger_type_t trigger_type    : 5; // the 5 msb are the trigger type
+    trigger_type_t padding_ttype   : 3; // this makes the information byte aligned
     
-    static data_size_t const num_bits_padding = 23;
-    static data_size_t const num_bits_trigger_id = 4;
+    static data_size_t const num_bits_padding_low  = 19;
+    static data_size_t const num_bits_trigger_id   = 4;
+    static data_size_t const num_bits_calib_id     = 4;
     static data_size_t const num_bits_trigger_type = 5;
+    static data_size_t const num_bits_padding_high = 3;
     
     // ID the trigger types
     static trigger_type_t const calibration = 0x00;
@@ -264,7 +275,7 @@ class PTBReader {
       }
       return "";
     }
-    
+
   };
 
   struct TimestampPayload {
@@ -336,6 +347,7 @@ class PTBReader {
   }
 
   // FIXME: Implement this along with the fragmented blocks
+#ifdef ENABLE_FRAG_BLOCKS
   uint32_t getPacketRollover() const {
     return packet_rollover_;
   }
@@ -343,7 +355,7 @@ class PTBReader {
   void setPacketRollover(uint32_t packetRollover) {
     packet_rollover_ = packetRollover;
   }
-  
+#endif
   /**
    * Stop the client threads without touching the mutex.
    * Important in the case that one wants to delete the object 
@@ -403,22 +415,27 @@ private:
   static void * ClientCollectorFunc(void * This) {((PTBReader *)This)->ClientCollector(); return NULL;}
   static void * ClientTransmitterFunc(void * This) {((PTBReader *)This)->ClientTransmitter(); return NULL;}
 
+  // -- Structures for data socket connection
+
   unsigned short tcp_port_;
   std::string tcp_host_;
-  uint32_t packet_rollover_;
 
   TCPSocket *socket_;
+
   pthread_t client_thread_collector_;
   pthread_t client_thread_transmitter_;
-  pthread_mutex_t lock_;
 
+#ifndef LOCKFREE
+  pthread_mutex_t lock_;
+#endif
+
+#ifdef ENABLE_FRAG_BLOCKS
+  uint32_t packet_rollover_;
+#endif
   bool ready_;
 
 
-//#ifdef ARM_POTHOS
-//  std::queue<DMABuffer*> buffer_queue_;
-//endif
-#ifdef ARM_XDMA
+#if defined(ARM_XDMA)
 // declare a bunch of variables that are common to the program
 #if defined(LOCKFREE)
   moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
@@ -431,9 +448,8 @@ private:
   struct xdma_transfer xdma_trans;
   uint32_t *dma_buffer_;
 
-#endif
+#elif defined(ARM_MMAP)
 
-#ifdef ARM_MMAP
   // Keeps frames stored
   LocalRegister control_register_;
   LocalRegister data_register_;
@@ -444,15 +460,21 @@ private:
 #endif
   uint32_t * memory_pool_;
   void * mapped_data_base_addr_;
+#elif defined(ARM_POTHOS)
+    std::queue<DMABuffer*> buffer_queue_;
 #endif
 
+
   // A few auxiliary constants
-  static const uint32_t max_packet_size = 0xFFFF;
-  static const uint32_t frame_size_bits = 0x80; // the buffer is 128 bits
-  static const uint32_t frame_size_bytes = 0x10; // 16 bytes
-  static const uint32_t frame_size_u32 = 0x4; // 4xuint32_t
+  static const uint32_t max_packet_size   = 0xFFFF; // Max possible ethernet packet
+  static const uint32_t frame_size_bits   = 0x80;   // the buffer is 128 bits
+  static const uint32_t frame_size_bytes  = 0x10;   // 16 bytes
+  static const uint32_t frame_size_u32    = 0x4;    // 4xuint32_t
   // This is the buffer size in number of frames
-  static const uint32_t buffer_size = 2*1024*1024;//1024*1024;
+  // Could easily do something else, or even set this as a configuration
+  // parameter
+  // FIXME: Change to a fhicl param
+  static const uint32_t buffer_size = 2*1024*1024;
 
 
   // Warning pre_computed words
@@ -461,22 +483,23 @@ private:
 
 
   // A few more constants that are important
-  // This is actually
-  static const uint32_t fw_version_ = 0x4;
+  static const uint32_t fw_version_ = 0x5;
 
   // Frame sequence number
   uint32_t seq_num_;
-
+#ifdef ENABLE_FRAG_BLOCKS
   bool fragmented_;
+#endif
   bool keep_transmitting_;
-  //bool ready_to_send_;
-  //bool first_ts_;
   bool keep_collecting_;
   uint64_t time_rollover_;
 
-  // Debugging and control variables
+  // -- Debugging and control variables
+  // timeouts don't make sense with MMAP
+#if defined(ARM_XDMA) || defined(ARM_POTHOS)
 uint32_t timeout_cnt_;
 const uint32_t timeout_cnt_threshold_ = 10000;
+#endif
 
 bool dry_run_; // Run the PTB without collecting data
 

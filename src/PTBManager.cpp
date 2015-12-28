@@ -191,10 +191,11 @@ void PTBManager::StartRun() {
   // Set status flag to RUNNING
   if (!reader_) reader_ = new PTBReader();
 
+  // As of Dec-2015 the connection is supposed to be open here. No warning should now be issued.
   // Open the connection. It should not be open yet
   if (!reader_->isReady()) {
-    msgs_ << "<warning>Connection to board reader is not opened yet. Trying to reopen.</warning>";
-    Log(warning,"Connection is not opened yet. Trying to reopen.");
+    //    msgs_ << "<warning>Connection to board reader is not opened yet. Trying to reopen.</warning>";
+    //    Log(warning,"Connection is not opened yet. Trying to reopen.");
     reader_->InitConnection();
   }
 
@@ -207,10 +208,12 @@ void PTBManager::StartRun() {
     reader_->StartDataTaking();
   }
   catch(PTBexception &e) {
+    Log(error,"Exception caught: %s",e.what());
     msgs_ << "<error>" << e.what() << "</error>";
     return;
   }
   catch (...) {
+    Log(error,"Unknown error starting reader thread");
     msgs_ << "<error> Unknown error starting reader.</error>"; 
     return;
   }
@@ -275,6 +278,8 @@ void PTBManager::StopRun() {
   msgs_ << " time_run_board=" <<  reader_->GetRunTime();
   msgs_ << " />";
 
+  Log(info,"End of run message: %s",msgs_.str().c_str());
+
   //-- Soft Reset
   //-- Also send a soft reset to make sure that when the next start run comes
   // things are just as if we were starting anew.
@@ -289,7 +294,6 @@ void PTBManager::StopRun() {
   
   msgs_ << "<success>true</success>";
   status_ = IDLE;
-  run_start_time_ = 0;
 }
 
 void PTBManager::SetupRegisters() {
@@ -402,10 +406,11 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
         Log(warning,"Don't have a valid PTBReader instance. Attempting to create a new one." );
         reader_ = new PTBReader();
       }
+
       //-- Get the host
       std::string host = it->child("DaqHost").child_value();
       reader_->setTcpHost(host);
-
+      // -- Get the port
       strVal << it->child("DaqPort").child_value();
       unsigned short port;
       strVal >> port;
@@ -416,7 +421,18 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
       reader_->setTcpPort(port);
       Log(debug,"Setting data transmission channel to [%s:%hu]",host.c_str(),port);
 
-
+      // -- Get if it is a dry run
+      {
+        std::string dry_run_state = it->child("DryRun").child_value();
+        if (!dry_run_state.compare("true")) {
+          reader_->SetDryRun(true);
+          Log(warning,"Dry run mode enabled in the PTB. No data will be sent to board reader.");
+        } else {
+          reader_->SetDryRun(false);
+          Log(debug,"Dry run mode disabled in the PTB.");
+        }
+      }
+#ifdef ENABLE_FRAG_BLOCKS
       uint32_t rollOver;
       strVal << it->child("RollOver").child_value();
       strVal >> rollOver;
@@ -424,7 +440,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
       strVal.str("");
       Log(debug,"Packet Rollover %u",rollOver);
       reader_->setPacketRollover(rollOver);
-
+#endif
       uint32_t duration;
       strVal <<it->child("MicroSliceDuration").child_value();
       strVal >> duration;

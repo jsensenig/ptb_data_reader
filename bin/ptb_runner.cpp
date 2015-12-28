@@ -64,9 +64,9 @@ int main() {
   // Register a signal handler
   std::signal(SIGINT,handler);
 
-  Logger::SetSeverity(Logger::verbose);
+  // Logger::SetSeverity(Logger::verbose);
   // Logger::SetSeverity(Logger::debug);
-  // Logger::SetSeverity(Logger::info);
+  Logger::SetSeverity(Logger::info);
   // Logger::SetSeverity(Logger::warning);
   // Logger::SetSeverity(Logger::error);
   

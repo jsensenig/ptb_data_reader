@@ -189,10 +189,10 @@ private:
   static const uint8_t num_registers_ = 40;
   static const char *default_config_;
   void *mapped_conf_base_addr_;
-  void *mapped_time_base_addr_;
-  LocalRegister ptb_start_ts_low_;
-  LocalRegister ptb_start_ts_high_;
-  uint64_t run_start_time_;
+//  void *mapped_time_base_addr_;
+//  LocalRegister ptb_start_ts_low_;
+//  LocalRegister ptb_start_ts_high_;
+//  uint64_t run_start_time_;
   std::ostringstream msgs_;
   std::string msgs_str_;
 };
