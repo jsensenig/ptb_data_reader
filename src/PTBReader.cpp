@@ -523,9 +523,11 @@ void PTBReader::ClientCollector() {
   // Initialize the index
   stat.idx = 0x0;
   while(keep_collecting_) {
-#if defined(MEASURE_PERFORMANCE) || defined(DEBUG)
+#if defined(MEASURE_PERFORMANCE)
     auto begin_trf = std::chrono::high_resolution_clock::now();
+#endif
 
+#if defined(DEBUG)
     // Set the read_ready bit
     // enable read_ready to trigger a transaction
     // There is an issue here. If the transaction is not done by the time
@@ -572,6 +574,9 @@ void PTBReader::ClientCollector() {
       auto end_trf = std::chrono::high_resolution_clock::now();
       total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();
       iterations++;
+
+#endif
+#ifdef DEBUG
 
       printf("%08X %08X %08X %08X\n",memory_pool_[pos],memory_pool_[pos+1],memory_pool_[pos+2],memory_pool_[pos+3]);
 #endif
@@ -807,12 +812,13 @@ void PTBReader::ClientTransmitter() {
       // software to simply send the while thing at once without resizing the packets
       // All packets become 16 bytes long and send everything as collected
 
-      //#ifdef DEBUG
+#ifdef DEBUG
       Log(debug,"Grabbed : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
-      //#endif
+#endif
 
       // Grab the header, that now should be at the 4 lsB
-      Word_Header *frame_header = reinterpret_cast_checked<Word_Header *>(frame);
+      //Word_Header *frame_header = reinterpret_cast_checked<Word_Header *>(frame);
+      Word_Header *frame_header = reinterpret_cast<Word_Header *>(frame);
 
       // Very first check to discard "ghost frames"
       // -- Ghost frames are caused by the NOvA timing not being fully initialized by
@@ -825,7 +831,8 @@ void PTBReader::ClientTransmitter() {
       // Ghost frames are a mess. For the moment keep them but need to set 
       // up something more reliable.
       // Most likely on the firmware side
-      if ((frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
+      // Wouldn't there be a possibility of randomly reaching a state with a full zero nova timestamp?
+      if ((seq_num_ == 1) && (frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
         //#ifdef DEBUG
         Log(warning,"Dropping ghost frame");
         //#endif
@@ -875,6 +882,10 @@ void PTBReader::ClientTransmitter() {
 #ifdef ENABLE_FRAG_BLOCKS
         fragmented_ = false;
 #endif
+#endif
+
+#ifdef MEASURE_PERFORMANCE
+        num_microslices_++;
         num_word_tstamp_++;
 #endif
         // break out of the cycle
@@ -906,7 +917,7 @@ void PTBReader::ClientTransmitter() {
         ipck += CounterPayload::size_words_ptb_u32;
         eth_buffer[ipck] = 0x2 & frame_header->padding;
         ipck+=1;
-#ifdef DEBUG
+#ifdef MEASURE_PERFORMANCE
         // Log(verbose,"Intermediate packet:");
         // print_bits(eth_buffer,ipck);
 
@@ -919,7 +930,7 @@ void PTBReader::ClientTransmitter() {
                     &frame[TriggerPayload::payload_offset_u32],
                     TriggerPayload::size_bytes);
         ipck += TriggerPayload::size_u32;
-#ifdef DEBUG
+#ifdef MEASURE_PERFORMANCE
         // Log(verbose,"Intermediate packet:");
         // print_bits(eth_buffer,ipck);
         num_word_trigger_++;
@@ -929,7 +940,7 @@ void PTBReader::ClientTransmitter() {
         Log(warning,
             "+++ Received a FIFO warning of type %08X .+++",
             (reinterpret_cast_checked<uint32_t*>(frame))[0]);
-#ifdef DEBUG
+#ifdef MEASURE_PERFORMANCE
         num_word_fifo_warning_++;
 #endif
         break;
@@ -995,19 +1006,19 @@ void PTBReader::ClientTransmitter() {
     std::memcpy(&eth_buffer[ipck],&eth_checksum,sizeof(eth_checksum));
     ipck += 1;
     packet_size = ipck*sizeof(uint32_t);
-//#ifdef DEBUG
+#ifdef DEBUG
     Log(debug,"Sending packet with %u bytes (including header)",packet_size);
     print_bits(eth_buffer,packet_size);
 
-//#endif
+#endif
     try {
       socket_->send(eth_buffer,packet_size);
     }
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what() );
       // Set the run to be stopped
-      keep_transmitting_ = false;
-      keep_collecting_ = false;
+//      keep_transmitting_ = false;
+//      keep_collecting_ = false;
     }
 
     // FIXME: Add support for fragmented blocks. 

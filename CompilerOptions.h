@@ -19,8 +19,8 @@
 
 /// -- Add data collection statistics.
 /// -- The times are reported at the end of the run
-//#define MEASURE_PERFORMANCE 1
-#undef MEASURE_PERFORMANCE
+#define MEASURE_PERFORMANCE 1
+//#undef MEASURE_PERFORMANCE
 
 /// -- Define whether a standard mutex base code should be used, or
 /// -- the contributed moodycamel lock-free implementation
