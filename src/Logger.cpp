@@ -11,13 +11,13 @@
 #include <sstream>
 #include <cstdlib>
 #include <cstdarg>
+#include <cstdio>
+
 #include "util.h"
 
 extern "C" {
-#include <stdio.h>
 #include <unistd.h>
 }
-
 
 static struct nullstream:
     std::ostream {
@@ -29,47 +29,14 @@ static struct nullstream:
 
 Logger::severity Logger::_sev = Logger::info;
 std::ostream* Logger::_ostream (&std::cout);
-//std::ostream* Logger::_estream (&std::cerr);
 std::ostream* Logger::_nstream (&devnull);
 bool Logger::_print = true;
 // By default do not allow colored output
 bool Logger::_color = false;
-std::mutex Logger::print_mutex_;
 
 Logger::Logger() { }
 
 Logger::~Logger() { }
-
-void Logger::message(Logger::severity sev, const char* where, const char* fmt,...){
-  print_mutex_.lock();
-
-  if (sev >= _sev) {
-
-
-    char header[250];
-    sprintf(header,"%s:%s:%s:",tostr(sev),where,currentDateTime().c_str());
-    std::string tmp_fmt = header;
-    tmp_fmt += fmt;
-    char msg[2048];
-    va_list args;
-    va_start(args,fmt);
-    vsprintf(msg,tmp_fmt.c_str(),args);
-    va_end(args);
-
-    //printf("%s\n",msg);
-    *_ostream << msg << std::endl;
-  }
-
-  print_mutex_.unlock();
-  // This part seems to be failing before the message is actually printed.
-  if (sev == fatal) {
-    throw;
-  }
-}
-
-//void Logger::endlog(std::ostream&){
-//  if(_print)*_ostream << std::endl;
-//}
 
 const char* Logger::tostr(Logger::severity sev) {
   _color=isatty(fileno(stdout))?true:false;
@@ -103,6 +70,79 @@ const char* Logger::tostr(Logger::severity sev) {
 }
 
 
+#if defined(LOCKFREE)
+
+moodycamel::ReaderWriterQueue<std::string> Logger::buffer_queue_;
+
+void Logger::message(Logger::severity sev, const char* where, const char* fmt,...){
+
+  // Pop the message into the queue
+  // Write *a* message. They will never be exactly done at the same time
+  if (sev >= _sev) {
+
+    char header[250];
+    //sprintf(header,"%s:%s:%s:",tostr(sev),where,currentDateTime().c_str());
+    sprintf(header,"%s:%s:",tostr(sev),where);
+    std::string tmp_fmt = header;
+    tmp_fmt += fmt;
+    char msg[2048];
+    va_list args;
+    va_start(args,fmt);
+    vsprintf(msg,tmp_fmt.c_str(),args);
+    va_end(args);
+    buffer_queue_.enqueue(std::string(msg));
+  }
+
+  // Try to print a message
+  std::string out_msg;
+  if (buffer_queue_.try_dequeue(out_msg)) {
+    *_ostream << out_msg << std::endl;
+  }
+
+// This part seems to be failing before the message is actually printed.
+//  if (sev == fatal) {
+//    throw;
+//  }
+}
+#else
+
+//std::ostream* Logger::_estream (&std::cerr);
+std::mutex Logger::print_mutex_;
+
+
+void Logger::message(Logger::severity sev, const char* where, const char* fmt,...){
+  print_mutex_.lock();
+
+  if (sev >= _sev) {
+
+
+    char header[250];
+    sprintf(header,"%s:%s:%s:",tostr(sev),where,currentDateTime().c_str());
+    std::string tmp_fmt = header;
+    tmp_fmt += fmt;
+    char msg[2048];
+    va_list args;
+    va_start(args,fmt);
+    vsprintf(msg,tmp_fmt.c_str(),args);
+    va_end(args);
+
+    //printf("%s\n",msg);
+    *_ostream << msg << std::endl;
+  }
+
+  print_mutex_.unlock();
+  // This part seems to be failing before the message is actually printed.
+  if (sev == fatal) {
+    throw;
+  }
+}
+
+//void Logger::endlog(std::ostream&){
+//  if(_print)*_ostream << std::endl;
+//}
+
+
+#endif
 //std::ostream& endlog(std::ostream& os) {
 //  Logger::endlog(os);
 //  return devnull;

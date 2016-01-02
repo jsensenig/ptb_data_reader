@@ -45,6 +45,7 @@ PTBManager *ConfigServer::data_manager_ = NULL;
 std::list<const char*> ConfigServer::queue_ = std::list<const char*>();
 pthread_t ConfigServer::thread_id_ = 0;
 bool ConfigServer::shutdown_= false;
+TCPSocket* ConfigServer::client_socket_ = nullptr;
 
 ConfigServer::ConfigServer() {
   // Use the practical socket to establish a connection
@@ -60,63 +61,62 @@ ConfigServer::ConfigServer() {
 }
 
 void* ConfigServer::listen(void *arg) {
-  //printf("In listen\n");
-  std::thread::id thread_id = std::this_thread::get_id();
-  std::ostringstream stream;
-  stream << std::hex << thread_id << " " << std::dec << thread_id;
-  Log(info,"#### PTB Listen thread: %s",stream.str().c_str());
 
-  try {
-    Log(info,"Creating server listening socket.");
-    TCPServerSocket servSock(port_);   // Socket descriptor for server
-    Log(info,"Entering wait mode for client connection at port %u",port_);
-    for (;;) {
+#ifdef DEBUG
+  std::thread::id thread_id = std::this_thread::get_id();
+  Log(debug,"PTB Listen thread: 0x%X",thread_id);
+#endif
+  //TCPSocket *client_socket_ = nullptr;
+  // This forces the loop to restart in case the problem was caused by loss of connection.
+  for (;;) {
+    try {
+      Log(info,"Creating server listening socket.");
+      TCPServerSocket servSock(port_);   // Socket descriptor for server
+      Log(info,"Entering wait mode for client connection at port %u",port_);
       // Check if there is a request to terminate the connection.
       if (shutdown_) {
         Log(info,"Received a request to shut down. Complying...");
         return NULL;
       }
 
-      Log(verbose,"Starting listener for connection.");
+      Log(info,"Starting listener for connection...");
       // Create a separate socket for the client
       // Wait indefinitely until the client kicks in.
-      TCPSocket *clntSock = servSock.accept();
-      Log(verbose,"Received client connection request.");
-      ThreadMain(clntSock);
+      client_socket_ = servSock.accept();
+
+      Log(debug,"Received client connection request.");
+      HandleTCPClient();
+    }
+    catch(SocketException &e) {
+      // The problem is that from here there is nothing else that can be done
+      // return to main and main will make sure to clean up and relaunch
+      Log(error,"Socket exception caught : %s",e.what());
+      delete client_socket_; client_socket_ = nullptr;
+      Log(warning,"Relaunching the socket for connection acceptance in 5s.");
+      std::this_thread::sleep_for(std::chrono::seconds(5));
     }
   }
-  catch(SocketException &e) {
-    // The problem is that from here there is nothing else that can be done
-    // return to main and main will make sure to clean up and relaunch
-    Log(error,"Socket exception caught : %s",e.what());
-    throw;
-    //std::abort();
 
-  }
-  catch(std::exception &e) {
-    Log(error,"Caught standard exception : %s",e.what());
-  }
-  /**
-  catch(...) {
-    Log(error,"Failed to establish configuration socket with unknown failure.");
-  }
-  */
-  Log(warning,"Reaching the end, but not sure why...");
+  Log(warning,"Reaching the end of execution, but not sure why...should not happen!");
   return NULL;
 }
 
 
 // TCP client handling function
-void ConfigServer::HandleTCPClient(TCPSocket *sock) {
-  Log(debug,"Handling client ");
+void ConfigServer::HandleTCPClient(/*TCPSocket *sock */) {
+  if (client_socket_ == nullptr) {
+    Log(error,"Refusing to handle a NULL socket.");
+    return;
+  }
+  Log(debug,"Handling client...");
   try {
 
-    Log(debug,"Address : %s",sock->getForeignAddress().c_str());;
+    Log(debug,"Address : %s",client_socket_->getForeignAddress().c_str());;
   } catch (SocketException &e) {
     Log(error,"Unable to get foreign address");
   }
   try {
-	  uint32_t localPort = sock->getForeignPort();
+	  uint32_t localPort = client_socket_->getForeignPort();
     Log(debug,"Port : %u",localPort);
   } catch (SocketException &e) {
     Log(error,"Unable to get foreign port");
@@ -142,7 +142,7 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
   localBuffer.resize(RCVBUFSIZE);
   localBuffer = "";
   // What if the string sent is bigger than the one being read?
-  while ((recvMsgSize = sock->recv(instBuffer, RCVBUFSIZE-2)) > 0) { // Zero means
+  while ((recvMsgSize = client_socket_->recv(instBuffer, RCVBUFSIZE-2)) > 0) { // Zero means
 
     // Truncate the instantaneous buffer on the number of bytes
     instBuffer[recvMsgSize] = '\0';
@@ -209,24 +209,24 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
           char*answer;
           ProcessTransmission(tcp_buffer_.c_str(),answer);
           //sprintf(instBuffer,"<success>true</success>");
-          sprintf(instBuffer,"%s",answer);
+          sprintf(instBuffer,"<feedback>%s</feedback>",answer);
           delete [] answer;
         }
         catch (std::string &e) {
           Log(error,"Config exception caught : %s",e.c_str());
           // Return a failure signal.
-          sprintf(instBuffer,"<error>%s</error>",e.c_str());
+          sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.c_str());
         }
         catch (std::exception &e) {
           Log(error,"STD exception caught : %s",e.what());
           // Return a failure signal.
-          sprintf(instBuffer,"<error>%s</error>",e.what());
+          sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.what());
         }
         catch (...) {
-          sprintf(instBuffer,"<error>Unknown</error>");
+          sprintf(instBuffer,"<feedback><error>Unknown</error></feedback>");
         }
 	Log(verbose,"Returning answer : %s",instBuffer);
-        sock->send(instBuffer,strlen(instBuffer));
+        client_socket_->send(instBuffer,strlen(instBuffer));
 
       } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
         Log(verbose,"Found a command block.");
@@ -247,42 +247,34 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
           char *answer;
           ProcessTransmission(tcp_buffer_.c_str(),answer);
           //sprintf(instBuffer,"<success>true</success>");
-          sprintf(instBuffer,"%s",answer);
+          sprintf(instBuffer,"<feedback>%s</feedback>",answer);
           delete [] answer;
         }
         catch (std::string &e) {
           Log(error,"Config exception caught : %s",e.c_str());
           // Return a failure signal.
-          sprintf(instBuffer,"<error>%s</error>",e.c_str());
+          sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.c_str());
         }
         catch (PTBexception &e) {
           Log(error,"PTB exception caught : %s",e.what());
-          sprintf(instBuffer,"<error>%s</error>",e.what());
+          sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.what());
         }
         catch (std::exception &e) {
           Log(error,"STD exception caught : %s", e.what());
           // Return a failure signal.
-          sprintf(instBuffer,"<error>%s</error>",e.what());
+          sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.what());
         }
         catch (...) {
-          sprintf(instBuffer,"<error>Unknown error</error>");
+          sprintf(instBuffer,"<feedback><error>Unknown error</error></feedback>");
         }
         Log(debug,"Sending answer");
         Log(debug,"%s",instBuffer);
-        sock->send(instBuffer,strlen(instBuffer));
+        client_socket_->send(instBuffer,strlen(instBuffer));
         Log(debug,"Answer sent");
       } else {
         Log(verbose,"Found nothing");
       }
     }
-
-    // Process the string
-    // Now the newly received string should be processed.
-    // This method decides only if the data is configuration or a command
-    //ProcessTransmission(tmpBuffer);
-
-    // Echo message back to client
-    //sock->send(echoBuffer, recvMsgSize);
   }
 
   //
@@ -292,16 +284,20 @@ void ConfigServer::HandleTCPClient(TCPSocket *sock) {
 }
 
 
-void* ConfigServer::ThreadMain(void* clntSocket) {
-  // Guarantees that thread resources are deallocated upon return
-  //pthread_detach(pthread_self());
-
-  // Extract socket file descriptor from argument
-  HandleTCPClient((TCPSocket *) clntSocket);
-
-  delete (TCPSocket *) clntSocket;
-  return NULL;
-}
+//void* ConfigServer::ThreadMain() {
+//  // Guarantees that thread resources are deallocated upon return
+//  // pthread_detach(pthread_self());
+//
+//
+//  // Extract socket file descriptor from argument
+//  //HandleTCPClient((TCPSocket *) clntSocket);
+//  TCPSocket * socket = static_cast<TCPSocket *>(clntSocket);
+//  HandleTCPClient(socket);
+//  // this does not
+//  delete socket; socket = nullptr;
+//
+//  return NULL;
+//}
 
 ConfigServer::~ConfigServer() {
   num_instances_--;

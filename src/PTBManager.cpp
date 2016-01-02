@@ -268,15 +268,15 @@ void PTBManager::StopRun() {
   }
 
   reader_->StopDataTaking();
-  msgs_ << "<run_statistics num_microslices=";
+  msgs_ << "<run_statistics num_eth_packets=\"";
   msgs_ << reader_->GetNumMicroslices();
-  msgs_ << " num_word_counter=" << reader_->GetNumCounterWords();
-  msgs_ << " num_word_trigger=" << reader_->GetNumTriggerWords();
-  msgs_ << " num_word_tstamp=" << reader_->GetNumTimestampWords();
-  msgs_ << " num_word_fifo_warn=" << reader_->GetNumFIFOWarnings();
-  msgs_ << " num_bytes=" << reader_->GetBytesSent();
-  msgs_ << " time_run_board=" <<  reader_->GetRunTime();
-  msgs_ << " />";
+  msgs_ << "\" num_word_counter=\"" << reader_->GetNumCounterWords();
+  msgs_ << "\" num_word_trigger=\"" << reader_->GetNumTriggerWords();
+  msgs_ << "\" num_word_tstamp=\"" << reader_->GetNumTimestampWords();
+  msgs_ << "\" num_word_fifo_warn=\"" << reader_->GetNumFIFOWarnings();
+  msgs_ << "\" num_bytes=\"" << reader_->GetBytesSent();
+  msgs_ << "\" time_run_board=\"" <<  reader_->GetRunTime();
+  msgs_ << "\" />";
 
   Log(info,"End of run message: %s",msgs_.str().c_str());
 

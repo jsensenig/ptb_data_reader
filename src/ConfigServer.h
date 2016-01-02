@@ -28,43 +28,6 @@ extern "C" {
 class TCPSocket;
 class PTBManager;
 
-//// Some custom exceptions
-//class config_exception : public std::runtime_error
-//{
-//public:
-//  config_exception(std::string msg) : std::runtime_error("configuration error"), message_(msg) {};
-//  virtual ~config_exception() _NOEXCEPT { };
-//  virtual const char* what() const throw() {
-//    cnvt_.str("");
-//    cnvt_ << std::runtime_error::what() << " : " << message_ ;
-//    return cnvt_.str().c_str();
-//  }
-//private:
-//  static std::ostringstream cnvt_;
-//  std::string message_;
-//};
-//
-//// Some custom exceptions
-//class command_exception : public std::runtime_error
-//{
-//public:
-//  command_exception(std::string msg) : std::runtime_error("command error"), message_(msg) {};
-//  virtual ~command_exception() _NOEXCEPT { };
-//  virtual const char* what() const throw() {
-//    cnvt_.str("");
-//    cnvt_ << std::runtime_error::what() << " : " << message_ ;
-//    return cnvt_.str().c_str();
-//  }
-//private:
-//  static std::ostringstream cnvt_;
-//  std::string message_;
-//};
-//
-//std::ostringstream config_exception::cnvt_;
-//std::ostringstream command_exception::cnvt_;
-
-
-
 
 class ConfigServer {
 public:
@@ -75,8 +38,8 @@ public:
 	void CheckInstances() const;
 
 	// Main client thread.
-	static void HandleTCPClient(TCPSocket *sock);
-	static void *ThreadMain(void *clntSock);
+	static void HandleTCPClient(/*TCPSocket *sock*/);
+	//static void *ThreadMain();
 	static void *listen(void *arg);
 
 	void RegisterDataManager(PTBManager*manager);
@@ -102,15 +65,17 @@ private:
 
 
 	// Self thread of the server.
+	static TCPSocket *client_socket_;
 	static pthread_t thread_id_;
 	// parameters
 	static unsigned int num_instances_;
 	static unsigned int port_;
-//	static std::string cfg_buffer_;
 	static bool shutdown_; ///< Handler for destroying object.
 	static std::string tcp_buffer_;
 
 	static std::list<const char*> queue_;
+
+
 
 //	static std::map<std::string, int> init_map() {
 //	  std::map<std::string, int> tmp_map;

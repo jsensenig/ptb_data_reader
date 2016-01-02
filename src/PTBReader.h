@@ -389,7 +389,7 @@ class PTBReader {
   }
   
   // -- Statistics methods:
-  uint32_t GetNumMicroslices() {return num_microslices_;};
+  uint32_t GetNumMicroslices() {return num_eth_fragments_;};
   uint32_t GetNumCounterWords() {return num_word_counter_;};
   uint32_t GetNumTriggerWords() {return num_word_trigger_;};
   uint32_t GetNumFIFOWarnings() {return num_word_fifo_warning_;};
@@ -504,7 +504,7 @@ const uint32_t timeout_cnt_threshold_ = 10000;
 bool dry_run_; // Run the PTB without collecting data
 
   // -- Internal run statistics
-  uint32_t num_microslices_;
+  uint32_t num_eth_fragments_;
   uint32_t num_word_counter_;
   uint32_t num_word_trigger_;
   uint32_t num_word_fifo_warning_;

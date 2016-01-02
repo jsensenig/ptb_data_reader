@@ -25,6 +25,7 @@
 /// -- Define whether a standard mutex base code should be used, or
 /// -- the contributed moodycamel lock-free implementation
 #define LOCKFREE 1
+//#undef LOCKFREE
 
 /// -- Data transfer method for PL-PS.
 /// -- Three options exist:

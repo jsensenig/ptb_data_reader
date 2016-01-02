@@ -10,6 +10,8 @@
 // -- STL includes
 #include <iostream>
 #include <mutex>
+#include "CompilerOptions.h"
+#include "readerwriterqueue.h"
 
 //-- A few helpful defines
 #define ERRLINE_SEGMENT_1(line)   #line
@@ -71,8 +73,11 @@ private:
   ///Private member to aux the conversion of the severity level into a string
   static const char* tostr(severity);
 
+#if defined(LOCKFREE)
+  static moodycamel::ReaderWriterQueue<std::string> buffer_queue_;
+  #else
   static std::mutex print_mutex_;
-
+#endif
 
 
 };

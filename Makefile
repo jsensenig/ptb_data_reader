@@ -12,7 +12,7 @@ DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src -I./
 #   DEF_CFLAGS += -I$(PWD)/src -I./
 #endif
 
-DEF_LFLAGS := -lpthread -lrt
+DEF_LFLAGS := -lpthread
 #-lrt
 #DEF_LFLAGS := -lpthread -lrt -lbz2 
 

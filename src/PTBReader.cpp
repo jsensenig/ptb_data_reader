@@ -104,7 +104,7 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
     keep_collecting_(true),time_rollover_(0),
     // below this point all these are debugging variables
     dry_run_(false),
-    num_microslices_(0),
+    num_eth_fragments_(0),
     num_word_counter_(0),num_word_trigger_(0),num_word_fifo_warning_(0),
     num_word_tstamp_(0),bytes_sent_(0),
     first_timestamp_(0),last_timestamp_(0)
@@ -512,9 +512,11 @@ void PTBReader::ClientCollector() {
   // otherwise most of the time is spent in waiting
   auto begin = std::chrono::high_resolution_clock::now();
   bool first = true;
+#ifdef DEBUG
   static uint32_t loop_counter = 0x0;
   static uint32_t test_val2 = 0x0;
   static uint32_t new_state = 0x0;
+#endif
 #endif
 
    // force position to always start at 0
@@ -720,7 +722,7 @@ void PTBReader::ClientTransmitter() {
   //FIXME: Implement fragmentation
   uint32_t *eth_buffer = new uint32_t[max_packet_size]();
 
-  num_microslices_ = 0;
+  num_eth_fragments_ = 0;
   num_word_counter_ = 0;
   num_word_trigger_ = 0;
   num_word_tstamp_ = 0;
@@ -885,7 +887,6 @@ void PTBReader::ClientTransmitter() {
 #endif
 
 #ifdef MEASURE_PERFORMANCE
-        num_microslices_++;
         num_word_tstamp_++;
 #endif
         // break out of the cycle
@@ -1013,9 +1014,16 @@ void PTBReader::ClientTransmitter() {
 #endif
     try {
       socket_->send(eth_buffer,packet_size);
+      num_eth_fragments_++;
     }
     catch(SocketException &e) {
-      Log(error,"Socket exception caught : %s",e.what() );
+      Log(error,"Socket exception : %s",e.what() );
+      // Try again
+      socket_->send(eth_buffer,packet_size);
+      num_eth_fragments_++;
+      // rethrow the exception so that is caught and run is stopped properly
+      //FIXME: Not sure if the exception will be caught in the other thread.
+      throw;
       // Set the run to be stopped
 //      keep_transmitting_ = false;
 //      keep_collecting_ = false;
@@ -1318,7 +1326,7 @@ void PTBReader::ClientTransmitter() {
     // Is this correct? I would have thought that it already has the size
     // needed. The packet_size should not include the header, since that
     // is a fixed part of it
-    uint32_t packet_size = ipck+sizeof(uint32_t);
+    uint32_t packet_size = (ipck+1)*sizeof(uint32_t);
 
     // Log(verbose,"Size was calculated to be %u",packet_size);
 
@@ -1375,8 +1383,6 @@ void PTBReader::ClientTransmitter() {
       Log(error,"Socket exception caught : %s",e.what() );
 
       // Set the run to be stopped
-      keep_transmitting_ = false;
-      keep_collecting_ = false;
     }
 
     // if we didn't have a fragmented block, update the sequence number
