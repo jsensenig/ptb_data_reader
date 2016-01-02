@@ -237,6 +237,7 @@ class PTBReader {
     static size_t const payload_offset_bytes = payload_offset_u32*sizeof(uint32_t);
     
     // Add a function that can be used to parse the trigger payload
+    //FIXME: This should be remade to be able to collect any trigger type
     static std::string getTriggerName(trigger_type_t trigger_type) {
       switch (trigger_type) {
       case calibration:

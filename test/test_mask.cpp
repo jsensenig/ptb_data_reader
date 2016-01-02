@@ -41,6 +41,14 @@ int main() {
   cout << "Range (CC): " << reg << " " << hex << reg << " " << dec << std::bitset<32>(reg) << endl;
 
 
+  uint32_t reg2 = 0xFFFF0000;
+  uint32_t value = (reg2 >> 15);
+  cout << "Mask shifted right " << std::bitset<16>(value) << endl;
+
+  uint32_t reg3 = 0xFFFF;
+  uint32_t value2 = (reg3 << 16);
+  cout << "Mask shifted left " << std::bitset<32>(value2) << endl;
+
 
   return 0;
 }

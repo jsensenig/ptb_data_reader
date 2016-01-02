@@ -373,6 +373,9 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
   if (status_ == RUNNING) {
     msgs_ << "<warning>Attempted to pass a new configuration during a run. Ignoring the new configuration.</warning>";
     Log(warning,"Attempted to pass a new configuration during a run. Ignoring the new configuration." );
+    msgs_str_ = msgs_.str();
+    answers = new char[msgs_str_.size()+1];
+    sprintf(answers,"%s",msgs_str_.c_str());
     return;
   }
   
@@ -397,7 +400,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
   ///! DataBuffer
   ///!
   //char *pEnd = NULL;
-  
+
+  // use this as an error catching state
+  bool has_error = false;
+
   for (pugi::xml_node_iterator it = config.begin(); it != config.end(); ++it) {
     Log(verbose," Child name : %s",it->name());
     // The reader should take care of this by itself.
@@ -484,8 +490,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
       ////// REG 2 (MSB of BSU channel mask + LSB of TSU channel mask)
       ////// TSU[13-0] + BSU[49-32]
       ////// ------
-      // The remaining 17 bits (49-32) go into the lower 17 bits of the next word
-      // [0-16]
+      // The remaining 18 bits (49-32) go into the lower 18 bits of the next word
+      // [0-17]
       register_map_[2].value() = (bsu >> 32 ) & 0x3FFFF;
       Log(debug,"Register 2 (tmp) : [0x%X]",register_map_[2].value() );
 
@@ -500,8 +506,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
       Log(debug,"TSU mask [%s]",std::bitset<48>(tsu).to_string().c_str());
 
 
-      // The lowest 15 bits go into the upper bits of the previous register
-      // [17-31]
+      // The lowest 14 (0-13) bits go into the upper bits of the previous register
+      // [18-31]
       SetBitRangeRegister(2,(tsu & 0x3FFF),18,14);
       Log(debug,"Register 2 : [0x%X]", register_map_[2].value() );
 
@@ -510,7 +516,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
       ////// TSU[45-14]
       ////// ------
 
-      // The remaining 33 (47-15) bits go into the next registers
+      // The remaining 34 (47-14) bits go into the next registers
+      // (14-45)
       register_map_[3].value() = ((tsu >> 14) & 0xFFFFFFFF);
       Log(debug,"Register 3 : [0x%X]",register_map_[3].value() );
 
@@ -520,14 +527,14 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
       ////// ------
 
       // The final 2 bits go into the lsb of register 4
-      SetBitRangeRegister(4,((tsu >> 46) & 0x3),0,2);
+      SetBitRangeRegister(4,((tsu >> 45) & 0x3),0,2);
       Log(debug,"Register 4 (CHMASK): [0x%X]",register_map_[4].value() );
     }
 
 
     if (!strcmp(it->name(),"ExtTriggers")) {
       // External triggers go into register 4
-      // to bits [26-30]
+      // to bits [2-5]
       uint32_t TRIGEX;
       strVal <<std::hex << it->child("Mask").child_value();
       strVal >> TRIGEX;
@@ -543,7 +550,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
     if (!strcmp(it->name(),"Hardware")) {
       // M_PULSEWIDTH - Number of clock cycles to keep the any outgoing pulse (out high)
       // Width of the outgoing pulses
-      // TrigOutWidth : [25-27]
+      // TrigOutWidth : [18-23]
       uint32_t M_PULSEWIDTH;
       strVal <<std::dec << it->child("PulseWidth").child_value();
       strVal >> M_PULSEWIDTH;
@@ -597,6 +604,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
 
       pugi::xml_node mtrigger_node = it->find_child_by_attribute("TriggerMask","id","A");
       if (mtrigger_node.empty()){
+        msgs_ << "<warning>Couldn't find the configuration for trigger A. Trigger will be disabled.</warning>";
         Log(warning,"Couldn't find the configuration for trigger A.");
         // If it doesn't find, disable this trigger
         ParseMuonTrigger(empty_node,5,11);
@@ -679,7 +687,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
           register_map_[reg].value() |= period & 0x7FFFFFFF;
         } else {
           Log(error,"Unknown status of enable flag : [%s]. Possible values : (true|false)",enable.c_str());
-          throw std::string("Unknown status of enable flag in calib module.");
+          msgs_ << "<error>Unknown status of enable flag : ["<< enable << "]. Possible values : (true|false)</error>";
+          has_error = true;
         }
       }
     } // -- strcmp calibrations
@@ -688,6 +697,14 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
     // Log(verbose," Content child : %s",it->child_value() );
   } // for
 
+  // Check if we got an error. If so, do not commit.
+  if (has_error) {
+    // Don't commit. Just go back and throw the error.
+    msgs_str_ = msgs_.str();
+    answers = new char[msgs_str_.size()+1];
+    sprintf(answers,"%s",msgs_str_.c_str());
+    return;
+  }
 
   DumpConfigurationRegisters();
 
@@ -699,7 +716,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
   Log(debug,"Control register after config commit 0x%08X", register_map_[0].value() );
   if (!GetConfigBitACK()) {
     Log(error,"Failed set to set the configuration bit. ACK not received");
-    throw PTBexception("Configuration failed to commit. ACK not received.");
+    msgs_ << "<has_error>Failed set to set the configuration bit. ACK not received</error>";
+    has_error = true;
   }
 
   Log(debug,"Registered committed configuration to the local cache.");
@@ -733,11 +751,17 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
   //   Log(warning,"Connection failed to establish. This might cause troubles later.");
   // }
 
-  msgs_ << "<success>true</success>";
-  msgs_str_ = msgs_.str();
-  answers = new char[msgs_str_.size()+1];
-  sprintf(answers,"%s",msgs_str_.c_str());
-    
+  if (has_error) {
+    // Don't commit. Just go back and throw the error.
+    msgs_str_ = msgs_.str();
+    answers = new char[msgs_str_.size()+1];
+    sprintf(answers,"%s",msgs_str_.c_str());
+  } else {
+    msgs_ << "<success>true</success>";
+    msgs_str_ = msgs_.str();
+    answers = new char[msgs_str_.size()+1];
+    sprintf(answers,"%s",msgs_str_.c_str());
+  }
   // Most likely the connection will fail at this point. Not a big problem.
   Log(verbose,"Returning from SetConfig with answer [%s]",answers);
 }
@@ -782,7 +806,6 @@ void PTBManager::RestoreConfigurationRegisters() {
 void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_reg) {
 
   Log(verbose,"Processing muon trigger starting at reg %u and conf_reg  %u",reg,conf_reg );
-
   // NFB - Dec-04-2015
   // Remapped the whole thing
 
