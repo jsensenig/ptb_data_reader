@@ -383,6 +383,7 @@ class PTBReader {
   
   /** Start the connection to the board reader **/
   void InitConnection(bool force = false);
+  void CloseConnection();
 
   bool getConnectionValid() const {
     // This might not be necessarily the best option

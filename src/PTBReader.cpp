@@ -331,6 +331,11 @@ void PTBReader::ResetBuffers() {
   Log(info,"Popped %u entries from the buffer queue.",counter);
 }
 
+// Only does one thing and that is killing the data connection.
+void PTBReader::CloseConnection() {
+  delete socket_;
+}
+
 void PTBReader::InitConnection(bool force) {
   //-- If a connection exists, assume it is correct and continue to use it
   // FIXME: A ghost connection can exist
@@ -363,17 +368,20 @@ void PTBReader::InitConnection(bool force) {
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what() );
       ready_ = false;
+      delete socket_;
       socket_ = NULL;
       throw;
     }
     catch(std::exception &e) {
       ready_ = false;
+      delete socket_;
       socket_ = NULL;
       Log(error,"STD exception caught : %s",e.what() );
       throw;
     }
     catch(...) {
       ready_ = false;
+      delete socket_;
       socket_ = NULL;
       Log(error,"Unknown exception caught." );
       throw;
@@ -381,8 +389,9 @@ void PTBReader::InitConnection(bool force) {
   } else {
     Log(error,"Calling to start connection without defining connection parameters." );
     ready_ = false;
+    delete socket_;
     socket_ = NULL;
-    throw;
+    throw PTBexception("Calling to start connection without defining connection parameters.");
   }
   Log(verbose,"Connection opened successfully");
 }

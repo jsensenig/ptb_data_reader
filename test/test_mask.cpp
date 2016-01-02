@@ -49,6 +49,9 @@ int main() {
   uint32_t value2 = (reg3 << 16);
   cout << "Mask shifted left " << std::bitset<32>(value2) << endl;
 
+  int* bla = NULL;
+  delete bla;
+  cout << "Passed the delete" << endl;
 
   return 0;
 }

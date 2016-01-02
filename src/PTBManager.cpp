@@ -41,13 +41,7 @@ extern "C" {
 
 #define CTL_BASE_REG_VAL 0x00000000
 
-
 mapped_register conf_reg;
-
-
-
-
-
 
 // Init with a new reader attached
 PTBManager::PTBManager( ) : reader_(0), cfg_srv_(0),status_(IDLE) {
@@ -85,10 +79,10 @@ PTBManager::~PTBManager() {
 
 
 void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
-  try{
+//  try{
     msgs_.clear();
     msgs_.str("");
-
+    error_state_ = false;
     Log(debug,"Received command [%s]", cmd);
     std::map<std::string, Command>::iterator it;
     for (it = commands_.begin(); it != commands_.end(); ++it) {
@@ -99,9 +93,13 @@ void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
     // -- Send the signal to start the run. Should be a register.
     case STARTRUN:
       // Only starts a run if the manager is in IDLE state
+      //Issue a warning and restart a run
       // Otherwise issue a warning
       if (getStatus() != PTBManager::IDLE) {
-        Log(warning,"A run is already running. Ignoring command" );
+        Log(warning,"A run is already running. Starting new run." );
+        msgs_ << "<warning>Board already taking data. Restarting new run.</warning>";
+        StopRun();
+        StartRun();
       } else {
         // Start the run
         Log(verbose,"Starting a new Run." );
@@ -141,8 +139,8 @@ void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
       break;
     case STOPRUN:
       if (getStatus() != PTBManager::RUNNING) {
+        msgs_ << "<warning>Called for STOPRUN but there is no run ongoing. Ignoring.</warning>";
         Log(warning,"Called for STOPRUN but there is no run ongoing. Ignoring." );
-        // -- Same thing.
         break;
       } else {
         Log(verbose,"The Run should STOP now" );
@@ -150,31 +148,28 @@ void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
         break;
       }
     default:
-      char msg[50]; sprintf(msg,"Unknown PTB command [%s]",cmd);
-      throw PTBexception(msg); // command_exception("Unkown command");
+      msgs_ << "<error>Unknown PTB command [" << cmd << "]";
+      break;
     }
-  }
-  catch (const std::out_of_range &oor) {
-    Log(error,"Out of range error: %s",oor.what() );
-    throw std::string("Unkown command");
-  }
-  catch(PTBexception &e) {
-    Log(error,"Caught PTB exception : %s.",e.what());
-    throw;
-  }
-  catch(std::exception &e) {
-    Log(error,"STL exception caught : %s",e.what() );
-    throw;
-  }
-  catch(std::string &str) {
-    Log(error,"Caught string exception. %s",str.c_str() );
-    Log(verbose,"Rethrowing" );
-    throw;
-  }
-  catch(...) {
-    Log(error,"Unknown exception caught." );
-    throw std::string("Unkown command");
-  }
+//  }
+//  catch(PTBexception &e) {
+//    // All exceptions should be caught at this point.
+//    Log(error,"Caught PTB exception : %s.",e.what());
+//    throw;
+//  }
+//  catch(std::exception &e) {
+//    Log(error,"STL exception caught : %s",e.what() );
+//    throw;
+//  }
+//  catch(std::string &str) {
+//    Log(error,"Caught string exception. %s",str.c_str() );
+//    Log(verbose,"Rethrowing" );
+//    throw;
+//  }
+//  catch(...) {
+//    Log(error,"Unknown exception caught." );
+//    throw std::string("Unkown command");
+//  }
   msgs_str_ = msgs_.str();
   answers = new char[msgs_str_.size()+1];
   sprintf(answers,"%s",msgs_str_.c_str());
@@ -182,8 +177,6 @@ void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
 
 void PTBManager::StartRun() {
   Log(verbose,"Starting the run" );
-  msgs_.clear();
-  msgs_.str("");
 
   // Order of execution:
   // Tell the PTBReader to start taking data (it won't receive anything but it will be ready)
@@ -191,30 +184,42 @@ void PTBManager::StartRun() {
   // Set status flag to RUNNING
   if (!reader_) reader_ = new PTBReader();
 
-  // As of Dec-2015 the connection is supposed to be open here. No warning should now be issued.
-  // Open the connection. It should not be open yet
-  if (!reader_->isReady()) {
-    //    msgs_ << "<warning>Connection to board reader is not opened yet. Trying to reopen.</warning>";
-    //    Log(warning,"Connection is not opened yet. Trying to reopen.");
-    reader_->InitConnection();
-  }
-
-  if (!reader_->isReady()) {
-    Log(warning,"Received call to start transmitting but reader is not ready. Refusing to run." );
-    throw PTBexception("Data reader not ready yet.");
-    return;
-  }
   try {
+    // As of Dec-2015 the connection is supposed to be open here. No warning should now be issued.
+    // Open the connection. It should not be open yet
+    if (!reader_->isReady()) {
+      //    msgs_ << "<warning>Connection to board reader is not opened yet. Trying to reopen.</warning>";
+      //    Log(warning,"Connection is not opened yet. Trying to reopen.");
+      reader_->InitConnection();
+    }
+
+    if (!reader_->isReady()) {
+      Log(warning,"Received call to start transmitting but reader is not ready. Refusing to run." );
+      msgs_ << "<error>PTB data reader is not ready yet.Refusing to run.</error>";
+      error_state_ = true;
+      return;
+    }
     reader_->StartDataTaking();
   }
+  catch(SocketException &e) {
+    msgs_ << "<error> PTB data socket exception (socket):" << e.what() << "</error>";
+    error_state_ = true;
+    return;
+  }
   catch(PTBexception &e) {
-    Log(error,"Exception caught: %s",e.what());
-    msgs_ << "<error>" << e.what() << "</error>";
+    msgs_ << "<error>PTB data socket exception (user):" << e.what() << "</error>";
+    error_state_ = true;
+    return;
+  }
+  catch(std::exception &e) {
+    msgs_ << "<error>PTB data socket exception (std):" << e.what() << "</error>";
+    error_state_ = true;
     return;
   }
   catch (...) {
     Log(error,"Unknown error starting reader thread");
-    msgs_ << "<error> Unknown error starting reader.</error>"; 
+    msgs_ << "<error> PTB data socket exception (unknown): error starting reader.</error>";
+    error_state_ = true;
     return;
   }
   
@@ -248,8 +253,6 @@ void PTBManager::StartRun() {
 
 void PTBManager::StopRun() {
   Log(debug,"Stopping the run" );
-  msgs_.clear();
-  msgs_.str("");
 
   // The order should be:
   // 1. Set the GLB_EN register to 0 (stop readout in the fabric)
@@ -261,13 +264,9 @@ void PTBManager::StopRun() {
   Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
 
   // Check the ACK bit
-  if (GetEnableBitACK() != false ) {
-    // Exceptions are caught upstream and converted into messages
-    Log(warning,"Stop Run failed. ACK bit still high.");
-    throw PTBexception("Stop Run failed. No ACK received.");
-  }
-
+  // Try to set the run to stop on the software
   reader_->StopDataTaking();
+
   msgs_ << "<run_statistics num_eth_packets=\"";
   msgs_ << reader_->GetNumMicroslices();
   msgs_ << "\" num_word_counter=\"" << reader_->GetNumCounterWords();
@@ -292,7 +291,13 @@ void PTBManager::StopRun() {
   RestoreConfigurationRegisters();
   SetConfigBit(true);
   
-  msgs_ << "<success>true</success>";
+  if (GetEnableBitACK() != false ) {
+    Log(warning,"Stop Run failed. ACK bit still high.");
+    msgs_ << "<warning>Failed to stop run on hardware. No ACK received. Issuing a reset.</warning>";
+  } else {
+    Log(info,"Run stopped");
+    msgs_ << "<success>true</success>";
+  }
   status_ = IDLE;
 }
 

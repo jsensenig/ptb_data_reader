@@ -195,6 +195,7 @@ private:
 //  uint64_t run_start_time_;
   std::ostringstream msgs_;
   std::string msgs_str_;
+  bool error_state_;
 };
 
 #endif /* PTBMANAGER_H_ */
