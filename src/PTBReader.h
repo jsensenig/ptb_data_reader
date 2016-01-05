@@ -404,6 +404,8 @@ class PTBReader {
 
   bool GetDryRun() {return dry_run_;};
 
+  bool GetErrorState() {return error_state_;};
+
 protected:
   /** Data collector function into the queue. Runs on it's own thread**/
   void ClientCollector();
@@ -504,6 +506,7 @@ const uint32_t timeout_cnt_threshold_ = 10000;
 #endif
 
 bool dry_run_; // Run the PTB without collecting data
+bool error_state_;
 
   // -- Internal run statistics
   uint32_t num_eth_fragments_;

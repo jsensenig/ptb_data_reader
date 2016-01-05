@@ -103,7 +103,7 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
     keep_transmitting_(true),
     keep_collecting_(true),time_rollover_(0),
     // below this point all these are debugging variables
-    dry_run_(false),
+    dry_run_(false), error_state_(false),
     num_eth_fragments_(0),
     num_word_counter_(0),num_word_trigger_(0),num_word_fifo_warning_(0),
     num_word_tstamp_(0),bytes_sent_(0),
@@ -334,6 +334,8 @@ void PTBReader::ResetBuffers() {
 // Only does one thing and that is killing the data connection.
 void PTBReader::CloseConnection() {
   delete socket_;
+  socket_ = nullptr;
+  ready_ = false;
 }
 
 void PTBReader::InitConnection(bool force) {
@@ -729,8 +731,11 @@ void PTBReader::ClientTransmitter() {
   // This should never happen. Sending a 64kB packet would be way overkill
   // It would be preferable to fragment the packet, b
   //FIXME: Implement fragmentation
-  uint32_t *eth_buffer = new uint32_t[max_packet_size]();
-
+  // this builds an array of 64k ints = 256 kbytes
+  uint32_t *global_eth_buffer = new uint32_t[max_packet_size]();
+  uint32_t *eth_buffer = nullptr;
+  error_state_ = false;
+  static uint32_t global_eth_pos = 0;
   num_eth_fragments_ = 0;
   num_word_counter_ = 0;
   num_word_trigger_ = 0;
@@ -748,13 +753,14 @@ void PTBReader::ClientTransmitter() {
   uint32_t* frame = NULL;
   uint32_t eth_header = 0;
   uint32_t eth_checksum = 0;
-
   ts_arrived = false;
   seq_num_ = 1;
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
   while(keep_transmitting_) {
+
+    eth_buffer = &global_eth_buffer[global_eth_pos];
 
     // FW decides when the packet is ready to be sent.
     // When DMA brings the TS word it is sign that packet has to be sent
@@ -1023,23 +1029,24 @@ void PTBReader::ClientTransmitter() {
 #endif
     try {
       socket_->send(eth_buffer,packet_size);
+      global_eth_pos += (ipck+4);
+      // add 4 bytes of padding just to make sure that there are no overlaps
+      if ((global_eth_pos+(2*ipck)) > max_packet_size) {
+        // reset the pointer to the beginning
+        global_eth_pos = 0;
+      }
 #ifdef DATA_STATISTICS
       num_eth_fragments_++;
 #endif
       }
     catch(SocketException &e) {
       Log(error,"Socket exception : %s",e.what() );
+      // Stop collecting and transmitting
+      //
+      error_state_ = true;
+      keep_collecting_ = false;
+      keep_transmitting_ = false;
       // Try again
-      socket_->send(eth_buffer,packet_size);
-#ifdef DATA_STATISTICS
-      num_eth_fragments_++;
-#endif
-      // rethrow the exception so that is caught and run is stopped properly
-      //FIXME: Not sure if the exception will be caught in the other thread.
-      throw;
-      // Set the run to be stopped
-//      keep_transmitting_ = false;
-//      keep_collecting_ = false;
     }
 
     // FIXME: Add support for fragmented blocks. 
@@ -1070,9 +1077,16 @@ void PTBReader::ClientTransmitter() {
   // Exited the  run loop. Return.
 
   Log(info,"Exited transmission loop.");
+  if (error_state_) {
+    Log(warning,"Transmission loop exited with error state.");
+  }
   // Deallocate the memory
-  delete [] eth_buffer;
+  delete [] global_eth_buffer;
+  // Finish the connection
+  Log(warning,"Closing data socket.");
+  CloseConnection();
   // Should be safe to delete the memory_pool here as well.
+  // Close the socket as well
 }
 #elif defined(ARM_POTHOS)
 void PTBReader::ClientTransmitter() {

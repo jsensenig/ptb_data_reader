@@ -267,6 +267,10 @@ void PTBManager::StopRun() {
   // Try to set the run to stop on the software
   reader_->StopDataTaking();
 
+  if (reader_->GetErrorState()) {
+    msgs_ << "<error> Data socket was lost while taking data </error>";
+  }
+
   msgs_ << "<run_statistics num_eth_packets=\"";
   msgs_ << reader_->GetNumMicroslices();
   msgs_ << "\" num_word_counter=\"" << reader_->GetNumCounterWords();
