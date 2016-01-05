@@ -895,7 +895,7 @@ void PTBReader::ClientTransmitter() {
 #endif
 #endif
 
-#ifdef MEASURE_PERFORMANCE
+#ifdef DATA_STATISTICS
         num_word_tstamp_++;
 #endif
         // break out of the cycle
@@ -927,7 +927,7 @@ void PTBReader::ClientTransmitter() {
         ipck += CounterPayload::size_words_ptb_u32;
         eth_buffer[ipck] = 0x2 & frame_header->padding;
         ipck+=1;
-#ifdef MEASURE_PERFORMANCE
+#ifdef DATA_STATISTICS
         // Log(verbose,"Intermediate packet:");
         // print_bits(eth_buffer,ipck);
 
@@ -940,7 +940,7 @@ void PTBReader::ClientTransmitter() {
                     &frame[TriggerPayload::payload_offset_u32],
                     TriggerPayload::size_bytes);
         ipck += TriggerPayload::size_u32;
-#ifdef MEASURE_PERFORMANCE
+#ifdef DATA_STATISTICS
         // Log(verbose,"Intermediate packet:");
         // print_bits(eth_buffer,ipck);
         num_word_trigger_++;
@@ -950,7 +950,7 @@ void PTBReader::ClientTransmitter() {
         Log(warning,
             "+++ Received a FIFO warning of type %08X .+++",
             (reinterpret_cast_checked<uint32_t*>(frame))[0]);
-#ifdef MEASURE_PERFORMANCE
+#ifdef DATA_STATISTICS
         num_word_fifo_warning_++;
 #endif
         break;
@@ -1023,13 +1023,17 @@ void PTBReader::ClientTransmitter() {
 #endif
     try {
       socket_->send(eth_buffer,packet_size);
+#ifdef DATA_STATISTICS
       num_eth_fragments_++;
-    }
+#endif
+      }
     catch(SocketException &e) {
       Log(error,"Socket exception : %s",e.what() );
       // Try again
       socket_->send(eth_buffer,packet_size);
+#ifdef DATA_STATISTICS
       num_eth_fragments_++;
+#endif
       // rethrow the exception so that is caught and run is stopped properly
       //FIXME: Not sure if the exception will be caught in the other thread.
       throw;

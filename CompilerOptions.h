@@ -18,9 +18,12 @@
 #undef DEBUG
 
 /// -- Add data collection statistics.
-/// -- The times are reported at the end of the run
-#define MEASURE_PERFORMANCE 1
-//#undef MEASURE_PERFORMANCE
+#define DATA_STATISTICS 1
+//#undef DATA_STATISTICS
+
+/// -- Measure data transfer times.
+//#define MEASURE_PERFORMANCE 1
+#undef MEASURE_PERFORMANCE
 
 /// -- Define whether a standard mutex base code should be used, or
 /// -- the contributed moodycamel lock-free implementation
