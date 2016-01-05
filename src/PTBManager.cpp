@@ -517,7 +517,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
 
       // The lowest 14 (0-13) bits go into the upper bits of the previous register
       // [18-31]
-      SetBitRangeRegister(2,(tsu & 0x3FFF),18,14);
+      SetBitRangeRegister(2,((tsu & 0x3FFF) << 18),18,14);
       Log(debug,"Register 2 : [0x%X]", register_map_[2].value() );
 
       ////// ------
