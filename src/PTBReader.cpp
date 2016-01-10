@@ -333,7 +333,8 @@ void PTBReader::ResetBuffers() {
 
 // Only does one thing and that is killing the data connection.
 void PTBReader::CloseConnection() {
-  delete socket_;
+
+  if (socket_!= nullptr) delete socket_;
   socket_ = nullptr;
   ready_ = false;
 }

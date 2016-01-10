@@ -73,7 +73,7 @@ private:
   ///Private member to aux the conversion of the severity level into a string
   static const char* tostr(severity);
 
-#if defined(LOCKFREE)
+#if defined(LOCKFREE_MSG)
   static moodycamel::ReaderWriterQueue<std::string> buffer_queue_;
   #else
   static std::mutex print_mutex_;

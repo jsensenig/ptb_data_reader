@@ -70,7 +70,7 @@ const char* Logger::tostr(Logger::severity sev) {
 }
 
 
-#if defined(LOCKFREE)
+#if defined(LOCKFREE_MSG)
 
 moodycamel::ReaderWriterQueue<std::string> Logger::buffer_queue_;
 

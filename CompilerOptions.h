@@ -30,6 +30,11 @@
 #define LOCKFREE 1
 //#undef LOCKFREE
 
+/// -- Define whether a standard mutex base code should be used, or
+/// -- the contributed moodycamel lock-free implementation
+//#define LOCKFREE_MSG 1
+#undef LOCKFREE_MSG
+
 /// -- Data transfer method for PL-PS.
 /// -- Three options exist:
 /// ARM_XDMA : The original implementation using the xdma polling kernel driver.
