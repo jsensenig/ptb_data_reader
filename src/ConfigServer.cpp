@@ -70,7 +70,9 @@ void* ConfigServer::listen(void *arg) {
   // This forces the loop to restart in case the problem was caused by loss of connection.
   for (;;) {
     try {
-      Log(info,"Creating server listening socket.");
+      Log(info,"Creating server listening socket...");
+      // If an exception kicks in, shouldn't the docket be automatically destroyed?
+      // Doesn't seem to be
       TCPServerSocket servSock(port_);   // Socket descriptor for server
       Log(info,"Entering wait mode for client connection at port %u",port_);
       // Check if there is a request to terminate the connection.
@@ -85,13 +87,42 @@ void* ConfigServer::listen(void *arg) {
       client_socket_ = servSock.accept();
 
       Log(debug,"Received client connection request.");
-      HandleTCPClient();
     }
     catch(SocketException &e) {
       // The problem is that from here there is nothing else that can be done
       // return to main and main will make sure to clean up and relaunch
       Log(error,"Socket exception caught : %s",e.what());
-      delete client_socket_; client_socket_ = nullptr;
+      if (client_socket_ != nullptr) delete client_socket_;
+      client_socket_ = nullptr;
+      Log(warning,"Relaunching the socket for connection acceptance in 5s.");
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
+
+    // The handling could go into a separate try block that would allow to close existing connections and configuration in case of trouble
+    try{
+      HandleTCPClient();
+    }
+    catch(SocketException &e) {
+      Log(error,"Socket exception caught : %s",e.what());
+      if (client_socket_ != nullptr) delete client_socket_;
+      client_socket_ = nullptr;
+      Log(warning,"Passing down shutdown signal.");
+      // if there is a data manager, tell it to stop taking data
+      if (data_manager_ != NULL) {
+        char *answer;
+        data_manager_->ExecuteCommand("StopRun",answer);
+        delete [] answer;
+      }
+      Log(warning,"Relaunching the socket for connection acceptance in 5s.");
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
+    catch(...) {
+      Log(error,"Unknown exception caught. Cleaning up and relaunching.");
+      if (data_manager_ != NULL) {
+        char *answer;
+        data_manager_->ExecuteCommand("StopRun",answer);
+        delete [] answer;
+      }
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }

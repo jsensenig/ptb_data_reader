@@ -29,20 +29,10 @@ extern "C" {
 #include <cstdlib>
 #include <cstring>
 
-#ifdef ARM_POTHOS
-#include "pothos_zynq_dma_driver.h"
 
-struct DMABuffer {
-  uint32_t *data_ptr;
-  size_t size;
-  int handle;
-};
-
-#endif
-#ifdef ARM_XDMA
+#if defined(ARM_XDMA)
 #include "xdma.h"
-#endif
-#ifdef ARM_MMAP // needed to use the LocalRegister structure
+#elif defined(ARM_MMAP) // needed to use the LocalRegister structure
 #include "util.h"
 #endif
 
@@ -464,8 +454,8 @@ private:
 #endif
   uint32_t * memory_pool_;
   void * mapped_data_base_addr_;
-#elif defined(ARM_POTHOS)
-    std::queue<DMABuffer*> buffer_queue_;
+#else
+#error DMA mode not specified
 #endif
 
 
@@ -500,7 +490,7 @@ private:
 
   // -- Debugging and control variables
   // timeouts don't make sense with MMAP
-#if defined(ARM_XDMA) || defined(ARM_POTHOS)
+#if defined(ARM_XDMA)
 uint32_t timeout_cnt_;
 const uint32_t timeout_cnt_threshold_ = 10000;
 #endif
@@ -518,10 +508,6 @@ bool error_state_;
   uint32_t first_timestamp_;
   uint32_t last_timestamp_;
   
-
-  //#ifdef ARM_POTHOS
-  //  pzdud_t *s2mm_;
-  //#endif
 };
 
 /// 

@@ -14,6 +14,7 @@
 #include "readerwriterqueue.h"
 
 //-- A few helpful defines
+// -- This expands into multiple ##
 #define ERRLINE_SEGMENT_1(line)   #line
 #define ERRLINE_SEGMENT_2(line)   ERRLINE_SEGMENT_1(line)
 // Use instead a compilation macro
@@ -73,11 +74,7 @@ private:
   ///Private member to aux the conversion of the severity level into a string
   static const char* tostr(severity);
 
-#if defined(LOCKFREE)
-  static moodycamel::ReaderWriterQueue<std::string> buffer_queue_;
-  #else
   static std::mutex print_mutex_;
-#endif
 
 
 };

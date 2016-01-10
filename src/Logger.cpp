@@ -70,42 +70,6 @@ const char* Logger::tostr(Logger::severity sev) {
 }
 
 
-#if defined(LOCKFREE)
-
-moodycamel::ReaderWriterQueue<std::string> Logger::buffer_queue_;
-
-void Logger::message(Logger::severity sev, const char* where, const char* fmt,...){
-
-  // Pop the message into the queue
-  // Write *a* message. They will never be exactly done at the same time
-  if (sev >= _sev) {
-
-    char header[250];
-    //sprintf(header,"%s:%s:%s:",tostr(sev),where,currentDateTime().c_str());
-    sprintf(header,"%s:%s:",tostr(sev),where);
-    std::string tmp_fmt = header;
-    tmp_fmt += fmt;
-    char msg[2048];
-    va_list args;
-    va_start(args,fmt);
-    vsprintf(msg,tmp_fmt.c_str(),args);
-    va_end(args);
-    buffer_queue_.enqueue(std::string(msg));
-  }
-
-  // Try to print a message
-  std::string out_msg;
-  if (buffer_queue_.try_dequeue(out_msg)) {
-    *_ostream << out_msg << std::endl;
-  }
-
-// This part seems to be failing before the message is actually printed.
-//  if (sev == fatal) {
-//    throw;
-//  }
-}
-#else
-
 //std::ostream* Logger::_estream (&std::cerr);
 std::mutex Logger::print_mutex_;
 
@@ -142,7 +106,6 @@ void Logger::message(Logger::severity sev, const char* where, const char* fmt,..
 //}
 
 
-#endif
 //std::ostream& endlog(std::ostream& os) {
 //  Logger::endlog(os);
 //  return devnull;

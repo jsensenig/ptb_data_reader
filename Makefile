@@ -22,11 +22,11 @@ ifeq ($(MACHINE), armv7l)
    $(info ======================)
    $(info ++++Compiling for uZed)
    $(info ======================)
-    LFLAGS   := $(DEF_LFLAGS)
+    LFLAGS   := -g $(DEF_LFLAGS)
 #   CFLAGS   := -g -O0 $(DEF_CFLAGS)
 #   CFLAGS   := -O3 -march=armv7-a -mcpu=cortex-a9 -mfpu=neon-fp16 $(DEF_CFLAGS)
 #   CFLAGS   := -O1 -march=armv7-a -mcpu=cortex-a9 $(DEF_CFLAGS)
-   CFLAGS   := -march=armv7-a -O0 $(DEF_CFLAGS) $(DMA_TYPE)
+   CFLAGS   := -g -march=armv7-a -O0 $(DEF_CFLAGS) $(DMA_TYPE)
    EXT_TARS := 
    CLN      := 
    UTL_DIR  := $(PWD)/util/ptb

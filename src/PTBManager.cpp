@@ -13,7 +13,7 @@
 #include "PracticalSocket.h"
 #include "util.h"
 
-#if defined(ARM_XDMA) || defined(ARM_MMAP) || defined(ARM_POTHOS)
+#if defined(ARM_XDMA) || defined(ARM_MMAP)
 #include "ptb_registers.h"
 #endif /*ARM*/
 
@@ -326,7 +326,7 @@ void PTBManager::SetupRegisters() {
   // Using memory mapped registers (specific locations)
   
   Log(info,"Setting up memory mapped registers");
-#if defined(ARM_XDMA) || defined(ARM_MMAP)||defined(ARM_POTHOS)
+#if defined(ARM_XDMA) || defined(ARM_MMAP)
   SetupConfRegisters();
   // First get the virtual address for the mapped physical address
   mapped_conf_base_addr_ = MapPhysMemory(conf_reg.base_addr,conf_reg.high_addr);
@@ -353,7 +353,7 @@ void PTBManager::SetupRegisters() {
 
 void PTBManager::FreeRegisters() {
   Log(info,"Cleaning up the allocated registers to configure the board." );
-#if defined(ARM_XDMA) || defined(ARM_MMAP)||defined(ARM_POTHOS)
+#if defined(ARM_XDMA) || defined(ARM_MMAP)
   munmap(mapped_conf_base_addr_,conf_reg.high_addr-conf_reg.base_addr);
   // Close the file
   Log(info,"Closing /dev/mem");

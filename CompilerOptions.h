@@ -36,15 +36,11 @@
 ///            this driver does a simple polling DMA and works fine, except for the
 ///            fact that it is unbearably slow. Kept getting latencies of ~3 ms
 ///            on DMA data transfers
-/// ARM_POTHOS : Uses the better POTHOS kernel driver with scatter-gather. Should be much
-///              faster but ran into problems synthesizing the firmware with SG enabled.
-///              To be further investigated in the future. The code has never been truly tested.
 /// ARM_MMAP  : Memory mapped register. The process is simple and seems to work fine.
 ///             Data is collected one frame at a time and essentially implements my own
 ///             DMA by mapping 4 registers aligned in memory so that the contents can be collected
 ///             in a single transaction
 #undef ARM_XDMA
-#undef ARM_POTHOS
 #define ARM_MMAP 1
 
 /// ENABLE_FRAG_BLOCKS
