@@ -13,7 +13,6 @@
 #include "ptb_registers.h"
 
 extern "C" {
-#include <sys/time.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <inttypes.h>
@@ -1009,13 +1008,4 @@ void PTBReader::ClientTransmitter() {
 void PTBReader::ClientTransmitter() {
 }
 #endif
-
-// Completely auxiliary clock function
-uint64_t ClockGetTime() {
-
-  struct timeval tv;
-  gettimeofday(&tv,NULL);
-  return (uint64_t)tv.tv_sec*1000000LL + (uint64_t)tv.tv_usec;
-
-}
 

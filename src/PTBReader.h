@@ -22,13 +22,12 @@
 
 extern "C" {
 #include<pthread.h>
-#include <stdint.h>
 #include <stdio.h>
 }
 
 #include <cstdlib>
 #include <cstring>
-
+#include <cstdint>
 
 #if defined(ARM_XDMA)
 #include "xdma.h"
@@ -55,7 +54,7 @@ class PTBReader {
  public:
   
   /// Bunch of structures that help manipulating the data.
-  /// These must be in sync with lbne-raw-data
+  /// These *must* be kept in sync with lbne-raw-data
 
     /// Header of ethernet packet
     struct Header {
@@ -119,6 +118,42 @@ class PTBReader {
     static data_size_t const num_bits_padding       = 2;
     static data_size_t const num_bits_short_tstamp  = 27;
     static data_size_t const num_bits_packet_type   = 3;
+
+    // This function converts the TS rollover into a full TS
+    // it takes the payload of the timestamp word that came after this word
+    // (the microslice border)
+    // and calculates the offset
+    // to use the full timestamp received before use the other method (pre)
+    uint64_t get_full_timestamp_post(uint64_t ts_ref) {
+      if ((ts_ref & 0x7FFFFFF) == short_nova_timestamp) {
+        // they are equal. This word is right on the border of the microslice
+        return ts_ref;
+      } else if ((ts_ref & 0x7FFFFFF) > short_nova_timestamp) {
+        // there was no bit rollover in between
+        return ts_ref - ((ts_ref & 0x7FFFFFF) - short_nova_timestamp);
+      } else {
+        // it rolled over.
+        // Be sure of the values being set
+        return ts_ref - ((ts_ref & 0x7FFFFFF) + (0x7FFFFFF - short_nova_timestamp));
+      }
+    }
+    // Does the same as the previous but with the timestamp that came before
+    // They should be equivalent but need to check to confirm
+    uint64_t get_full_timestamp_pre(uint64_t ts_ref) {
+      if ((ts_ref & 0x7FFFFFF) == short_nova_timestamp) {
+        // they are equal. This word is right on the border of the microslice
+        return ts_ref;
+      } else if ((ts_ref & 0x7FFFFFF) > short_nova_timestamp) {
+        // it rolled over. Has to sum the short and the difference
+        // that takes for the reference to roll over
+        return ts_ref + (0x7FFFFFF - ((ts_ref & 0x7FFFFFF))) + short_nova_timestamp;
+      } else {
+        // it didn't roll over. Just add the difference of the rollovers
+        return ts_ref + (short_nova_timestamp - (ts_ref & 0x7FFFFFF));
+      }
+    }
+
+
   };
 
   /// Counter payload description
@@ -140,7 +175,7 @@ class PTBReader {
     counter_set_t bsu_cu     : 10;
     //FIXME: The panels should be remapped so that bsu_cl would be all together
     counter_set_t bsu_cl1    : 6;
-    counter_set_t extra      : 1;
+    counter_set_t bsu_extra  : 1;
     counter_set_t bsu_cl2    : 7;
     counter_set_t bsu_rl     : 10;
     // Just ignore the rest of the word
@@ -179,13 +214,12 @@ class PTBReader {
   };
 
   /// Trigger description
-  /// FIXME: Review these
   struct TriggerPayload {
     typedef uint32_t trigger_type_t;
     typedef uint16_t data_size_t;
 
-    // The 23 lsb are padding. No information is passed there
-    trigger_type_t padding : 19; 
+    // The 16 lsb are padding. No information is passed there
+    trigger_type_t padding_low : 16;
 
     // This is to be remapped so that calib words can be OR-ed with
     // calibration words
@@ -193,27 +227,51 @@ class PTBReader {
     trigger_type_t trigger_id_calib: 4; // which of the calibration channels 
     trigger_type_t trigger_id_muon : 4; // which of the muon triggers
     trigger_type_t trigger_type    : 5; // the 5 msb are the trigger type
-    trigger_type_t padding_ttype   : 3; // this makes the information byte aligned
+    trigger_type_t padding_high    : 3; // this makes the information byte aligned
     
-    static data_size_t const num_bits_padding_low  = 19;
-    static data_size_t const num_bits_trigger_id   = 4;
-    static data_size_t const num_bits_calib_id     = 4;
-    static data_size_t const num_bits_trigger_type = 5;
-    static data_size_t const num_bits_padding_high = 3;
+    static data_size_t const num_bits_padding_low     = 16;
+    static data_size_t const num_bits_trigger_id_calib= 4;
+    static data_size_t const num_bits_trigger_id_muon = 4;
+    static data_size_t const num_bits_trigger_type    = 5;
+    static data_size_t const num_bits_padding_high    = 3;
     
-    // ID the trigger types
+    // The logic below this point is a bit different since now multiple
+    // triggers can be ID-ed in the same word
+    // Better to ask for specific types
+
+
+    // ID the trigger types for fugure reference
     static trigger_type_t const calibration = 0x00;
     static trigger_type_t const muon        = 0x10;
     static trigger_type_t const ssp         = 0x08;
     // -- This should probably be split into RCE and then RCE types
-    static trigger_type_t const rce_a       = 0x01;
-    static trigger_type_t const rce_b       = 0x02;
-    static trigger_type_t const rce_ab      = 0x03;
-    static trigger_type_t const rce_c       = 0x04;
-    static trigger_type_t const rce_ac      = 0x05;
-    static trigger_type_t const rce_bc      = 0x06;
-    static trigger_type_t const rce_abc     = 0x07;
+    static trigger_type_t const rce_1       = 0x01;
+    static trigger_type_t const rce_2       = 0x02;
+    static trigger_type_t const rce_12      = 0x03;
+    static trigger_type_t const rce_3       = 0x04;
+    static trigger_type_t const rce_13      = 0x05;
+    static trigger_type_t const rce_23      = 0x06;
+    static trigger_type_t const rce_123     = 0x07;
     
+    // C1 : 1000 : 0x8
+    // C2 : 0100 : 0x4
+    // C3 : 0010 : 0x2
+    // C4 : 0001 : 0x1
+    static trigger_type_t const C1 = 0x8;
+    static trigger_type_t const C2 = 0x4;
+    static trigger_type_t const C3 = 0x2;
+    static trigger_type_t const C4 = 0x1;
+
+    // TA : 1000
+    // TB : 0100
+    // TC : 0010
+    // TD : 0001
+    static trigger_type_t const TA = 0x8;
+    static trigger_type_t const TB = 0x4;
+    static trigger_type_t const TC = 0x2;
+    static trigger_type_t const TD = 0x1;
+
+
     static size_t const size_bytes = sizeof(uint32_t);
     static size_t const size_u32 = size_bytes/sizeof(uint32_t);
 
@@ -226,33 +284,84 @@ class PTBReader {
     static size_t const payload_offset_u32 = 1;
     static size_t const payload_offset_bytes = payload_offset_u32*sizeof(uint32_t);
     
+
+
+    ///Bunch of auxiliary functions to help parse the word
+    ///
+    bool has_muon_trigger() {
+      return ((trigger_type & muon) != 0x0);
+    }
+    bool has_rce_trigger() {
+      return ((trigger_type & rce_123) != 0x0);
+    }
+    bool has_ssp_trigger() {
+      return ((trigger_type & ssp) != 0x0);
+    }
+    bool has_calibration() {
+      return ((trigger_type & calibration) != 0x0);
+    }
+
+
+    /// Test for the different calibration types
+    ///
+    bool has_C1() {
+      return ((trigger_id_calib & C1) != 0);
+    }
+    bool has_C2() {
+      return ((trigger_id_calib & C2) != 0);
+    }
+    bool has_C3() {
+      return ((trigger_id_calib & C3) != 0);
+    }
+    bool has_C4() {
+      return ((trigger_id_calib & C4) != 0);
+    }
+
+    /// Test the different muon trigger types
+    ///
+    bool has_muon_TA() {
+      return ((trigger_id_muon & TA) != 0);
+    }
+    bool has_muon_TB() {
+      return ((trigger_id_muon & TB) != 0);
+    }
+    bool has_muon_TC() {
+      return ((trigger_id_muon & TC) != 0);
+    }
+    bool has_muon_TD() {
+      return ((trigger_id_muon & TD) != 0);
+    }
+
+
     // Add a function that can be used to parse the trigger payload
-    //FIXME: This should be remade to be able to collect any trigger type
+    //FIXME: This should be considered obsolete and removed
+    // in a near future
+
     static std::string getTriggerName(trigger_type_t trigger_type) {
       switch (trigger_type) {
       case calibration:
 	return "calibration";
 	break;
-      case rce_a:
-	return "rce_a";
+      case rce_1:
+	return "rce_1";
 	break;
-      case rce_b:
-	return "rce_b";
+      case rce_2:
+	return "rce_2";
 	break;
-      case rce_c:
-	return "rce_c";
+      case rce_3:
+	return "rce_3";
 	break;
-      case rce_ab:
-	return "rce_ab";
+      case rce_12:
+	return "rce_12";
 	break;
-      case rce_ac:
-	return "rce_ac";
+      case rce_13:
+	return "rce_13";
 	break;
-      case rce_bc:
-	return "rce_bc";
+      case rce_23:
+	return "rce_23";
 	break;
-      case rce_abc:
-	return "rce_abc";
+      case rce_123:
+	return "rce_123";
 	break;
       case ssp  :
 	return "ssp";
@@ -509,28 +618,6 @@ bool error_state_;
   uint32_t bytes_sent_;
   
 };
-
-/// 
-/// This should be obsolete now.
-/// 
-/** Auxiliary classes
- *
- */
-class evtType {
- public:
-  uint8_t type;
-  uint8_t trigger;
-  uint64_t next;
-  
-};
-
-class closer {
-public:
-  bool operator() (const evtType &a, const evtType &b) {
-    return (a.next>b.next);
-  };
-};
-
 
 
 #endif /* PTBREADER_H_ */
