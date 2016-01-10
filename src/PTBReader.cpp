@@ -106,8 +106,7 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
     dry_run_(false), error_state_(false),
     num_eth_fragments_(0),
     num_word_counter_(0),num_word_trigger_(0),num_word_fifo_warning_(0),
-    num_word_tstamp_(0),bytes_sent_(0),
-    first_timestamp_(0),last_timestamp_(0)
+    num_word_tstamp_(0),bytes_sent_(0)
 {
 
 
@@ -299,8 +298,6 @@ void PTBReader::StartDataTaking() {
 }
 
 void PTBReader::ResetBuffers() {
-  // FIXME: Migrate this to C++11 constructs (std::thread::mutex)
-  // FIXME: Replace mutex by lock free queue
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
 #if defined(LOCKFREE)
@@ -517,7 +514,7 @@ void PTBReader::ClientCollector() {
   // In this case we want to have a local memory buffer and it is there that we
   // do any manipulations
   // Also allocate 32 MB
-  memory_pool_ = new uint32_t[buffer_size*frame_size_u32];
+  memory_pool_ = new uint32_t[buffer_size_frames*frame_size_u32];
   static uint32_t pos = 0; // position pointer in the memory_pool_ variable
   static uint32_t test_val = 0x0;
   // Some memory testing
@@ -607,13 +604,8 @@ void PTBReader::ClientCollector() {
       pthread_mutex_unlock(&lock_);
 #endif
       pos += frame_size_u32;
-    //}
-    //  else {
-    //      printf("There is nothing\n");
-    //      control_register_.value() = 0x0;
-    //      continue;
-    //    }
-    if (pos+frame_size_u32 >= buffer_size) {
+
+      if (pos+frame_size_u32 >= buffer_size_frames) {
       pos = 0;
     }
   } // while keep_collecting
@@ -642,80 +634,74 @@ void PTBReader::ClientTransmitter() {
   Log(debug, "Starting data transmitter\n");
 
 
-  // Allocate the maximum memory that an eth packet can have.
-  // FIXME: Change this to zero memory copy. If using MMAP, it should be trivial
-  // as the position should never be overrun
-  // Ideally one would want to not allocate the eth packet and simply use the
-  // allocated RAM directly. Doable, but must be careful because of the circular buffer.
-  // For the moment copy the contents and see if performance is good enough.
-  // use std::memcpy for better performance
+  // Allocate a memory buffer to build eth packets.
 
-  // This should never happen. Sending a 64kB packet would be way overkill
-  // It would be preferable to fragment the packet, b
   //FIXME: Implement fragmentation
   // this builds an array of 64k ints = 256 kbytes
-  uint32_t *global_eth_buffer = new uint32_t[max_packet_size]();
+  // Should correspond to several words in worst case scenario
+  uint32_t *global_eth_buffer = new uint32_t[eth_buffer_size_u32]();
+
+  // Local pointer that is effectively used to build the eth packet
   uint32_t *eth_buffer = nullptr;
-  error_state_ = false;
+  // pointer that keeps track of the offset within the global buffer
   uint32_t global_eth_pos = 0;
+
+
+  error_state_ = false;
+
+  // Debugging information that is passed down in the end of the run
   num_eth_fragments_ = 0;
   num_word_counter_ = 0;
   num_word_trigger_ = 0;
   num_word_tstamp_ = 0;
   bytes_sent_ = 0;
-  first_timestamp_ = 0;
-  last_timestamp_ = 0;
 
   // This will keep track on the number of u32 words
   // In the end the size of the buffer will be ipck*sizeof(uint32_t);
   static uint32_t ipck = 0;
   static bool carry_on = true;
   static bool ts_arrived = false;
+
+  // Temporary variables that will end up making part of the eth packet
   static uint32_t packet_size = 0;
-  uint32_t* frame = nullptr;
   uint32_t eth_header = 0;
   uint32_t eth_checksum = 0;
+
+  // pointer to a new word
+  uint32_t* frame = nullptr;
   ts_arrived = false;
   seq_num_ = 1;
+
+  // Assign the skelleton packet header
+  // This would be nice to go out of the loop but it
+  eth_header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
   while(keep_transmitting_) {
 
+    // Set the local pointer to the place pointer by the global pointer
     eth_buffer = &global_eth_buffer[global_eth_pos];
 
     // FW decides when the packet is ready to be sent.
-    // When DMA brings the TS word it is sign that packet has to be sent
+    // The TS word marks that a packet has to be sent.
 
     // 2 conditions to be careful of:
     //
     // 1. If time time based rollover is reached.
-    // 2. If the size based rollover is reached.
+    // 2. If the size based rollover is reached. (not implemented)
 
 
     /// -- Start by generating a header
 
-    /// -- The endianess issue:
-    // The data is collected little endian. However, for this kind of applications
-    // little endian is a bit silly in the sense that the most significant byte 
-    // is on the
-    // last position of an array. This often causes troubles of the 
-    // bytes being swapped in groups
-    // of 4 (a uint32_t is 4 bytes long...har har)
-
     // ipck   : Counter of u32
-    // iframe : Frame counter.
     ipck = 0;
     carry_on = true;
 
-    // FIXME: Move part of this assigment out of the loop.
-    eth_header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
-
-    //    eth_buffer[0] = header;
-    // Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
-    // ipck should not include the header
-    // But it also works as an index counter, so the manipulation is done at the end
+    eth_header = SetBitRange(eth_header,(seq_num_  << 16) & 0xFF0000,16,8);
     ipck += 1;
+
+    // Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
 
     // while a packet_sending_condition is not reached
     // keep the loop going...
@@ -726,9 +712,6 @@ void PTBReader::ClientTransmitter() {
     while(carry_on and keep_transmitting_) {
 
       // Grab a frame...if there is one to grab
-      // There should be a better way to set up this wait
-      // Ideally we would love to have a inerrupt sending a 
-      // callback the moment that there
 #if defined(LOCKFREE)
       while (!buffer_queue_.try_dequeue(frame) && keep_transmitting_) {
         continue;
@@ -747,8 +730,8 @@ void PTBReader::ClientTransmitter() {
       pthread_mutex_unlock(&lock_);
 #endif
 
-      // FIXME: If the PTBreader is still slow after these changes modify the
-      // software to simply send the while thing at once without resizing the packets
+      // TODO: If the PTBreader is still slow after these changes modify the
+      // software to simply send the whole thing at once without resizing the packets
       // All packets become 16 bytes long and send everything as collected
 
 #ifdef DEBUG
@@ -756,38 +739,44 @@ void PTBReader::ClientTransmitter() {
 #endif
 
       // Grab the header, that now should be at the 4 lsB
-      //Word_Header *frame_header = reinterpret_cast_checked<Word_Header *>(frame);
-      Word_Header *frame_header = reinterpret_cast<Word_Header *>(frame);
+      Word_Header *frame_header = reinterpret_cast_checked<Word_Header *>(frame);
+      //Word_Header *frame_header = reinterpret_cast<Word_Header *>(frame);
 
       // Very first check to discard "ghost frames"
       // -- Ghost frames are caused by the NOvA timing not being fully initialized by
       // the time the word was generated. These usually occur because there
-      // is a delay between the sync pulse and the timestamps starting 
+      // is a delay between the sync pulse and the timestamps starting
       // to be populated in the NOvA firmware.
       // Unfortunately it doesn't seem that anything can be done about it
 
-      // FIXME: Get rid of ghost frames on the FW side
-      // Ghost frames are a mess. For the moment keep them but need to set 
-      // up something more reliable.
-      // Most likely on the firmware side
-      // Wouldn't there be a possibility of randomly reaching a state with a full zero nova timestamp?
-      if ((!ts_arrived) && (frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
-        //#ifdef DEBUG
-        Log(warning,"Dropping ghost frame");
-        //#endif
-        continue;
-      }
+      // Conditions that must be checked before the first timestamp arrives
+      if (!ts_arrived) {
+        // FIXME: Get rid of ghost frames on the FW side
+        // Ghost frames are a mess. For the moment keep them but need to set
+        // up something more reliable.
+        // Most likely on the firmware side
+        // after the first TS arrives ignore ghost frames
 
-      // FIXME: THis is just temporary. Have to fix the firmware to grab 
-      // the proper data
-      // This problem is strongly related with the previous. 
-      // Will have to fix it on the firmware side
-      if (!ts_arrived && (frame_header->data_packet_type != DataTypeTimestamp)) {
-        //#ifdef DEBUG
-        Log(warning,"Dropping frames until a timestamp shows up.");
-        //#endif
-        continue;
-      }
+        if ((frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
+          //#ifdef DEBUG
+          Log(warning,"Dropping ghost frame");
+          //#endif
+          continue;
+        }
+
+        // FIXME: This is just temporary. Have to fix the firmware to grab
+        // the proper data
+        // This problem is strongly related with the previous.
+        // Will have to fix it on the firmware side to ensure that the very
+        // first word is a timestamp
+        if ((frame_header->data_packet_type != DataTypeTimestamp)) {
+          //#ifdef DEBUG
+          Log(warning,"Dropping frames until a timestamp shows up.");
+          //#endif
+          continue;
+        }
+      } // ts_arrived
+
 
       /// -- Check if the packet is a TS frame
       if(frame_header->data_packet_type == DataTypeTimestamp) {
@@ -826,7 +815,7 @@ void PTBReader::ClientTransmitter() {
 #ifdef DATA_STATISTICS
         num_word_tstamp_++;
 #endif
-        // break out of the cycle
+        // break out of the cycle to send the packet
         carry_on = false;
         break;
       }
@@ -847,6 +836,7 @@ void PTBReader::ClientTransmitter() {
         // The data that is in the header is from the BSU's, so we can simply copy the payload
         // and then just add the 2 additional bits from the header at the end
         // I put it hardcoded so that I don't end up messing up with it
+        // Since the firmware sends little endian data, the bytes are reversed
         std::memcpy(&eth_buffer[ipck],
             &(frame[CounterPayload::payload_offset_u32]),
             CounterPayload::size_words_ptb_bytes);
@@ -902,27 +892,20 @@ void PTBReader::ClientTransmitter() {
     } // -- carry_on && keep transmitting
 
     // -- if keep_transmitting was called out (eg. run ended),
-    // don't send this data. The board reader won't like to receive an incomplete timestamp
+    // don't send this data. The board reader won't like to receive an incomplete packet without
+    // timestamp word
     if (!keep_transmitting_) break;
 
     // Transmit the data.
     // Log(verbose, "Packet completed. Calculating the checksum.\n");
 
-
-    // FIXME: Verify that the size is correct. 
-    // The size that is written in the header should not include the checksum
+    // Add one word to account for the checksum
     packet_size = (ipck+1)*sizeof(uint32_t);
     // Log(verbose,"Size was calculated to be %u",packet_size);
 
 
     eth_header = SetBitRange(eth_header,packet_size,0,16);
     std::memcpy(&(eth_buffer[0]),&eth_header,sizeof(eth_header));
-    // // eth_buffer[0] = SetBitRange(eth_buffer[0],packet_size,0,16);
-    // bitdump.str(""); bitdump << std::bitset<4>(eth_buffer[0] >> 28)
-    // 			     << " " << std::bitset<4>(eth_buffer[0] >> 24 & 0xF)
-    // 			     << " " << std::bitset<8>(eth_buffer[0] >> 16 & 0xFF)
-    // 			     << " " << std::bitset<16>(eth_buffer[0] & 0xFFFF);
-    // Log(verbose,"Temp header : %X [%s]",eth_buffer[0], bitdump.str().c_str());
 
     // Calculate the checksum
     //
@@ -947,7 +930,7 @@ void PTBReader::ClientTransmitter() {
     eth_checksum = (0x4 << 29) | checksum;
     std::memcpy(&eth_buffer[ipck],&eth_checksum,sizeof(eth_checksum));
     ipck += 1;
-    packet_size = ipck*sizeof(uint32_t);
+    //packet_size = ipck*sizeof(uint32_t);
 #ifdef DEBUG
     Log(debug,"Sending packet with %u bytes (including header)",packet_size);
     print_bits(eth_buffer,packet_size);
@@ -957,13 +940,14 @@ void PTBReader::ClientTransmitter() {
       socket_->send(eth_buffer,packet_size);
       global_eth_pos += (ipck+4);
       // add 4 bytes of padding just to make sure that there are no overlaps
-      // for occasional small packets troubles could ensue.
-      if ((global_eth_pos+(4*ipck)) > max_packet_size) {
+      // for occasional small packets troubles could happen.
+      if ((global_eth_pos+(4*ipck)) > eth_buffer_size_u32) {
         // reset the pointer to the beginning
         global_eth_pos = 0;
       }
 #ifdef DATA_STATISTICS
       num_eth_fragments_++;
+      bytes_sent_ += packet_size;
 #endif
       }
     catch(SocketException &e) {
@@ -1007,6 +991,9 @@ void PTBReader::ClientTransmitter() {
   if (error_state_) {
     Log(warning,"Transmission loop exited with error state.");
   }
+  // wait for a few moments before deallocating the memory so that the kernel does not go ballistic
+  // in case it hans't yet committed all the buffers
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
   // Deallocate the memory
   delete [] global_eth_buffer;
   // Finish the connection

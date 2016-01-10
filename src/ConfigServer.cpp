@@ -92,10 +92,12 @@ void* ConfigServer::listen(void *arg) {
       // The problem is that from here there is nothing else that can be done
       // return to main and main will make sure to clean up and relaunch
       Log(error,"Socket exception caught : %s",e.what());
+      // FIXME: If the socket does not have a valid object won't this cause trouble?
       if (client_socket_ != nullptr) delete client_socket_;
       client_socket_ = nullptr;
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));
+      continue;
     }
 
     // The handling could go into a separate try block that would allow to close existing connections and configuration in case of trouble
@@ -106,8 +108,9 @@ void* ConfigServer::listen(void *arg) {
       Log(error,"Socket exception caught : %s",e.what());
       if (client_socket_ != nullptr) delete client_socket_;
       client_socket_ = nullptr;
-      Log(warning,"Passing down shutdown signal.");
+      Log(warning,"Passing down shutdown signal to the PTB.");
       // if there is a data manager, tell it to stop taking data
+      // If there is no data taking going on, no problems, it is ignored
       if (data_manager_ != NULL) {
         char *answer;
         data_manager_->ExecuteCommand("StopRun",answer);
@@ -117,7 +120,7 @@ void* ConfigServer::listen(void *arg) {
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }
     catch(...) {
-      Log(error,"Unknown exception caught. Cleaning up and relaunching.");
+      Log(error,"An exception was caught. Cleaning up and relaunching.");
       if (data_manager_ != NULL) {
         char *answer;
         data_manager_->ExecuteCommand("StopRun",answer);
@@ -152,7 +155,7 @@ void ConfigServer::HandleTCPClient(/*TCPSocket *sock */) {
   } catch (SocketException &e) {
     Log(error,"Unable to get foreign port");
   }
-  Log(info,"Working  with thread %x",pthread_self());
+  Log(info,"Working  with thread 0x%x",pthread_self());
 
   // Send received string and receive again until the end of transmission
 

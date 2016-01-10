@@ -381,13 +381,12 @@ class PTBReader {
   }
   
   // -- Statistics methods:
-  uint32_t GetNumMicroslices() {return num_eth_fragments_;};
+  uint32_t GetNumFragmentsSent() {return num_eth_fragments_;};
   uint32_t GetNumCounterWords() {return num_word_counter_;};
   uint32_t GetNumTriggerWords() {return num_word_trigger_;};
   uint32_t GetNumFIFOWarnings() {return num_word_fifo_warning_;};
   uint32_t GetNumTimestampWords() {return num_word_tstamp_;};
   uint32_t GetBytesSent() {return bytes_sent_;};
-  uint64_t GetRunTime() {return (last_timestamp_ - first_timestamp_);};
 
 
   void SetDryRun(bool status) {dry_run_ = status;};
@@ -460,7 +459,8 @@ private:
 
 
   // A few auxiliary constants
-  static const uint32_t max_packet_size   = 0xFFFF; // Max possible ethernet packet
+
+  static const uint32_t eth_buffer_size_u32   = 0xFFFF; // Max possible ethernet packet
   static const uint32_t frame_size_bits   = 0x80;   // the buffer is 128 bits
   static const uint32_t frame_size_bytes  = 0x10;   // 16 bytes
   static const uint32_t frame_size_u32    = 0x4;    // 4xuint32_t
@@ -468,7 +468,9 @@ private:
   // Could easily do something else, or even set this as a configuration
   // parameter
   // FIXME: Change to a fhicl param
-  static const uint32_t buffer_size = 2*1024*1024;
+  ///! Number of frames possible to buffer in the RAM memory
+  /// Increased from 2M to 8M => 32MB
+  static const uint32_t buffer_size_frames = 8*1024*1024;
 
 
   // Warning pre_computed words
@@ -505,8 +507,6 @@ bool error_state_;
   uint32_t num_word_fifo_warning_;
   uint32_t num_word_tstamp_;
   uint32_t bytes_sent_;
-  uint32_t first_timestamp_;
-  uint32_t last_timestamp_;
   
 };
 

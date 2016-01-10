@@ -9,6 +9,7 @@
 #define UTIL_H_
 #include <cstdlib>
 #include <sstream>
+#include "Logger.h"
 
 uint32_t CreateMask(uint32_t begin, uint32_t end);
 uint32_t SetBitRange(uint32_t content, uint32_t value, uint32_t pos, uint32_t len);
@@ -39,7 +40,8 @@ template <typename S, typename T>
   if ( inptr_void != outptr_void ) {
     std::ostringstream msg;
     msg << "reinterpret_cast_checked::ERROR: casted " << inptr_void << " to " << outptr_void << " => results of the cast can't be trusted";
-    throw msg.str();
+//    throw PTBexception(msg.str());
+    Log(error,"%s",msg.str().c_str());
   }
 
   return outptr;
