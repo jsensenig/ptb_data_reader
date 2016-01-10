@@ -69,7 +69,6 @@ const char* Logger::tostr(Logger::severity sev) {
   return "INFO";
 }
 
-
 //std::ostream* Logger::_estream (&std::cerr);
 std::mutex Logger::print_mutex_;
 
