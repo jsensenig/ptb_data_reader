@@ -102,7 +102,7 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
     keep_transmitting_(true),
     keep_collecting_(true),time_rollover_(0),
     // below this point all these are debugging variables
-    dry_run_(false), error_state_(false),
+    dry_run_(false), error_state_(false),error_messages_(""),
     num_eth_fragments_(0),
     num_word_counter_(0),num_word_trigger_(0),num_word_fifo_warning_(0),
     num_word_tstamp_(0),bytes_sent_(0)
@@ -111,11 +111,10 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
 
 #ifndef LOCKFREE
   // Init the mutex for the queue
-  // FIXME: Replace mutex by lock free queue
   if (pthread_mutex_init(&lock_, NULL) != 0)
   {
     Log(error,"\n Failed to create the mutex for the data queue\n" );
-    throw std::string("Failed to create the mutex for the data queue.");
+    throw PTBexception("Failed to create the mutex for the data queue.");
   }
 #endif
 
@@ -124,7 +123,6 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
 PTBReader::~PTBReader() {
   Log(debug,"Destroying the reader." );
 #ifndef LOCKFREE
-  //FIXME: Replace mutex by lock free queue
   pthread_mutex_destroy(&lock_);
 #endif
   ready_ = false;
@@ -135,22 +133,21 @@ void PTBReader::ClearThreads() {
     // the threads only exist in transmission mode. 
     return;
   } else {
-    // FIXME: Migrate this to C++11 threads.
     Log(debug,"Killing the daughter threads.\n");
     // First stop the loops
     keep_collecting_ = false;
     std::this_thread::sleep_for (std::chrono::milliseconds(100));
-    Log(info,"Killing collector thread.");
+    Log(info,"Joining collector thread.");
     // Kill the collector thread first
     // Ideally we would prefer to join the thread
     if (client_thread_collector_ != 0) {
       pthread_join(client_thread_collector_,NULL);
       client_thread_collector_ = 0;
     }
-    // Kill the transmittor thread.
+    // Kill the transmitter thread.
 
     keep_transmitting_ = false;
-    std::this_thread::sleep_for (std::chrono::seconds(2));
+    std::this_thread::sleep_for (std::chrono::milliseconds(200));
     // -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
     Log(info,"Killing transmitter thread.");
     if (client_thread_transmitter_) {
@@ -181,8 +178,18 @@ void PTBReader::StopDataTaking() {
   close(g_dma_fd);
 
 #elif defined(ARM_MMAP)
+  Log(info,"Unmapping data registers...");
   // Release the mmapped memory for the data
   UnmapPhysMemory(mapped_data_base_addr_,(data_reg.high_addr-data_reg.base_addr));
+  Log(info,"Emptying the buffer queue");
+  bool has_entries;
+  do {
+    // TODO: Check that calling a destructor of a partial memory address
+    // does not cause trouble.
+    has_entries = buffer_queue_.pop();
+  } while(has_entries);
+
+  Log(info,"Deleting memory pool...");
   delete [] memory_pool_;
   // The file is closed when the configuration registers are unmapped
 #endif /*ARM_MMAP*/
@@ -191,7 +198,6 @@ void PTBReader::StopDataTaking() {
 }
 
 void PTBReader::StartDataTaking() {
-  //FIXME: Migrate this to C++11 constructs
   if (dry_run_) { // in dry run don't launch anything
     return;
   } else {
@@ -261,9 +267,8 @@ void PTBReader::StartDataTaking() {
         throw PTBexception("Failed to initialize the DMA engine for PTB data collection.");
         return;
       }
-#endif
+#elif defined(ARM_MMAP)
 
-#ifdef ARM_MMAP
       Log(debug,"Mapping the data registers");
       // Map the physical addresses
       SetupDataRegisters();
@@ -290,7 +295,7 @@ void PTBReader::StartDataTaking() {
       }
 
     } else {
-      Log(error,"Calling to start taking data connection is not ready yet." );
+      Log(error,"Calling to start data taking but connection is not ready yet." );
       throw PTBexception("Connection not available.");
     }
   }
@@ -316,6 +321,14 @@ void PTBReader::ResetBuffers() {
 
 // Only does one thing and that is killing the data connection.
 void PTBReader::CloseConnection() {
+  bool socket_good = TestSocket();
+  // only call for delete if the socket is good
+  if ((socket_ != nullptr) && socket_good) delete socket_;
+  socket_ = nullptr;
+  ready_ = false;
+}
+
+bool PTBReader::TestSocket() {
   // -- test if the socket yields something usable
   bool socket_good = true;
   try {
@@ -325,30 +338,25 @@ void PTBReader::CloseConnection() {
     // if an exception is caught here, then the socket is no longer good.
     socket_good = false;
   }
-  // only call for delete if the socket is good
-  if ((socket_ != nullptr) && socket_good) delete socket_;
-  socket_ = nullptr;
-  ready_ = false;
+  return socket_good;
 }
 
 void PTBReader::InitConnection(bool force) {
   //-- If a connection exists, assume it is correct and continue to use it
   // FIXME: A ghost connection can exist
   // Try first if the connection is good
-  bool socket_good = true;
-  try {
-    socket_->getForeignPort();
-  }
-  catch (...) {
-    socket_good = false;
-  }
-  if ((socket_ != nullptr) && socket_good) {
-    if (force) {
-      Log(warning,"Destroying existing socket!");
-      delete socket_;
-    } else {
-      Log(info,"Reusing existing connection.");
-      return;
+  if (socket_ != nullptr) {
+    bool socket_good = TestSocket();
+
+    if (socket_good) {
+      if (force) {
+        Log(warning,"Destroying existing socket!");
+        delete socket_;
+        socket_ = nullptr;
+      } else {
+        Log(info,"Reusing existing connection.");
+        return;
+      }
     }
   }
 
@@ -367,24 +375,24 @@ void PTBReader::InitConnection(bool force) {
       ready_ = true;
 
     }
-    // -- Catch and rethrow the exceptions sho that they can be dealt with at higher level.
+    // -- Catch and rethrow the exceptions so that they can be dealt with at higher level.
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what() );
       ready_ = false;
-      delete socket_;
+      if (socket_) delete socket_;
       socket_ = nullptr;
       throw;
     }
     catch(std::exception &e) {
       ready_ = false;
-      delete socket_;
+      if (socket_) delete socket_;
       socket_ = nullptr;
       Log(error,"STD exception caught : %s",e.what() );
       throw;
     }
     catch(...) {
       ready_ = false;
-      delete socket_;
+      if (socket_) delete socket_;
       socket_ = nullptr;
       Log(error,"Unknown exception caught." );
       throw;
@@ -392,7 +400,7 @@ void PTBReader::InitConnection(bool force) {
   } else {
     Log(error,"Calling to start connection without defining connection parameters." );
     ready_ = false;
-    delete socket_;
+    if (socket_) delete socket_;
     socket_ = nullptr;
     throw PTBexception("Calling to start connection without defining connection parameters.");
   }
@@ -637,7 +645,7 @@ void PTBReader::ClientTransmitter() {
 
   //FIXME: Implement fragmentation
   // this builds an array of 64k ints = 256 kbytes
-  // Should correspond to several words in worst case scenario
+  // Should correspond to several ethernet packets in worst case scenario
   uint32_t *global_eth_buffer = new uint32_t[eth_buffer_size_u32]();
 
   // Local pointer that is effectively used to build the eth packet
@@ -647,7 +655,7 @@ void PTBReader::ClientTransmitter() {
 
 
   error_state_ = false;
-
+  error_messages_ = "";
   // Debugging information that is passed down in the end of the run
   num_eth_fragments_ = 0;
   num_word_counter_ = 0;
@@ -954,6 +962,11 @@ void PTBReader::ClientTransmitter() {
       // Stop collecting and transmitting
       //
       error_state_ = true;
+      error_messages_ += "<error>Data socket exception [";
+      error_messages_ += currentDateTime();
+      error_messages_ += "] : ";
+      error_messages_ += e.what();
+      error_messages_ += "</error>";
       keep_collecting_ = false;
       keep_transmitting_ = false;
       //

@@ -66,49 +66,43 @@ void* ConfigServer::listen(void *arg) {
   std::thread::id thread_id = std::this_thread::get_id();
   Log(debug,"PTB Listen thread: 0x%X",thread_id);
 #endif
+
   //TCPSocket *client_socket_ = nullptr;
   // This forces the loop to restart in case the problem was caused by loss of connection.
-  for (;;) {
-    try {
-      Log(info,"Creating server listening socket...");
-      // If an exception kicks in, shouldn't the docket be automatically destroyed?
-      // Doesn't seem to be
-      TCPServerSocket servSock(port_);   // Socket descriptor for server
-      Log(info,"Entering wait mode for client connection at port %u",port_);
-      // Check if there is a request to terminate the connection.
-      if (shutdown_) {
-        Log(info,"Received a request to shut down. Complying...");
-        return NULL;
-      }
+  // This should be outside the loop.
+  Log(info,"Creating server listening socket...");
+  // This simply binds the port. Should not need to destroy and relaunch
+  TCPServerSocket servSock(port_);   // Socket descriptor for server
+  Log(info,"Entering wait mode for client connection at port %u",port_);
 
+  for (;;) {
+    client_socket_ = nullptr;
+    // Check if there is a request to terminate the connection.
+    if (shutdown_) {
+      Log(info,"Received a request to shut down. Complying...");
+      return NULL;
+    }
+
+    try {
       Log(info,"Starting listener for connection...");
       // Create a separate socket for the client
       // Wait indefinitely until the client kicks in.
       client_socket_ = servSock.accept();
 
-      Log(debug,"Received client connection request.");
-    }
-    catch(SocketException &e) {
-      // The problem is that from here there is nothing else that can be done
-      // return to main and main will make sure to clean up and relaunch
-      Log(error,"Socket exception caught : %s",e.what());
-      // FIXME: If the socket does not have a valid object won't this cause trouble?
-      if (client_socket_ != nullptr) delete client_socket_;
+      Log(info,"Received client connection request.");
+
+      HandleTCPClient();
+      Log(info,"Client connection completed. Clearing socket...");
+      delete client_socket_;
       client_socket_ = nullptr;
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));
-      continue;
-    }
-
-    // The handling could go into a separate try block that would allow to close existing connections and configuration in case of trouble
-    try{
-      HandleTCPClient();
     }
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what());
       if (client_socket_ != nullptr) delete client_socket_;
       client_socket_ = nullptr;
-      Log(warning,"Passing down shutdown signal to the PTB.");
+      Log(warning,"Passing down a shutdown signal to the PTB.");
       // if there is a data manager, tell it to stop taking data
       // If there is no data taking going on, no problems, it is ignored
       if (data_manager_ != NULL) {
@@ -120,7 +114,10 @@ void* ConfigServer::listen(void *arg) {
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }
     catch(...) {
-      Log(error,"An exception was caught. Cleaning up and relaunching.");
+      Log(error,"An unspecified exception was caught. Cleaning up and relaunching.");
+      if (client_socket_ != nullptr) delete client_socket_;
+      client_socket_ = nullptr;
+      Log(warning,"Passing down a shutdown signal to the PTB.");
       if (data_manager_ != NULL) {
         char *answer;
         data_manager_->ExecuteCommand("StopRun",answer);
@@ -129,7 +126,7 @@ void* ConfigServer::listen(void *arg) {
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }
-  }
+  } // -- for
 
   Log(warning,"Reaching the end of execution, but not sure why...should not happen!");
   return NULL;
@@ -142,6 +139,7 @@ void ConfigServer::HandleTCPClient(/*TCPSocket *sock */) {
     Log(error,"Refusing to handle a NULL socket.");
     return;
   }
+  // Test the quality of the socket
   Log(debug,"Handling client...");
   try {
 
@@ -150,7 +148,7 @@ void ConfigServer::HandleTCPClient(/*TCPSocket *sock */) {
     Log(error,"Unable to get foreign address");
   }
   try {
-	  uint32_t localPort = client_socket_->getForeignPort();
+    uint32_t localPort = client_socket_->getForeignPort();
     Log(debug,"Port : %u",localPort);
   } catch (SocketException &e) {
     Log(error,"Unable to get foreign port");
@@ -176,7 +174,8 @@ void ConfigServer::HandleTCPClient(/*TCPSocket *sock */) {
   localBuffer.resize(RCVBUFSIZE);
   localBuffer = "";
   // What if the string sent is bigger than the one being read?
-  while ((recvMsgSize = client_socket_->recv(instBuffer, RCVBUFSIZE-2)) > 0) { // Zero means
+  // zero means transmission is finished.
+  while ((recvMsgSize = client_socket_->recv(instBuffer, RCVBUFSIZE-2)) > 0) {
 
     // Truncate the instantaneous buffer on the number of bytes
     instBuffer[recvMsgSize] = '\0';
@@ -236,6 +235,7 @@ void ConfigServer::HandleTCPClient(/*TCPSocket *sock */) {
         }
 
         // Process the transmission.
+        // These exceptions should never be caught. They should be caught underneath
         try {
           Log(verbose,"Processing buffer [%s]",tcp_buffer_.c_str());
           // Don't understand what this sleep is doing here
@@ -259,7 +259,7 @@ void ConfigServer::HandleTCPClient(/*TCPSocket *sock */) {
         catch (...) {
           sprintf(instBuffer,"<feedback><error>Unknown</error></feedback>");
         }
-	Log(verbose,"Returning answer : %s",instBuffer);
+        Log(verbose,"Returning answer : %s",instBuffer);
         client_socket_->send(instBuffer,strlen(instBuffer));
 
       } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
@@ -301,19 +301,22 @@ void ConfigServer::HandleTCPClient(/*TCPSocket *sock */) {
         catch (...) {
           sprintf(instBuffer,"<feedback><error>Unknown error</error></feedback>");
         }
-        Log(debug,"Sending answer");
-        Log(debug,"%s",instBuffer);
+        Log(info,"Sending answer : ");
+        Log(info,"%s",instBuffer);
         client_socket_->send(instBuffer,strlen(instBuffer));
         Log(debug,"Answer sent");
       } else {
         Log(verbose,"Found nothing");
       }
     }
-  }
+  } // recv_size > =
 
   //
   Log(warning,"Connection to the client was lost.");
-  Log(warning,"Socket will be closed.");
+  Log(warning,"This socket will be closed.");
+
+  // shouldn't it be destroyed properly?
+
   // Destructor closes socket
 }
 
@@ -383,9 +386,9 @@ void ConfigServer::ProcessTransmission(const char* buffer,char*& answer) {
   // 2.) There are both config and command nodes
   if (command == NULL &&  config == NULL) {
     Log(error,"Neither config nor command blocks were found. Ignoring the data.");
-//    std::ostringstream docstr;
-//    doc.print(docstr);
-//    throw PTBexception(docstr.str().c_str());
+    //    std::ostringstream docstr;
+    //    doc.print(docstr);
+    //    throw PTBexception(docstr.str().c_str());
 
   } else if (command != NULL and config != NULL){
     Log(error,"Found both a config and a command node. This is not supported yet.");
@@ -410,55 +413,42 @@ void ConfigServer::ProcessConfig(pugi::xml_node &config, char*& answer) {
   Log(verbose,"Value: [%s]",config.child_value());
 
   // Store the buffer in the local variable.
-  if (Logger::GetSeverity() <= Logger::debug) {
+  if (Logger::GetSeverity() <= Logger::verbose) {
     config.print(std::cout,"",pugi::format_raw);
   }
-  try {
-    // Let's treat the writing of the answers directly in the low level code.
-    // easier to evaluate on a run by run basis.
-    data_manager_->ProcessConfig(config,answer);
-  }
-  catch(std::string &e) {
-    Log(error,"Configuration exception caught: %s",e.c_str());
-    throw;
-  }
-  catch(PTBexception &e) {
-    Log(error,"PTB exception caught: %s",e.what());
-    throw;
-  }
-  catch(...) {
-    Log(error,"unknown exception caught.");
-    throw;
-  }
+  // NOTE: No exception should be caught at this point. All were caught at a lower level.
+  // Let's treat the writing of the answers directly in the low level code.
+  // easier to evaluate on a run by run basis.
+  data_manager_->ProcessConfig(config,answer);
+  Log(debug,"Returning from ProcessConfig with answer [%s].",answer);
 }
 
 void ConfigServer::ProcessCommand(pugi::xml_node &command, char*&answer) {
 
   Log(verbose,"Processing input buffer");
-  Log(verbose,"Name: [%s]",command.name());
-  Log(verbose,"Value: [%s]",command.value());
+  //  Log(verbose,"Name: [%s]",command.name());
+  //  Log(verbose,"Value: [%s]",command.value());
+  //  Log(verbose,"Child Value: [%s]",command.child_value());
+  //  try{
+  const char* cmd = command.child_value();
+  Log(debug,"Checking command [%s]",cmd);
 
-  Log(verbose,"Value: [%s]",command.child_value());
-  try{
-    const char* cmd = command.child_value();
-    Log(debug,"Checking command [%s]",cmd);
-
-    // Pass the command to the manager and let it handle it properly
-    data_manager_->ExecuteCommand(cmd,answer);
-  }
-  catch (const std::exception &e) {
-    Log(error,"STL exception caught : %s ",e.what());
-    throw;
-  }
-  catch (std::string &str) {
-    Log(error,"Caught STR exception %s ",str.c_str());
-    throw;
-  }
-  catch(...) {
-    Log(error,"Unknown exception caught.");
-    throw;
-  }
+  // Like before, if an exception is thrown, the answer does not arrive here.
+  // Should catch the exceptions further below and here simply relay whatever arrives
+  // Pass the command to the manager and let it handle it properly
+  data_manager_->ExecuteCommand(cmd,answer);
+  //  }
+  //  catch (const std::exception &e) {
+  //    Log(error,"STL exception caught : %s ",e.what());
+  //  }
+  //  catch (std::string &str) {
+  //    Log(error,"Caught STR exception %s ",str.c_str());
+  //  }
+  //  catch(...) {
+  //    Log(error,"Unknown exception caught.");
+  //  }
   // Get the command answer
+  Log(debug,"Returning from ProcessCommand with answer [%s].",answer);
 
 }
 
@@ -484,7 +474,7 @@ void ConfigServer::Shutdown(bool force) {
   Log(warning,"Shutdown requested.");
   // Check if force is passed
   if (force) {
-	Log(warning,"Forcing it into server thread.");
+    Log(warning,"Forcing it into server thread.");
     // Detach to deallocate resources
     pthread_detach(thread_id_);
     // Send a cancel call.
@@ -507,28 +497,28 @@ void ConfigServer::Shutdown(bool force) {
       queue_.pop_front();
     }
   } else {
-	  Log(debug,"Performing a soft shutdown");
-	  // First kill the thread that is waiting for a connection
-	    //pthread_detach(thread_id_);
-	    // Send a cancel call.
-	    pthread_cancel(thread_id_);
-	  	//pthread_kill(thread_id_,SIGINT);
+    Log(debug,"Performing a soft shutdown");
+    // First kill the thread that is waiting for a connection
+    //pthread_detach(thread_id_);
+    // Send a cancel call.
+    pthread_cancel(thread_id_);
+    //pthread_kill(thread_id_,SIGINT);
 
-	    thread_id_ = 0;
+    thread_id_ = 0;
 
-	  // Try to do a soft exit
-	  // If there is a manager tell it to stop
-	  if (data_manager_) {
-		  // Get the reader
-		  PTBReader *reader = const_cast<PTBReader*>(data_manager_->getReader());
-		  reader->ClearThreads();
-		  delete reader;
-		  data_manager_->FreeRegisters();
-		  data_manager_->ClearCommands();
-		  Log(verbose,"Destroying the manager");
-		  //delete data_manager_;
-		  Log(verbose,"Manager destroyed");
-	  }
+    // Try to do a soft exit
+    // If there is a manager tell it to stop
+    if (data_manager_) {
+      // Get the reader
+      PTBReader *reader = const_cast<PTBReader*>(data_manager_->getReader());
+      reader->ClearThreads();
+      delete reader;
+      data_manager_->FreeRegisters();
+      data_manager_->ClearCommands();
+      Log(verbose,"Destroying the manager");
+      //delete data_manager_;
+      Log(verbose,"Manager destroyed");
+    }
   }
 }
 

@@ -484,6 +484,8 @@ class PTBReader {
   void InitConnection(bool force = false);
   void CloseConnection();
 
+  bool TestSocket();
+
   bool getConnectionValid() const {
     // This might not be necessarily the best option
     return (socket_ != NULL);
@@ -503,6 +505,8 @@ class PTBReader {
   bool GetDryRun() {return dry_run_;};
 
   bool GetErrorState() {return error_state_;};
+
+  std::string GetErrorMessages() {return error_messages_;};
 
 protected:
   /** Data collector function into the queue. Runs on it's own thread**/
@@ -608,6 +612,7 @@ const uint32_t timeout_cnt_threshold_ = 10000;
 
 bool dry_run_; // Run the PTB without collecting data
 bool error_state_;
+std::string error_messages_;
 
   // -- Internal run statistics
   uint32_t num_eth_fragments_;
