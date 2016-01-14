@@ -95,6 +95,15 @@ void* ConfigServer::listen(void *arg) {
       Log(info,"Client connection completed. Clearing socket...");
       delete client_socket_;
       client_socket_ = nullptr;
+      // -- Force a hard reset in the PTB to account for the case the
+      // DAQ crashed
+      if (data_manager_ != NULL) {
+        char *answer;
+        data_manager_->ExecuteCommand("StopRun",answer);
+        delete [] answer;
+        data_manager_->ExecuteCommand("HardReset",answer);
+        delete [] answer;
+      }
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }
@@ -109,6 +118,9 @@ void* ConfigServer::listen(void *arg) {
         char *answer;
         data_manager_->ExecuteCommand("StopRun",answer);
         delete [] answer;
+        data_manager_->ExecuteCommand("HardReset",answer);
+        delete [] answer;
+
       }
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -122,6 +134,9 @@ void* ConfigServer::listen(void *arg) {
         char *answer;
         data_manager_->ExecuteCommand("StopRun",answer);
         delete [] answer;
+        data_manager_->ExecuteCommand("HardReset",answer);
+        delete [] answer;
+
       }
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));

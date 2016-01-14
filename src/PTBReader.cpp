@@ -305,8 +305,11 @@ void PTBReader::ResetBuffers() {
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
 #if defined(LOCKFREE)
-  buffer_queue_.pop();
-  counter++;
+  bool has_data = true;
+  do {
+    has_data = buffer_queue_.pop();
+    counter++;
+  } while (has_data);
 #else
   pthread_mutex_lock(&lock_);
 
