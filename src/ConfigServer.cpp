@@ -122,7 +122,6 @@ void* ConfigServer::listen(void *arg) {
         data_manager_->ExecuteCommand("HardReset",answer);
         delete [] answer;
       }
-
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }
@@ -137,6 +136,9 @@ void* ConfigServer::listen(void *arg) {
         char *answer;
         data_manager_->ExecuteCommand("StopRun",answer);
         delete [] answer;
+        data_manager_->ExecuteCommand("HardReset",answer);
+        delete [] answer;
+
       }
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -150,6 +152,9 @@ void* ConfigServer::listen(void *arg) {
         char *answer;
         data_manager_->ExecuteCommand("StopRun",answer);
         delete [] answer;
+        data_manager_->ExecuteCommand("HardReset",answer);
+        delete [] answer;
+
       }
       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
       std::this_thread::sleep_for(std::chrono::seconds(5));
