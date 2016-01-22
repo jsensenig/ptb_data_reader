@@ -749,7 +749,7 @@ void PTBReader::ClientTransmitter() {
 #endif
 
       // Grab the header, that now should be at the 4 lsB
-      Word_Header *frame_header = reinterpret_cast_checked<Word_Header *>(frame);
+      Payload_Header *frame_header = reinterpret_cast_checked<Payload_Header *>(frame);
       //Word_Header *frame_header = reinterpret_cast<Word_Header *>(frame);
 
       // Very first check to discard "ghost frames"
@@ -795,7 +795,7 @@ void PTBReader::ClientTransmitter() {
         // Check if this is the first TS after StartRun
         // Log(verbose, "Timestamp frame...\n");
 #ifdef DEBUG
-        TimestampPayload *t = reinterpret_cast<TimestampPayload *>(&(frame[TimestampPayload::payload_offset_u32]));
+        Payload_Timestamp *t = reinterpret_cast<Payload_Timestamp *>(&(frame[Payload_Timestamp::payload_offset_u32]));
         Log(verbose,"Timestamp first estimate  %" PRIX64 " (%" PRIu64 ")",t->nova_timestamp,t->nova_timestamp);
         std::cout << "Just to make sure: " << t->nova_timestamp << std::endl;
 
@@ -805,14 +805,14 @@ void PTBReader::ClientTransmitter() {
         // print_bits(&frame[Word_Header::size_words+TimestampPayload::ptb_offset],16-(Word_Header::size_words+TimestampPayload::ptb_offset));
         // print_bits(t,8);
 #endif
-        std::memcpy(&eth_buffer[ipck],frame,Word_Header::size_bytes);
-        ipck += Word_Header::size_u32;
+        std::memcpy(&eth_buffer[ipck],frame,Payload_Header::size_bytes);
+        ipck += Payload_Header::size_u32;
 
         // Don't forget to apply the ptb_offset!!
         std::memcpy(&eth_buffer[ipck],
-                    &(frame[TimestampPayload::payload_offset_u32]),
-                    TimestampPayload::size_bytes);
-        ipck += TimestampPayload::size_u32;
+                    &(frame[Payload_Timestamp::payload_offset_u32]),
+                    Payload_Timestamp::size_bytes);
+        ipck += Payload_Timestamp::size_u32;
 #ifdef DEBUG
         //Log(verbose,"Intermediate packet:");
         //print_bits(eth_buffer,ipck);
@@ -834,8 +834,8 @@ void PTBReader::ClientTransmitter() {
       // -- Grab the header (valid for all situations
       // Log(verbose, "Grabbing the header\n");
 
-      std::memcpy(&eth_buffer[ipck],frame,Word_Header::size_bytes);
-      ipck += Word_Header::size_u32;
+      std::memcpy(&eth_buffer[ipck],frame,Payload_Header::size_bytes);
+      ipck += Payload_Header::size_u32;
 
       switch(frame_header->data_packet_type) {
       case DataTypeCounter:
@@ -848,11 +848,11 @@ void PTBReader::ClientTransmitter() {
         // I put it hardcoded so that I don't end up messing up with it
         // Since the firmware sends little endian data, the bytes are reversed
         std::memcpy(&eth_buffer[ipck],
-            &(frame[CounterPayload::payload_offset_u32]),
-            CounterPayload::size_words_ptb_bytes);
+            &(frame[Payload_Counter::payload_offset_u32]),
+            Payload_Counter::size_words_ptb_bytes);
         // Now add the remaining 2 bits to the lsb of the next u32
         // and pad the rest with zeros
-        ipck += CounterPayload::size_words_ptb_u32;
+        ipck += Payload_Counter::size_words_ptb_u32;
         eth_buffer[ipck] = 0x2 & frame_header->padding;
         ipck+=1;
 #ifdef DATA_STATISTICS
@@ -865,9 +865,9 @@ void PTBReader::ClientTransmitter() {
       case DataTypeTrigger:
         // Log(verbose, "Trigger word\n");
         std::memcpy(&eth_buffer[ipck],
-                    &frame[TriggerPayload::payload_offset_u32],
-                    TriggerPayload::size_bytes);
-        ipck += TriggerPayload::size_u32;
+                    &frame[Payload_Trigger::payload_offset_u32],
+                    Payload_Trigger::size_bytes);
+        ipck += Payload_Trigger::size_u32;
 #ifdef DATA_STATISTICS
         // Log(verbose,"Intermediate packet:");
         // print_bits(eth_buffer,ipck);

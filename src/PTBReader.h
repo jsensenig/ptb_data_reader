@@ -78,7 +78,7 @@ class PTBReader {
   };
 
   /// Internal warning word
-  struct Word_Warning {
+  struct Warning_Word {
     typedef uint32_t data_t;
     typedef uint16_t data_size_t;
     
@@ -96,7 +96,7 @@ class PTBReader {
   };
 
   /// Frame header : Common header to everything except warning words
-  struct Word_Header {
+  struct Payload_Header {
     typedef uint32_t data_t;
     typedef uint16_t data_size_t;
     
@@ -157,7 +157,7 @@ class PTBReader {
   };
 
   /// Counter payload description
-  struct CounterPayload {
+  struct Payload_Counter {
     typedef uint64_t counter_set_t;
     typedef uint16_t data_size_t;
     // -- Must be careful to follow the right order
@@ -214,7 +214,7 @@ class PTBReader {
   };
 
   /// Trigger description
-  struct TriggerPayload {
+  struct Payload_Trigger {
     typedef uint32_t trigger_type_t;
     typedef uint16_t data_size_t;
 
@@ -378,7 +378,7 @@ class PTBReader {
 
   };
 
-  struct TimestampPayload {
+  struct Payload_Timestamp {
     typedef uint64_t timestamp_t;
     typedef uint16_t data_size_t;
     timestamp_t nova_timestamp : 64;
@@ -408,11 +408,11 @@ class PTBReader {
   static microslice_size_t const payload_size_warning   = 0 * sizeof(uint32_t); //32-bit payload
   
   //The types of data words
-  static const Word_Header::data_packet_type_t DataTypeWarning   = 0x0; //0b000
-  static const Word_Header::data_packet_type_t DataTypeCounter   = 0x1; //0b001
-  static const Word_Header::data_packet_type_t DataTypeTrigger   = 0x2; //0b010
-  static const Word_Header::data_packet_type_t DataTypeChecksum  = 0x4; //0b100
-  static const Word_Header::data_packet_type_t DataTypeTimestamp = 0x7; //0b111
+  static const Payload_Header::data_packet_type_t DataTypeWarning   = 0x0; //0b000
+  static const Payload_Header::data_packet_type_t DataTypeCounter   = 0x1; //0b001
+  static const Payload_Header::data_packet_type_t DataTypeTrigger   = 0x2; //0b010
+  static const Payload_Header::data_packet_type_t DataTypeChecksum  = 0x4; //0b100
+  static const Payload_Header::data_packet_type_t DataTypeTimestamp = 0x7; //0b111
 
   /** 
    * Implementation of the PTBReader class
