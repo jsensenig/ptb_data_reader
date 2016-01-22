@@ -146,6 +146,8 @@ void PTBReader::ClearThreads() {
     }
     // Kill the transmitter thread.
 
+    // Occasionally there seems to be memory corruption between these two steps
+    Log(info,"Telling transmitter thread to stop.");
     keep_transmitting_ = false;
     std::this_thread::sleep_for (std::chrono::milliseconds(200));
     // -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
@@ -688,6 +690,7 @@ void PTBReader::ClientTransmitter() {
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
+  // Wonder if sometimes there could be a conflict when both a write and a read are issued over the variable.
   while(keep_transmitting_) {
 
     // Set the local pointer to the place pointer by the global pointer
@@ -727,7 +730,10 @@ void PTBReader::ClientTransmitter() {
         continue;
       }
       // break out if a stop was requested while waiting for data to be available.
-      if (!keep_transmitting_) break;
+      if (!keep_transmitting_) {
+	Log(info,"Received request to stop transmitting.");
+	break;
+      }
 #else
       if (buffer_queue_.size() == 0) {
         continue;
@@ -904,8 +910,10 @@ void PTBReader::ClientTransmitter() {
     // -- if keep_transmitting was called out (eg. run ended),
     // don't send this data. The board reader won't like to receive an incomplete packet without
     // timestamp word
-    if (!keep_transmitting_) break;
-
+    if (!keep_transmitting_) {
+      Log(info,"Stopping transmission requested. Breaking out.");
+      break;
+    }
     // Transmit the data.
     // Log(verbose, "Packet completed. Calculating the checksum.\n");
 

@@ -66,20 +66,38 @@ void* ConfigServer::listen(void *arg) {
   std::thread::id thread_id = std::this_thread::get_id();
   Log(debug,"PTB Listen thread: 0x%X",thread_id);
 #endif
+  TCPServerSocket * servSock = nullptr;
 
-  //TCPSocket *client_socket_ = nullptr;
-  // This forces the loop to restart in case the problem was caused by loss of connection.
-  // This should be outside the loop.
-  Log(info,"Creating server listening socket...");
-  // This simply binds the port. Should not need to destroy and relaunch
-  TCPServerSocket servSock(port_);   // Socket descriptor for server
-  Log(info,"Entering wait mode for client connection at port %u",port_);
-
+  do {
+    try {
+      //TCPSocket *client_socket_ = nullptr;
+      // This forces the loop to restart in case the problem was caused by loss of connection.
+      // This should be outside the loop.
+      Log(info,"Creating server listening socket...");
+      
+      // This simply binds the port. Should not need to destroy and relaunch
+      //TCPServerSocket servSock(port_);   // Socket descriptor for server
+      servSock = new TCPServerSocket(port_);
+      Log(info,"Entering wait mode for client connection at port %u",port_);
+    }
+    catch(SocketException &e) {
+      Log(error,"Socket exception caught : %s",e.what());
+      if (servSock != nullptr) delete servSock;
+      servSock = nullptr;
+      Log(warning,"Relaunching the socket for connection acceptance in 5s.");
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
+  } while (servSock == nullptr);
+  
   for (;;) {
     client_socket_ = nullptr;
     // Check if there is a request to terminate the connection.
     if (shutdown_) {
       Log(info,"Received a request to shut down. Complying...");
+      // delete the server socket
+      delete servSock;
+      servSock = nullptr;
+      Log(info,"Listening socket destroyed.");
       return NULL;
     }
 
@@ -87,7 +105,7 @@ void* ConfigServer::listen(void *arg) {
       Log(info,"Starting listener for connection...");
       // Create a separate socket for the client
       // Wait indefinitely until the client kicks in.
-      client_socket_ = servSock.accept();
+      client_socket_ = servSock->accept();
 
       Log(info,"Received client connection request.");
 
@@ -99,7 +117,7 @@ void* ConfigServer::listen(void *arg) {
       // DAQ crashed
       if (data_manager_ != NULL) {
         char *answer;
-        data_manager_->ExecuteCommand("StopRun",answer);
+	data_manager_->ExecuteCommand("StopRun",answer);
         delete [] answer;
         data_manager_->ExecuteCommand("HardReset",answer);
         delete [] answer;
@@ -512,12 +530,14 @@ void ConfigServer::Shutdown(bool force) {
       queue_.pop_front();
     }
   } else {
-    Log(debug,"Performing a soft shutdown");
+    Log(info,"Performing a soft shutdown");
     // First kill the thread that is waiting for a connection
     //pthread_detach(thread_id_);
     // Send a cancel call.
-    pthread_cancel(thread_id_);
-    //pthread_kill(thread_id_,SIGINT);
+    if (thread_id_) {
+      pthread_cancel(thread_id_);
+    }
+      //pthread_kill(thread_id_,SIGINT);
 
     thread_id_ = 0;
 
