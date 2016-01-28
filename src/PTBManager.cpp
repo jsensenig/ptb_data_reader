@@ -132,7 +132,9 @@ void PTBManager::ExecuteCommand(const char* cmd,char *&answers) {
       // Sleep for 10 microseconds to make sure that reset has taken place
       std::this_thread::sleep_for (std::chrono::microseconds(10));
       SetResetBit(false);
-      reader_->ResetBuffers();
+      if (reader_) {
+        reader_->ResetBuffers();
+      }
       ResetConfigurationRegisters();
       msgs_ << "<success>true</success>";
       break;
