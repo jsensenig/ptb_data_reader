@@ -64,6 +64,7 @@ void run() {
 
 int main() {
   // Register a signal handler
+  std::signal(SIGPIPE, SIG_IGN);
   std::signal(SIGINT,handler);
   g_relaunch = true;
   // Logger::SetSeverity(Logger::verbose);

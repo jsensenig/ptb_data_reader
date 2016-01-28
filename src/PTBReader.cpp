@@ -146,6 +146,8 @@ void PTBReader::ClearThreads() {
     }
     // Kill the transmitter thread.
 
+    // Occasionally there seems to be memory corruption between these two steps
+    Log(info,"Telling transmitter thread to stop.");
     keep_transmitting_ = false;
     std::this_thread::sleep_for (std::chrono::milliseconds(200));
     // -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
@@ -661,8 +663,14 @@ void PTBReader::ClientTransmitter() {
   num_word_counter_ = 0;
   num_word_trigger_ = 0;
   num_word_tstamp_ = 0;
+  num_word_fifo_warning_ = 0;
   bytes_sent_ = 0;
 
+  #ifdef DATA_STATISTICS
+  std::map<int,int> counters_stats;
+  for (int i = 0; i < 98; ++i) counter_stats[i]=0;
+  #endif
+  
   // This will keep track on the number of u32 words
   // In the end the size of the buffer will be ipck*sizeof(uint32_t);
   static uint32_t ipck = 0;
@@ -685,6 +693,7 @@ void PTBReader::ClientTransmitter() {
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
+  // Wonder if sometimes there could be a conflict when both a write and a read are issued over the variable.
   while(keep_transmitting_) {
 
     // Set the local pointer to the place pointer by the global pointer
@@ -724,7 +733,10 @@ void PTBReader::ClientTransmitter() {
         continue;
       }
       // break out if a stop was requested while waiting for data to be available.
-      if (!keep_transmitting_) break;
+      if (!keep_transmitting_) {
+	Log(info,"Received request to stop transmitting.");
+	break;
+      }
 #else
       if (buffer_queue_.size() == 0) {
         continue;
@@ -833,7 +845,7 @@ void PTBReader::ClientTransmitter() {
 
       std::memcpy(&eth_buffer[ipck],frame,Word_Header::size_bytes);
       ipck += Word_Header::size_u32;
-
+      //TriggerPayload *tp= nullptr;
       switch(frame_header->data_packet_type) {
       case DataTypeCounter:
 #ifdef DEBUG
@@ -850,7 +862,8 @@ void PTBReader::ClientTransmitter() {
         // Now add the remaining 2 bits to the lsb of the next u32
         // and pad the rest with zeros
         ipck += CounterPayload::size_words_ptb_u32;
-        eth_buffer[ipck] = 0x2 & frame_header->padding;
+	// 0x3 is the two lsb's
+        eth_buffer[ipck] = 0x3 & frame_header->padding;
         ipck+=1;
 #ifdef DATA_STATISTICS
         // Log(verbose,"Intermediate packet:");
@@ -860,7 +873,19 @@ void PTBReader::ClientTransmitter() {
 #endif
         break;
       case DataTypeTrigger:
-        // Log(verbose, "Trigger word\n");
+	// Log(info,"Trigger word : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
+        // Log(info,"Trigger word [%s] \n[%s] \n[%s] \n[%s]",
+	//     std::bitset<32>(frame[0]).to_string().c_str(),
+	//     std::bitset<32>(frame[1]).to_string().c_str(),
+	//     std::bitset<32>(frame[2]).to_string().c_str(),
+	//     std::bitset<32>(frame[3]).to_string().c_str());
+	// Log(info,"Copying [%s]",std::bitset<32>(frame[TriggerPayload::payload_offset_u32]).to_string().c_str());
+	// tp = reinterpret_cast<TriggerPayload*>(&frame[TriggerPayload::payload_offset_u32]);
+	// Log(info,"Trigger info type [%s] id_muon [%s] id_calib [%s]",
+	//     std::bitset<5>(tp->trigger_type).to_string().c_str(),
+	//     std::bitset<4>(tp->trigger_id_muon).to_string().c_str(),
+	//     std::bitset<4>(tp->trigger_id_calib).to_string().c_str());
+
         std::memcpy(&eth_buffer[ipck],
                     &frame[TriggerPayload::payload_offset_u32],
                     TriggerPayload::size_bytes);
@@ -901,8 +926,10 @@ void PTBReader::ClientTransmitter() {
     // -- if keep_transmitting was called out (eg. run ended),
     // don't send this data. The board reader won't like to receive an incomplete packet without
     // timestamp word
-    if (!keep_transmitting_) break;
-
+    if (!keep_transmitting_) {
+      Log(info,"Stopping transmission requested. Breaking out.");
+      break;
+    }
     // Transmit the data.
     // Log(verbose, "Packet completed. Calculating the checksum.\n");
 
