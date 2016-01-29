@@ -32,6 +32,16 @@ extern "C" {
 #include <cstring>
 
 
+/// Const definitions from the base structures
+PTBReader::Payload_Trigger::trigger_type_t const PTBReader::Payload_Trigger::TA;
+PTBReader::Payload_Trigger::trigger_type_t const PTBReader::Payload_Trigger::TB;
+PTBReader::Payload_Trigger::trigger_type_t const PTBReader::Payload_Trigger::TC;
+PTBReader::Payload_Trigger::trigger_type_t const PTBReader::Payload_Trigger::TD;
+
+
+
+
+
 #ifdef ARM_XDMA
 // declare a bunch of variables that are used by the DMA driver
 
@@ -666,11 +676,20 @@ void PTBReader::ClientTransmitter() {
   num_word_counter_ = 0;
   num_word_trigger_ = 0;
   num_word_tstamp_ = 0;
+  num_word_fifo_warning_ = 0;
   bytes_sent_ = 0;
+  for (int i = 0; i < 98; ++i) counter_stats_[i]=0;
+  trigger_stats_[PTBReader::Payload_Trigger::TA] = 0;
+  trigger_stats_[PTBReader::Payload_Trigger::TB] = 0;
+  trigger_stats_[PTBReader::Payload_Trigger::TC] = 0;
+  trigger_stats_[PTBReader::Payload_Trigger::TD] = 0;
+  Payload_Trigger *tp= nullptr;
+  Payload_Counter *cp= nullptr;
 
   // This will keep track on the number of u32 words
   // In the end the size of the buffer will be ipck*sizeof(uint32_t);
   static uint32_t ipck = 0;
+  static uint32_t tmp_idx = 0;
   static bool carry_on = true;
   static bool ts_arrived = false;
 
@@ -843,6 +862,8 @@ void PTBReader::ClientTransmitter() {
       std::memcpy(&eth_buffer[ipck],frame,Payload_Header::size_bytes);
       ipck += Payload_Header::size_u32;
 
+      // debugging pointer for later use
+
       switch(frame_header->data_packet_type) {
       case DataTypeCounter:
 #ifdef DEBUG
@@ -856,20 +877,40 @@ void PTBReader::ClientTransmitter() {
         std::memcpy(&eth_buffer[ipck],
             &(frame[Payload_Counter::payload_offset_u32]),
             Payload_Counter::size_words_ptb_bytes);
+        tmp_idx = ipck;
+        ipck += Payload_Counter::size_words_ptb_u32;
         // Now add the remaining 2 bits to the lsb of the next u32
         // and pad the rest with zeros
-        ipck += Payload_Counter::size_words_ptb_u32;
-        eth_buffer[ipck] = 0x2 & frame_header->padding;
+        // 0x3 is the two lsb's
+        eth_buffer[ipck] = 0x3 & frame_header->padding;
         ipck+=1;
 #ifdef DATA_STATISTICS
         // Log(verbose,"Intermediate packet:");
         // print_bits(eth_buffer,ipck);
-
+        cp = reinterpret_cast<Payload_Counter*>(&eth_buffer[tmp_idx]);
+        // -- Collect the statistics of the present counter word
+        for (uint32_t i = 0; i < 98; ++i) {
+          if (cp->get_counter_status(i)) {
+              counter_stats_[i]++;
+          }
+        }
         num_word_counter_++;
 #endif
         break;
       case DataTypeTrigger:
-        // Log(verbose, "Trigger word\n");
+	// Log(info,"Trigger word : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
+        // Log(info,"Trigger word [%s] \n[%s] \n[%s] \n[%s]",
+	//     std::bitset<32>(frame[0]).to_string().c_str(),
+	//     std::bitset<32>(frame[1]).to_string().c_str(),
+	//     std::bitset<32>(frame[2]).to_string().c_str(),
+	//     std::bitset<32>(frame[3]).to_string().c_str());
+	// Log(info,"Copying [%s]",std::bitset<32>(frame[TriggerPayload::payload_offset_u32]).to_string().c_str());
+	// tp = reinterpret_cast<TriggerPayload*>(&frame[TriggerPayload::payload_offset_u32]);
+	// Log(info,"Trigger info type [%s] id_muon [%s] id_calib [%s]",
+	//     std::bitset<5>(tp->trigger_type).to_string().c_str(),
+	//     std::bitset<4>(tp->trigger_id_muon).to_string().c_str(),
+	//     std::bitset<4>(tp->trigger_id_calib).to_string().c_str());
+
         std::memcpy(&eth_buffer[ipck],
                     &frame[Payload_Trigger::payload_offset_u32],
                     Payload_Trigger::size_bytes);
@@ -877,6 +918,10 @@ void PTBReader::ClientTransmitter() {
 #ifdef DATA_STATISTICS
         // Log(verbose,"Intermediate packet:");
         // print_bits(eth_buffer,ipck);
+
+        tp = reinterpret_cast<Payload_Trigger*>(&frame[Payload_Trigger::payload_offset_u32]);
+        trigger_stats_[tp->trigger_id_muon]++;
+
         num_word_trigger_++;
 #endif
         break;
@@ -1014,6 +1059,18 @@ void PTBReader::ClientTransmitter() {
   if (error_state_) {
     Log(warning,"Transmission loop exited with error state.");
   }
+#ifdef DATA_STATISTICS
+  std::ostringstream str;
+  for (uint32_t i = 0; i < counter_stats_.size(); ++i) {
+    str << counter_stats_[i] << ":" ;
+  }
+  str << "||";
+  for (std::map<Payload_Trigger::trigger_type_t,int>::const_iterator it = trigger_stats_.begin(); it != trigger_stats_.end();++it) {
+    str << std::bitset<4>(it->first) << "=" << it->second << ":";
+  }
+  Log(info,"Counter statistics: [%s]",str.str().c_str());
+#endif
+
   // wait for a few moments before deallocating the memory so that the kernel does not go ballistic
   // in case it hans't yet committed all the buffers
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
