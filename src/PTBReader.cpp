@@ -1063,12 +1063,15 @@ void PTBReader::ClientTransmitter() {
   std::ostringstream str;
   for (uint32_t i = 0; i < counter_stats_.size(); ++i) {
     str << counter_stats_[i] << ":" ;
+    if ((i==9) || (i==19) || (i==29) || (i==39) || (i==49) || (i==59) || (i==69) || (i==79) || (i==89)) {
+      str << "\n";
+    }
   }
   str << "||";
   for (std::map<Payload_Trigger::trigger_type_t,int>::const_iterator it = trigger_stats_.begin(); it != trigger_stats_.end();++it) {
-    str << std::bitset<4>(it->first) << "=" << it->second << ":";
+    str << std::bitset<8>(it->first) << "=" << it->second << ":";
   }
-  Log(info,"Counter statistics: [%s]",str.str().c_str());
+  Log(info,"Counter statistics: \n %s \n",str.str().c_str());
 #endif
 
   // wait for a few moments before deallocating the memory so that the kernel does not go ballistic

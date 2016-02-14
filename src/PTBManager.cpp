@@ -382,7 +382,9 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
 
     // This is the workhorse of the configuration.
     // At this point the registers should already be mapped and things should be flowing
-
+    std::ostringstream document;
+    config.print(document);
+    Log(debug,"Configuration fragment [[[\n\n%s\n\n]]]",document.str().c_str());
     Log(info,"Parsing the configuration." );
 
 
@@ -434,11 +436,10 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
 #endif
         uint32_t duration;
         strVal <<it->child("MicroSliceDuration").child_value();
-        strVal >> duration;
-        strVal.clear();
-        strVal.str("");
+        strVal >> std::dec >> duration;
+
         // Microslice duration is now a full number...check if it fits into 27 bits
-        Log(debug,"MicroSlice Duration %u [%X][%s]",duration,duration, std::bitset<27>(duration).to_string().c_str());
+        Log(debug,"MicroSlice Duration [%s] (%u) [0x%X][%s]",strVal.str().c_str(),duration,duration, std::bitset<27>(duration).to_string().c_str());
         if (duration >= (1<<27)) {
           msgs_ << "<warning>Input value of [" << duration << "] above the allowed limit of 27 bits. Setting to maximum allowed.";
           Log(warning,"Input value of [%u] above maximum rollover [27]. Truncating to maximum.",duration);
@@ -447,6 +448,8 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
 
         SetBitRangeRegister(35,duration,0,27);
         Log(debug,"Register 35 : [0x%X]", register_map_[35].value() );
+        strVal.clear();
+        strVal.str("");
 
       }
       if (!strcmp(it->name(),"ChannelMask")) {
@@ -478,11 +481,11 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
         // The remaining 18 bits (49-32) go into the lower 18 bits of the next word
         // [0-17]
         register_map_[2].value() = (bsu >> 32 ) & 0x3FFFF;
-        Log(debug,"Register 2 (tmp) : [0x%X]",register_map_[2].value() );
+        Log(debug,"Register 2 : {17-0} : [0x%X]",register_map_[2].value() );
 
         // Now grab the TSU part to complete the mask of this register
         uint64_t tsu;
-        strVal <<std::hex << it->child("TSU").child_value();
+        strVal << std::hex << it->child("TSU").child_value();
         strVal >> tsu;
         strVal.clear();
         strVal.str("");
@@ -494,7 +497,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
         // The lowest 14 (0-13) bits go into the upper bits of the previous register
         // [18-31]
         SetBitRangeRegister(2,((tsu & 0x3FFF) << 18),18,14);
-        Log(debug,"Register 2 : [0x%X]", register_map_[2].value() );
+        Log(debug,"Register 2 : {31-18} : [0x%X]", register_map_[2].value() );
 
         ////// ------
         ////// REG 3   (MSB of channel mask)
@@ -513,23 +516,70 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
 
         // The final 2 bits go into the lsb of register 4
         SetBitRangeRegister(4,((tsu >> 45) & 0x3),0,2);
-        Log(debug,"Register 4 (CHMASK): [0x%X]",register_map_[4].value() );
+        Log(debug,"Register 4 {1-0}: [0x%X]",register_map_[4].value() );
       }
 
 
       if (!strcmp(it->name(),"ExtTriggers")) {
-        // External triggers go into register 4
-        // to bits [2-5]
+        // External triggers go into register 37
+        // to bits [0-3]
         uint32_t TRIGEX;
         strVal <<std::hex << it->child("Mask").child_value();
         strVal >> TRIGEX;
+
+        Log(debug,"TRIGEX (%s) [0x%X] [%s]",strVal.str().c_str(),TRIGEX,std::bitset<4>(TRIGEX).to_string().c_str());
+
+        SetBitRangeRegister(37,(TRIGEX & 0xF),0,4);
+        Log(debug,"Register 37 {3-0} : [0x%X]",register_map_[37].value());
         strVal.clear();
         strVal.str("");
 
-        Log(debug,"TRIGEX [0x%04X] [%s]",TRIGEX,std::bitset<4>(TRIGEX).to_string().c_str());
+        // enable echo
+        std::string enable;
+        uint32_t gate  = 0;
+        uint32_t prescale = 0;
+        enable = it->child("echo_enabled").child_value();
+        Log(debug,"ExtTrig enable : %s",enable.c_str());
 
-        SetBitRangeRegister(4,((TRIGEX & 0xF) << 2),2,4);
-        Log(debug,"Register 4 (TRIGEX) : 0x%X",register_map_[4].value());
+        if (!enable.compare("true")) {
+          SetBitRangeRegister(37,(1<<15),15,1);
+        }
+        Log(debug,"Register 37 {15} : [0x%X]",register_map_[37].value());
+
+        strVal << std::dec << it->child("gate").child_value();
+        strVal >> std::dec >> gate;
+
+        Log(debug,"TrigEx Gate (%s) (%u) [0x%X] [%s]",strVal.str().c_str(),gate,gate,std::bitset<11>(gate).to_string().c_str());
+        if (gate > ((1<<11)-1)) {
+          msgs_ << "<warning>TriEx gate larger than maximum allowable size. Truncating to max value ( 2047 : 0x7FF)</warning>";
+          Log(warning,"TriEx gate larger than maximum allowable size. Truncating to max value ( 2047 : 0x7FF)");
+          gate = (1<<11)-1;
+          Log(debug,"TrigEx Gate (%s) (%u) [0x%X] [%s]",strVal.str().c_str(),gate,gate,std::bitset<11>(gate).to_string().c_str());
+        }
+        SetBitRangeRegister(37,(gate << 4),4,11);
+        Log(debug,"Register 37 {14-4} : [0x%X]",register_map_[37].value());
+        strVal.clear();
+        strVal.str("");
+
+
+        // prescale
+        strVal << std::dec << it->child("prescale").child_value();
+        strVal >> std::dec >> prescale;
+
+        Log(debug,"TrigEx Prescale (%s) (%u) [0x%X] [%s]",strVal.str().c_str(),prescale,prescale,std::bitset<8>(prescale).to_string().c_str());
+        if (prescale > ((1<<8)-1)) {
+          msgs_ << "<warning>TriEx prescale larger than maximum allowable size. Truncating to max value ( 255 : 0xFF)</warning>";
+          Log(warning,"TriEx prescale larger than maximum allowable size. Truncating to max value ( 255 : 0xFF)");
+          prescale = (1<<8)-1;
+          Log(debug,"TrigEx Prescale (%s) (%u) [0x%X] [%s]",strVal.str().c_str(),prescale,prescale,std::bitset<8>(prescale).to_string().c_str());
+
+        }
+
+        SetBitRangeRegister(37,((prescale & 0xFF) << 16),16,8);
+        Log(debug,"Register 37 {23-16} : [0x%X]",register_map_[37].value());
+        strVal.clear();
+        strVal.str("");
+
       }
 
       if (!strcmp(it->name(),"Hardware")) {
@@ -538,13 +588,19 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
         // TrigOutWidth : [18-23]
         uint32_t M_PULSEWIDTH;
         strVal <<std::dec << it->child("PulseWidth").child_value();
-        strVal >> M_PULSEWIDTH;
+        strVal >> std::dec >> M_PULSEWIDTH;
+
+        Log(debug,"M_PULSEWIDTH [%s] (%u) [0x%X] [%s]",strVal.str().c_str(),M_PULSEWIDTH,M_PULSEWIDTH,std::bitset<6>(M_PULSEWIDTH).to_string().c_str());
+        if (M_PULSEWIDTH > ((1<<6)-1)) {
+          msgs_ << "<warning>Pulse width larger than maximum allowable size. Truncating to max value ( " << ((1<<6)-1) << " : 0x3F)</warning>";
+          Log(warning,"Pulse width larger than maximum allowable size. Truncating to max value ( %u : 0x3F)",((1<<6)-1));
+          M_PULSEWIDTH = (1<<6)-1;
+          Log(debug,"M_PULSEWIDTH [%s] (%u) [0x%X] [%s]",strVal.str().c_str(),M_PULSEWIDTH,M_PULSEWIDTH,std::bitset<6>(M_PULSEWIDTH).to_string().c_str());
+        }
+        SetBitRangeRegister(4,((M_PULSEWIDTH & 0x3F) << 18),18,6);
+        Log(debug,"Register 4 {23-18} : [0x%X]", register_map_[4].value());
         strVal.clear();
         strVal.str("");
-
-        Log(debug,"M_PULSEWIDTH [0x%03X] [%s]",M_PULSEWIDTH,std::bitset<6>(M_PULSEWIDTH).to_string().c_str());
-        SetBitRangeRegister(4,((M_PULSEWIDTH & 0x3F) << 18),18,6);
-        Log(debug,"Register 4 (M_PULSEWIDTH) : [0x%X]", register_map_[4].value());
 
       }
       // The most troublesome part: muon triggers
@@ -555,15 +611,23 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
         // The lockout window goes into register 3
         // LockoutWindow : [1-5]
         uint32_t MT_LOCKDOWN;
-        strVal << it->child("LockdownWindow").child_value();
-        strVal >> MT_LOCKDOWN;
-        strVal.clear();
-        strVal.str("");
+        strVal << std::dec << it->child("LockdownWindow").child_value();
+        strVal >> std::dec >> MT_LOCKDOWN;
 
-        Log(debug,"MT_LOCKDOWN [0x%05X] [%s]",MT_LOCKDOWN,std::bitset<6>(MT_LOCKDOWN).to_string().c_str());
+
+        Log(debug,"MT_LOCKDOWN (%s) (%u) [0x%X] [%s]",strVal.str().c_str(),MT_LOCKDOWN,MT_LOCKDOWN,std::bitset<6>(MT_LOCKDOWN).to_string().c_str());
+
+        if (MT_LOCKDOWN > ((1<<6)-1)) {
+          msgs_ << "<warning>Lockdown larger than maximum allowable size. Truncating to max value ( " << ((1<<6)-1) << " : 0x3F)</warning>";
+          Log(warning,"Lockdown larger than maximum allowable size. Truncating to max value ( %u : 0x3F)",((1<<6)-1));
+          MT_LOCKDOWN = (1<<6)-1;
+          Log(debug,"MT_LOCKDOWN (%s) (%u) [0x%X] [%s]",strVal.str().c_str(),MT_LOCKDOWN,MT_LOCKDOWN,std::bitset<6>(MT_LOCKDOWN).to_string().c_str());
+        }
 
         SetBitRangeRegister(4,((MT_LOCKDOWN & 0x3F) << 10),10,6);
-        Log(debug,"Register 4 (MT_LOCKDOWN) [0x%X]",register_map_[4].value() );
+        Log(debug,"Register 4 {15-10} [0x%X]",register_map_[4].value() );
+        strVal.clear();
+        strVal.str("");
 
         // The remaining configuration words go into register 5
 
@@ -571,15 +635,22 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
         // Width of the trigger window
         // TriggerWindow : [22-24]
         uint32_t M_LOCKHI;
-        strVal << it->child("TriggerWindow").child_value();
-        strVal >> M_LOCKHI;
-        strVal.clear();
-        strVal.str("");
+        strVal << std::dec << it->child("TriggerWindow").child_value();
+        strVal >> std::dec >> M_LOCKHI;
 
-        Log(debug,"M_LOCKHI [0x%03X] [%s]",M_LOCKHI,std::bitset<4>(M_LOCKHI).to_string().c_str());
+        Log(debug,"M_LOCKHI (%s) (%u)[0x%X] [%s]",strVal.str().c_str(),M_LOCKHI,M_LOCKHI,std::bitset<4>(M_LOCKHI).to_string().c_str());
+        if (M_LOCKHI > ((1<<4)-1)) {
+          msgs_ << "<warning>Trigger gate larger than maximum allowable size. Truncating to max value ( " << ((1<<4)-1) << " : 0xF)</warning>";
+          Log(warning,"Trigger gate larger than maximum allowable size. Truncating to max value ( %u : 0xF)",((1<<4)-1));
+          MT_LOCKDOWN = (1<<4)-1;
+          Log(debug,"M_LOCKHI (%s) (%u)[0x%X] [%s]",strVal.str().c_str(),M_LOCKHI,M_LOCKHI,std::bitset<4>(M_LOCKHI).to_string().c_str());
+        }
 
         SetBitRangeRegister(4,((M_LOCKHI & 0xF) << 25),25,4);
-        Log(verbose,"Fourth register (M_LOCKHI) 0x%X", register_map_[4].value() );
+        Log(debug,"Register 4 {28-25} [0x%X]", register_map_[4].value() );
+
+        strVal.clear();
+        strVal.str("");
 
         // Now it is specific trigger codes...
         // Deal with one at a time
@@ -654,16 +725,17 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
             enable = node.child("enabled").child_value();
             Log(debug,"Calibration channel %u enable : %s",i+1,enable.c_str());
             strVal << std::dec << node.child("period").child_value();
-            strVal >> period;
-            Log(debug,"%s PERIOD [0x%X] [%s]",channel_id[i],period,std::bitset<30>(period).to_string().c_str());
+            strVal >> std::dec >> period;
+            Log(debug,"%s PERIOD (%s) (%u) [0x%X] [%s]",channel_id[i],strVal.str().c_str(),period,period,std::bitset<30>(period).to_string().c_str());
+            if (period > ((1<<30)-1)) {
+              msgs_ << "<warning>Period of "<< channel_id[i] << " larger than maximum allowable size. Truncating to max value ( " << ((1<<30)-1) << " : 0x3FFFFFFF)</warning>";
+              Log(warning,"Period of %s larger than maximum allowable size. Truncating to max value ( %u : 0x%X)",channel_id[i],((1<<30)-1),((1<<30)-1));
+              period = (1<<30)-1;
+              Log(debug,"%s PERIOD (%s) (%u) [0x%X] [%s]",channel_id[i],strVal.str().c_str(),period,period,std::bitset<30>(period).to_string().c_str());
+            }
           }
 
           reg = reg_init + i;
-          if (period > 0x7FFFFFFF) {
-            msgs_ << "<warning>Period larger than maximum allowable size. Truncating to max value ( 2147483647 : 0x7FFFFFFF)</warning>";
-            Log(warning,"Period larger than maximum allowable size. Truncating to max value ( 2147483647 : 0x7FFFFFFF)");
-            period = 0x7FFFFFFF;
-          }
           if (!enable.compare("true")) {
             register_map_[reg].value() = (0x1 << 31);
             register_map_[reg].value() |= period & 0x7FFFFFFF;
@@ -822,7 +894,7 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_
   bool reverse_order = (conf_reg<reg)?true:false;
   //uint32_t prsc_pos;
   uint32_t lreg;
-  uint32_t mask, bit_offset, input_word;
+  uint32_t nbits,mask, bit_offset, input_word;
   uint64_t input_longword;
   std::string field_name;
   std::stringstream strVal;
@@ -835,20 +907,30 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_
   /// ExtLogic : reg_offset[bit_offset - bit_offset+1]
   ////////////////////////////////////////////////////////////////
   mask = 0x3;
+  nbits = 2;
   bit_offset = (reverse_order)?8:22;
   field_name = "ExtLogic";
   if (T.empty()) {
+    msgs_ << "<warning>Couldn't find external muon logic. Assuming AND.</warning>";
+    Log(warning,"Couldn't find external muon logic. Assuming AND.");
     input_word = 0x0;
   } else {
     strVal << std::hex << T.child(field_name.c_str()).child_value();
-    strVal >> input_word;
-    strVal.clear();
-    strVal.str("");
+    strVal >> std::hex >> input_word;
   }
 
+  if ((input_word != 0x0) && (input_word != 0x2) && (input_word != 0x1)) {
+    msgs_ << "<warning>Unknown logic found. Assuming AND.</warning>";
+    Log(warning,"Unknown logic found. Assuming AND.");
+    input_word = 0x0;
+  }
   // Assign the value to the register
-  Log(verbose,"ExtLogic [0x%X] [%s]",input_word,std::bitset<2>(input_word).to_string().c_str());
-  SetBitRangeRegister(conf_reg,((input_word & mask) << (bit_offset)),bit_offset,2);
+  Log(debug,"ExtLogic (%s) (%u) [0x%X] [%s]",strVal.str().c_str(),input_word,input_word,std::bitset<2>(input_word).to_string().c_str());
+  SetBitRangeRegister(conf_reg,((input_word & mask) << (bit_offset)),bit_offset,nbits);
+  Log(debug,"Register %u {%u-%u} [0x%X]",conf_reg,bit_offset+nbits-1, bit_offset, register_map_[conf_reg].value() );
+
+  strVal.clear();
+  strVal.str("");
 
   // The prescale is a different matter
   // All the prescales go into the same register (36)
@@ -872,18 +954,22 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_
     }
   }
   mask = 0xFF;
+  nbits = 8;
   field_name = "Prescale";
   if (T.empty()) {
+    msgs_ << "<warning>Couldn't find trigger prescale. Assuming 0.</warning>";
+    Log(warning,"Couldn't find trigger prescale. Assuming 0.");
     input_word = 0x0;
   } else {
     strVal << std::dec << T.child(field_name.c_str()).child_value();
-    strVal >> input_word;
-    strVal.clear();
-    strVal.str("");
+    strVal >> std::dec >> input_word;
   }
-  Log(verbose,"Prescale [0x%X] [%s]",input_word,std::bitset<8>(input_word).to_string().c_str());
+  Log(debug,"Prescale (%s) (%u) [0x%X] [%s]",strVal.str().c_str(),input_word,input_word,std::bitset<8>(input_word).to_string().c_str());
   SetBitRangeRegister(prscl_reg,((input_word & mask) << bit_offset),bit_offset,8);
-  Log(debug,"Prescale register %u (%s) %X",prscl_reg,field_name.c_str(),register_map_[prscl_reg].value());
+  Log(debug,"Register %u {%u-%u} [0x%X]",prscl_reg,bit_offset+nbits-1, bit_offset, register_map_[prscl_reg].value() );
+
+  strVal.clear();
+  strVal.str("");
 
   ////////////////////////////////////////////////////////////////
   ///
@@ -901,10 +987,11 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_
       G = T.child(groups[i]);
     }
     // Now the more messy part of using a long register
-    Log(verbose,"Processing group [%s]",groups[i]);
+    Log(debug,"Processing group [%s]",groups[i]);
 
     // Intra group logic:
     mask = 0x3;
+    nbits = 2;
     // trig. A:: g1=4, g2=6
     // trig. B:: g1=24, g2=26
     bit_offset = (reverse_order)?(24+(2*i)):(4+(2*i));
@@ -912,16 +999,24 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_
 
     if (T.empty()) {
       msgs_ << "<warning>Couldn't find internal logic for group " << groups[i]+1 << ". Assuming OR.</warning>";
-      input_word = 0x01;
+      Log(warning,"Couldn't find internal logic for group %u. Assuming OR.",groups[i]+1);
+      input_word = 0x1;
     } else {
       strVal << std::hex << G.child(field_name.c_str()).child_value();
-      strVal >> input_word;
-      strVal.clear();
-      strVal.str("");
+      strVal >> std::hex >> input_word;
     }
-    Log(verbose,"Logic [0x%X] [%s]",input_word,std::bitset<2>(input_word).to_string().c_str());
+    if ((input_word != 0x1) && (input_word != 0x2) && (input_word != 0x3)) {
+      msgs_ << "<warning>Unknown internal logic found. Assuming OR.</warning>";
+      Log(warning,"Unknown logic found. Assuming OR.");
+      input_word = 0x1;
+    }
+
+    Log(debug,"Logic g%u (%s) (%u) [0x%X] [%s]",i+1,strVal.str().c_str(),input_word,input_word,std::bitset<2>(input_word).to_string().c_str());
     SetBitRangeRegister(conf_reg,((input_word & mask) << bit_offset),bit_offset,2);
-    Log(debug,"Conf register %u (%s) %X",conf_reg,field_name.c_str(),register_map_[conf_reg].value() );
+    Log(debug,"Register %u {%u-%u} [0x%X]",conf_reg,bit_offset+nbits-1, bit_offset, register_map_[conf_reg].value() );
+
+    strVal.clear();
+    strVal.str("");
 
     ////////////////////////////////////////
     ///
@@ -930,15 +1025,14 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_
     ////////////////////////////////////////
     field_name = "TSU";
     if (T.empty()) {
-      msgs_ << "<warning>Couldn't find mask for TSU in group " << groups[i]+1 << ". Assuming 0x0.</warning>";
+      msgs_ << "<warning>Couldn't find mask for TSU in group " << groups[i] << ". Assuming 0x0.</warning>";
+      Log(warning,"Couldn't find mask for TSU in group %s. Assuming 0x0.",groups[i]);
       input_longword = 0x0;
     } else {
       strVal << std::hex << G.child(field_name.c_str()).child_value();
-      strVal >> input_longword;
-      strVal.clear();
-      strVal.str("");
+      strVal >> std::hex >> input_longword;
     }
-    Log(verbose,"TSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<48>(input_longword).to_string().c_str());
+    Log(debug,"TSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<48>(input_longword).to_string().c_str());
 
     // -- This part now could probably be made a bit more iterative
     // I know that the TSU's go into the lower registers, followed by the BSU's
@@ -948,28 +1042,31 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_
     // Trig. B
     // g1: 12,13,14,15 g2: 15,16,17,11
     mask = 0xFFFFFFFF;
+    nbits = 32;
     lreg = reg+(i*3);
     register_map_[lreg].value() = (input_longword & mask);
     Log(debug,"Mask register %u (W1) %X",lreg,register_map_[lreg].value() );
     // The rest of the TSU's go into the next register
     //tsu[47:32] : 16 bits --> word[15:0]
     mask = 0xFFFF;
+    nbits = 16;
     bit_offset = 0;
     lreg += 1; // reg = 6
     SetBitRangeRegister(lreg,((input_longword >> 32) & mask)<< bit_offset,bit_offset,16);
     Log(debug,"Mask register %u (W2) %X",lreg,register_map_[lreg].value() );
 
+    strVal.clear();
+    strVal.str("");
+
 
     // Now the BSU's
     field_name = "BSU";
     if (T.empty()) {
-      msgs_ << "<warning>Couldn't find mask for BSU in group " << groups[i]+1 << ". Assuming 0x0.</warning>";
+      msgs_ << "<warning>Couldn't find mask for BSU in group " << groups[i] << ". Assuming 0x0.</warning>";
       input_longword = 0x0;
     } else {
       strVal << std::hex << G.child(field_name.c_str()).child_value();
       strVal >> input_longword;
-      strVal.clear();
-      strVal.str("");
     }
     Log(verbose,"BSU mask [0x%" PRIX64 "] [%s]",input_longword,std::bitset<50>(input_longword).to_string().c_str());
 
@@ -995,7 +1092,8 @@ void PTBManager::ParseMuonTrigger(pugi::xml_node T, uint32_t reg, uint32_t conf_
       bit_offset = (reverse_order)?30:2;
     }
     SetBitRangeRegister(lreg,((input_longword >> 48) & mask) << bit_offset,bit_offset,2);
-
+    strVal.clear();
+    strVal.str("");
   }
 }
 
