@@ -398,10 +398,18 @@ class PTBReader {
       // TB : TSU SL/NU : 01000000
       // TC : TSU SU/NL : 00100000
       // TD : TSU EL/WU : 00010000
+      // TE : ????????? : 00001000 <-- Not implemented in FW
+      // TF : ????????? : 00000100 <-- Not implemented in FW
+      // TG : ????????? : 00000010 <-- Not implemented in FW
+      // TH : ????????? : 00000001 <-- Not implemented in FW
       static trigger_type_t const TA = 0x80;
       static trigger_type_t const TB = 0x40;
       static trigger_type_t const TC = 0x20;
       static trigger_type_t const TD = 0x10;
+      static trigger_type_t const TE = 0x08;
+      static trigger_type_t const TF = 0x04;
+      static trigger_type_t const TG = 0x02;
+      static trigger_type_t const TH = 0x01;
 
       static trigger_type_t const bsu_rm_cl = 0x80;
       static trigger_type_t const tsu_sl_nu = 0x40;
@@ -491,6 +499,18 @@ class PTBReader {
       }
       bool has_muon_TD() {
         return ((trigger_id_muon & TD) != 0);
+      }
+      bool has_muon_TE() {
+        return ((trigger_id_muon & TE) != 0);
+      }
+      bool has_muon_TF() {
+        return ((trigger_id_muon & TF) != 0);
+      }
+      bool has_muon_TG() {
+        return ((trigger_id_muon & TG) != 0);
+      }
+      bool has_muon_TH() {
+        return ((trigger_id_muon & TH) != 0);
       }
 
       /// Test the different muon trigger types

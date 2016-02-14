@@ -524,7 +524,7 @@ void PTBManager::ProcessConfig(pugi::xml_node config,char *&answers) {
         // External triggers go into register 37
         // to bits [0-3]
         uint32_t TRIGEX;
-        strVal <<std::hex << it->child("Mask").child_value();
+        strVal <<std::hex << it->child("mask").child_value();
         strVal >> TRIGEX;
 
         Log(debug,"TRIGEX (%s) [0x%X] [%s]",strVal.str().c_str(),TRIGEX,std::bitset<4>(TRIGEX).to_string().c_str());
