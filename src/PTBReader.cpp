@@ -702,6 +702,7 @@ void PTBReader::ClientTransmitter() {
   uint32_t* frame = nullptr;
   ts_arrived = false;
   seq_num_ = 1;
+  static uint32_t tmpcount = 0;
 
   // Assign the skelleton packet header
   // This would be nice to go out of the loop but it
@@ -732,6 +733,7 @@ void PTBReader::ClientTransmitter() {
 
     eth_header = SetBitRange(eth_header,(seq_num_  << 16) & 0xFF0000,16,8);
     ipck += 1;
+    tmpcount = 0;
 
     // Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
 
@@ -773,6 +775,10 @@ void PTBReader::ClientTransmitter() {
       Log(debug,"Grabbed : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
 #endif
 
+      if (tmpcount < 50) {
+        Log(debug,"Grabbed : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
+        tmpcount++;
+      }
       // Grab the header, that now should be at the 4 lsB
       Payload_Header *frame_header = reinterpret_cast_checked<Payload_Header *>(frame);
       //Word_Header *frame_header = reinterpret_cast<Word_Header *>(frame);
@@ -794,7 +800,8 @@ void PTBReader::ClientTransmitter() {
 
         if ((frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
           //#ifdef DEBUG
-          Log(warning,"Dropping ghost frame");
+          Log(warning,"Dropping ghost frame %s",std::bitset<32>(frame[0]).to_string().c_str());
+//          Log(warning,"Dropping ghost frame");
           //#endif
           continue;
         }
