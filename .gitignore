@@ -3,3 +3,9 @@
 .cproject
 .project
 .obj
+*.dSYM
+
+# Eclipse code
+.settings
+
+
