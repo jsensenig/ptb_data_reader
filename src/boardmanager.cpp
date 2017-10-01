@@ -571,8 +571,8 @@ namespace ptb {
       Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",rtriggerfreq);
       rtriggerfreq = (1<<26)-1;
     }
-    set_bit(6,30,rtrigger_en);
-    set_bit_range_register(28,0,26,rtriggerfreq);
+    set_bit(27,0,rtrigger_en);
+    set_bit_range_register(25,0,26,rtriggerfreq);
     //Set pulser frequency
     json pulserconf = doc.at("ctb").at("pulser");
     bool pulser_en = pulserconf.at("enable").get<bool>();
@@ -582,8 +582,8 @@ namespace ptb {
       Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",pulserfreq);
       pulserfreq = (1<<26)-1;
     }
-    set_bit(29,31,pulser_en);
-    set_bit_range_register(29,0,26,pulserfreq);
+    set_bit(26,31,pulser_en);
+    set_bit_range_register(26,0,26,pulserfreq);
 
     uint32_t duration = receiver.at("rollover").get<unsigned int>();
     // Microslice duration is now a full number...check if it fits into 27 bits
@@ -765,8 +765,8 @@ void board_manager::pds_config(json &pdsconfig){
     set_bit_range_register(2,0,24,channelmask);
 
     //Configure counting trigger 0
-    uint32_t trig0 = (count0<<27) + (trigtype0<<24);
-    set_bit_range_register(27,0,32,trig0);
+    uint32_t trig0 = trigtype0 + count0;
+    set_bit_range_register(38,0,9,trig0);
 
 }
 

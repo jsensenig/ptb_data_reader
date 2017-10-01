@@ -306,7 +306,7 @@ class ctb_robot {
                   break;
                 case ptb::content::word::t_ts:
                   ts = reinterpret_cast<ptb::content::word::timestamp_t *>(word);
-                  //cout << "Received timestamp " << ts->timestamp << endl;
+                  cout << "Received timestamp " << ts->timestamp << endl;
                   pos += ptb::content::word::word_t::size_bytes;
                   break;
                 case ptb::content::word::t_ch:

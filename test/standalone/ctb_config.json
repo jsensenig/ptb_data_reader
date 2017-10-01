@@ -19,7 +19,7 @@
     },
     "randomtrigger":{
       "enable":true,
-      "frequency":100
+      "frequency":10
     },
     "pulser":{
       "enable":true,
@@ -32,7 +32,7 @@
         "dac_thresholds":[3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,1930,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000],
         "triggers": [
           { "id":"LLT_1",
-            "type" : "0x2",
+            "type" : "0x1",
             "count" : "0x1"
           }
         ]
