@@ -479,8 +479,8 @@ namespace ptb {
     data_socket_port_ = receiver.at("port").get<unsigned short>();
     reader_->set_tcp_port(data_socket_port_);
     Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
-    // -- Grab the SSP configuration
-    json sspconf = doc.at("ctb").at("subsystems").at("ssp");
+    // -- Grab the PDS configuration
+    json pdsconf = doc.at("ctb").at("subsystems").at("pds");
     
     // uint32_t duration;
     std::stringstream strVal;
@@ -496,7 +496,7 @@ namespace ptb {
     }
 
     //Program the DACs with config values
-    board_manager::dac_config(sspconf);
+    board_manager::dac_config(pdsconf);
 
     // 1 ms in a 50MHz clock
     //  if (duration <= 50000) {
@@ -593,11 +593,11 @@ namespace ptb {
 
   }
 
-void board_manager::dac_config(json &sspconfig){
+void board_manager::dac_config(json &pdsconfig){
 
     i2conf* dacsetup;
 
-    std::vector<uint32_t> dac_values = sspconfig.at("dac_thresholds"); //.get<uint32_t>() ...do this???
+    std::vector<uint32_t> dac_values = pdsconfig.at("dac_thresholds"); //.get<uint32_t>() ...do this???
     // std::vector<uint32_t> dac_values (24, 0);
 
     if (dac_values.size() != (i2conf::nchannels_)*(i2conf::ndacs_)) {

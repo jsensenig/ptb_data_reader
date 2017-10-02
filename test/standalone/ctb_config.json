@@ -1,10 +1,10 @@
 {
   "ctb":{
     "sockets":{
-      "rollover":50000,
-      "receiver":{
-        "host":"localhost",
-        "port":8992
+	"receiver":{
+	    "rollover":50000,
+            "host":"localhost",
+            "port":8992
       },
       "monitor":{
         "enable" : false,
@@ -21,7 +21,7 @@
       "pds":{
         "channel_mask":"0xFFFFF",
         "reshape_length" : 10,
-        "dac_thresholds":[2000,2000,2000,2000,2000,2200,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,0,2000,2000]
+          "dac_thresholds":[2175,2155,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,2175]
       },
       "crt":{
         "ch_mask": "0xFFFFFFFF",

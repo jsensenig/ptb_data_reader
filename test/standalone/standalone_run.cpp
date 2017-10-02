@@ -33,6 +33,7 @@ using json = nlohmann::json;
 
 
 static std::string g_config; 
+std::string cfile = "ctb_config.json";
 
 
 //static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":50000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018]}}}}";
@@ -119,6 +120,8 @@ public:
       //std::thread reader(this->receive_data);
     std::thread reader(&ctb_robot::receive_data, this);
       // Now loop for commands
+    std::ifstream cfin;
+    json conf;
     while(!stop_req_) {
       cout << "### Select command : " << endl;
       cout << " 1 : Init" << endl;
@@ -132,12 +135,36 @@ public:
       cin >> command;
       switch(command) {
         case init:
-        send_config();
-        break;
-        case start:
+	  // Now open the file
+	  cfin.exceptions ( ifstream::failbit | ifstream::badbit );
+	  try 
+	    {
+	      cfin.open(cfile);
+	      cfin >> conf;
+	      // if (vlvl > 0) {
+	      // 	cout << "Dumping input configuration:"<< endl;
+	      // 	cout << "===============================" << endl;
+	      // 	cout << conf.dump(2) << endl;
+	      // 	cout << "===============================" << endl;
+	      // }
+	      g_config = conf.dump();
+	      cfin.close();
+	    }
+	  catch (const ifstream::failure& e)
+	    {
+	      cout << "** Failure opening/reading the configuration file: " << e.what() << endl;
+	      exit(1);
+	    }
+	  catch( const json::exception& e) {
+	    cout << "Caught a JSON exception: " << e.what() << endl;
+	    exit(1);
+	  }
+	  send_config();
+	  break;
+      case start:
         send_start();
         break;
-        case stop:
+      case stop:
         send_stop();
         break;
         case quit:
@@ -276,7 +303,7 @@ public:
 	    case ptb::content::word::t_ch:
 	      chs = reinterpret_cast<ptb::content::word::payload::ch_status_t *>(&(word->wbody));
 	      val = chs->pds;
-	      cout << "CH: " << std::hex << val << std::dec << " " << std::bitset<24>(val) << endl;
+	      cout << "CH: " << std::bitset<3>(hdr->word_type) << " " << hdr->ts_rollover << " " << std::bitset<29>(hdr->ts_rollover) << " " << std::hex << val << std::dec << " " << std::bitset<24>(val) << endl;
 	      pos += ptb::content::word::body_t::size_bytes;
 	      break;
 	    default:
@@ -326,8 +353,14 @@ int main(int argc, char**argv) {
 
   std::cout.setf(std::ios::unitbuf);
   size_t vlvl = 0;
-  std::string cfile = "ctb_config.json";
 
+  cout << "Some debugging..." << endl;
+  cout << "Size of header : " << sizeof(ptb::content::word::header_t) << endl;
+  cout << "Body : " << sizeof(ptb::content::word::body_t) << endl;
+  cout << "Size of channel status : " << sizeof(ptb::content::word::payload::ch_status_t) << endl;
+  
+
+  
   try {
     cxxopts::Options options(argv[0], " - command line options");
     options.add_options()
@@ -359,31 +392,6 @@ int main(int argc, char**argv) {
     exit(1);
   }
 
-  // Now open the file
-  std::ifstream cfin;
-  cfin.exceptions ( ifstream::failbit | ifstream::badbit );
-  try 
-  {
-    cfin.open(cfile);
-    json conf;
-    cfin >> conf;
-    if (vlvl > 0) {
-      cout << "Dumping input configuration:"<< endl;
-      cout << "===============================" << endl;
-      cout << conf.dump(2) << endl;
-      cout << "===============================" << endl;
-    }
-    g_config = conf.dump();
-  }
-catch (const ifstream::failure& e)
-{
-  cout << "** Failure opening/reading the configuration file: " << e.what() << endl;
-  exit(1);
-}
-catch( const json::exception& e) {
-  cout << "Caught a JSON exception: " << e.what() << endl;
-  exit(1);
-}
   cout << "Starting robot..." << endl;
   //ctb_robot robot("128.91.41.238",8991);
   ctb_robot robot("localhost",8991);

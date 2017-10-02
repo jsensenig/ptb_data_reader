@@ -175,10 +175,11 @@ namespace ptb {
         // is padding
         // FIXME: Decide if the padding should be added to the lsb or msb
         typedef struct ch_status_t {
-            typedef uint64_t channel_set_t;
-            channel_set_t padding : 29;
+            typedef uint32_t channel_set_t;
+            channel_set_t padding : 23;
             channel_set_t beam    : 9;
             channel_set_t crt     : 32;
+	  channel_set_t pad1 : 8;
             channel_set_t pds     : 24;
 
             static size_t const size_bytes      = 2*sizeof(uint64_t);
