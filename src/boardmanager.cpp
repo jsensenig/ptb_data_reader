@@ -486,6 +486,20 @@ namespace ptb {
     std::stringstream strVal;
     // strVal << receiver.at("rollover").get<std::string>();
     // strVal >> std::dec >> duration;
+     //Set the random trigger frequency register
+    json rtrigger = doc.at("ctb").at("randomtrigger");
+    bool rtrigger_ena = rtrigger.at("enable").get<bool>();
+    uint32_t rtriggerfreq = rtrigger.at("frequency").get<unsigned int>();
+    Log(debug,"Random Trigger Frequency [%d] (%u) [0x%X][%s]",rtriggerfreq,rtriggerfreq,rtriggerfreq, std::bitset<26>(rtriggerfreq).to_string().c_str());
+    if (rtriggerfreq >= (1<<26)) {
+      Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",rtriggerfreq);
+      rtriggerfreq = (1<<26)-1;
+    }
+    set_bit_range_register(28,0,26,rtriggerfreq);
+
+    uint8_t rtrigger_enable = 0;
+    if(rtrigger_ena) { rtrigger_enable = 1; }
+
     uint32_t duration = receiver.at("rollover").get<unsigned int>();
     // Microslice duration is now a full number...check if it fits into 27 bits
     Log(debug,"MicroSlice Duration [%d] (%u) [0x%X][%s]",duration,duration,duration, std::bitset<27>(duration).to_string().c_str());
@@ -495,20 +509,21 @@ namespace ptb {
       duration = (1<<27)-1;
     }
 
-    //Program the DACs with config values
-    board_manager::dac_config(pdsconf);
-
     // 1 ms in a 50MHz clock
     //  if (duration <= 50000) {
     //    msgs_ << "<warning>Input value of ["<< duration << "] below recommended limit of 1 ms (50000). ";
     //    msgs_ << "Will allow but this setting is likely to cause overload of the ethernet connection. </warning>";
 
     //  }
-
-    set_bit_range_register(6,0,27,duration);
+    uint32_t reg6_value = (rtrigger_enable<<30) + duration;
+    set_bit_range_register(6,0,32,reg6_value);
     Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
     strVal.clear();
     strVal.str("");
+
+    //Program the DACs with config values
+    //board_manager::pds_config(pdsconf);
+    pds_config(pdsconf);
 
     // -- Once the configuration is set, dump locally the status of the config registers
     dump_config_registers();
@@ -593,11 +608,19 @@ namespace ptb {
 
   }
 
-void board_manager::dac_config(json &pdsconfig){
+void board_manager::pds_config(json &pdsconfig){
 
     i2conf* dacsetup;
 
-    std::vector<uint32_t> dac_values = pdsconfig.at("dac_thresholds"); //.get<uint32_t>() ...do this???
+    std::vector<uint32_t> dac_values = pdsconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
+    std::string s_channelmask = pdsconfig.at("channel_mask").get<std::string>();
+    std::string s_trigtype0 = pdsconfig.at("triggers").at(0).at("type").get<std::string>();
+    std::string s_count0 = pdsconfig.at("triggers").at(0).at("count").get<std::string>();
+
+    uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
+    uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
+    uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
+
     // std::vector<uint32_t> dac_values (24, 0);
 
     if (dac_values.size() != (i2conf::nchannels_)*(i2conf::ndacs_)) {
@@ -616,6 +639,13 @@ void board_manager::dac_config(json &pdsconfig){
         Log(error,"Failed to write configuration values to DACs.");
     }
     Log(info,"Programmed %i DAC channels", dac_values.size());
+
+    //Input channel masks
+    set_bit_range_register(2,0,24,channelmask);
+
+    //Configure counting trigger 0
+    uint32_t trig0 = (count0<<27) + (trigtype0<<24);
+    set_bit_range_register(27,0,32,trig0);
 
 }
 
