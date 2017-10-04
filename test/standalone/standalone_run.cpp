@@ -225,7 +225,7 @@ class ctb_robot {
           ptb::content::word::word_t*word;
 
           //uint32_t header;
-          uint8_t tcp_data[4096];
+          uint8_t tcp_data[8192];
           size_t count = 0;
           bool timeout_reached = false;
           size_t tcp_body_size = 0;
@@ -243,6 +243,7 @@ class ctb_robot {
             header = reinterpret_cast<ptb::content::tcp_header *>(tcp_data);
             count++;
             if (!(count%1000)) cout << "Counting " << count << "packets received..." << endl;
+	    
             // check the number of bytes in this packet
             //cout << "Expecting to receive " << header->word.packet_size << " bytes " << endl;
             tcp_body_size = header->word.packet_size;
@@ -250,6 +251,7 @@ class ctb_robot {
             while (bytes_collected != tcp_body_size) {
               bytes_collected += sock->recv(&tcp_data[bytes_collected],(int)(tcp_body_size-bytes_collected));
             }
+	    /*
             // cout << "Collected expected bytes. " << endl;
             // for(size_t i = 0; i < bytes_collected; i++) {
             //   printf("%02X ",tcp_data[i]);
@@ -320,6 +322,7 @@ class ctb_robot {
                   break;
               }
             }
+	    */
           }
           cout << "Left the loop for running..." << endl;
           delete sock;

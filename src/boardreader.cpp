@@ -384,7 +384,7 @@ void board_reader::data_collector() {
     }
     // -- Push the transfer to the queue
     //dma_buffer.handle = handle;
-    Log(debug,"Acquired %u (%u bytes)",dma_buffer.handle,dma_buffer.len);
+    Log(verbose,"Acquired %u (%u bytes)",dma_buffer.handle,dma_buffer.len);
     dma_buffer.len = len;
     buffer_queue_.push(dma_buffer);
   }
