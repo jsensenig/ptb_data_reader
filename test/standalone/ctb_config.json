@@ -21,6 +21,10 @@
       "enable":true,
       "frequency":100
     },
+    "pulser":{
+      "enable":true,
+      "frequency":10
+    },
     "subsystems":{
       "pds":{
         "channel_mask":"0xFFFFF",

@@ -251,7 +251,7 @@ class ctb_robot {
             while (bytes_collected != tcp_body_size) {
               bytes_collected += sock->recv(&tcp_data[bytes_collected],(int)(tcp_body_size-bytes_collected));
             }
-	    /*
+	    //HERE
             // cout << "Collected expected bytes. " << endl;
             // for(size_t i = 0; i < bytes_collected; i++) {
             //   printf("%02X ",tcp_data[i]);
@@ -322,7 +322,7 @@ class ctb_robot {
                   break;
               }
             }
-	    */
+	    //...to here
           }
           cout << "Left the loop for running..." << endl;
           delete sock;

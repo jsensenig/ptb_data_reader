@@ -573,9 +573,17 @@ namespace ptb {
     }
     set_bit(6,30,rtrigger_en);
     set_bit_range_register(28,0,26,rtriggerfreq);
-
-//    uint8_t rtrigger_enable = 0;
-//    if(rtrigger_ena) { rtrigger_enable = 1; }
+    //Set pulser frequency
+    json pulserconf = doc.at("ctb").at("pulser");
+    bool pulser_en = pulserconf.at("enable").get<bool>();
+    uint32_t pulserfreq = pulserconf.at("frequency").get<unsigned int>();
+    Log(debug,"Pulser Frequency [%d] (%u) [0x%X][%s]",pulserfreq,pulserfreq,pulserfreq, std::bitset<26>(pulserfreq).to_string().c_str());
+    if (pulserfreq >= (1<<26)) {
+      Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",pulserfreq);
+      pulserfreq = (1<<26)-1;
+    }
+    set_bit(29,31,pulser_en);
+    set_bit_range_register(29,0,26,pulserfreq);
 
     uint32_t duration = receiver.at("rollover").get<unsigned int>();
     // Microslice duration is now a full number...check if it fits into 27 bits
