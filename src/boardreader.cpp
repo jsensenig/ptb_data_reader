@@ -335,11 +335,13 @@ void board_reader::data_collector() {
   //static int handle;
   ptb::content::buffer_t dma_buffer;
   std::ostringstream err_msg;
+  size_t counter = 0;
   while(keep_collecting_) {
     if (!keep_collecting_) {
       Log(warning,"Received signal to stop acquiring data. Cleaning out...");
       break;
     }
+    counter++;
     dma_buffer.handle = pzdud_acquire(s2mm, &len);
     // Deal with the case that there is no data transferred yet
     if (dma_buffer.handle < 0)
@@ -359,20 +361,20 @@ void board_reader::data_collector() {
       // This is dangerous and usually means that
       // something crapped out
       if (dma_buffer.handle == PZDUD_ERROR_TIMEOUT) {
-        Log(error,"Failed to acquire data with timeout . Returned %i",dma_buffer.handle);
+        Log(error,"Failed to acquire data with timeout on iteration %u . Returned %i",counter,dma_buffer.handle);
         json obj;
         obj["type"] = "error";
         obj["message"] = "Failed to acquire data with timeout from DMA";
         feedback_messages_.push_back(obj);
       }
       if (dma_buffer.handle == PZDUD_ERROR_CLAIMED) {
-        Log(error,"Failed to acquire data due to claimed buffers.");
+        Log(error,"Failed to acquire data due to claimed buffers [iteration %u].",counter);
         json obj;
         obj["type"] = "error";
         obj["message"] = "Failed to acquire data due to claimed DMA buffers";
         feedback_messages_.push_back(obj);
       }
-      Log(error,"Failed to acquire data. Returned %i",dma_buffer.handle);
+      Log(error,"Failed to acquire data. Returned %i [iteration %u]",dma_buffer.handle,counter);
       err_msg  << "Failed to acquire data. Returned " << dma_buffer.handle;
       json obj;
       obj["type"] = "error";
@@ -384,7 +386,7 @@ void board_reader::data_collector() {
     }
     // -- Push the transfer to the queue
     //dma_buffer.handle = handle;
-    Log(verbose,"Acquired %u (%u bytes)",dma_buffer.handle,dma_buffer.len);
+    Log(verbose,"Acquired %u (%u bytes) on %u iterations",dma_buffer.handle,dma_buffer.len,counter);
     dma_buffer.len = len;
     buffer_queue_.push(dma_buffer);
   }
@@ -405,6 +407,7 @@ void board_reader::clean_and_shutdown_dma() {
   Log(debug,"Destroying the handle over the S2MM channel of the DMA engine");
   pzdud_destroy(s2mm);
   dma_initialized_ = false;
+  Log(info,"DMA engine shut down");
 }
 
 
