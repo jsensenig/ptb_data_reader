@@ -30,10 +30,14 @@ using json = nlohmann::json;
 // -- configuration that we are running with for now, either set the DAC values to all 0 or the operation level 1879
 // EDIT here where the IP where you are running, which is where the CTB will attempt to connect to send the data
 
-static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[0,0,0,0,0,0,0,0,1879,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]}}}}";
+//static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[0,0,0,0,0,0,0,0,2012,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]}}}}";
 
-//static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879]}}}}";
+static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":50000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[2000,2000,2000,2000,2000,2200,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,0,2000,2000]}}}}";
 ////////////////////////////////
+
+
+//static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":50000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018]}}}}";
+
 
 class ctb_robot {
 public:
@@ -86,6 +90,7 @@ public:
       cout << "Resetting before configuring" << endl;
       send_reset();
     }
+    send_reset();
     client_sock.send(g_config.c_str(),g_config.size());
     client_sock.recv(answer_,1024);
     cout << "Received answer [" << answer_ << "]" << endl;
@@ -223,7 +228,11 @@ public:
           // printf("\n");
           // -- We now should have the whole sent packet
           // parse it
+	  uint8_t *data = NULL;
           uint32_t pos = 0;
+	  uint32_t val = 0;
+	  ptb::content::word::payload::timestamp_t *ts = NULL;
+	  ptb::content::word::payload::ch_status_t *chs = NULL;
           while (pos < tcp_body_size) {
             // 1. grab the frame:
             word = reinterpret_cast<ptb::content::word::word_t*>(&tcp_data[pos]);
@@ -232,33 +241,48 @@ public:
             pos += hdr->size_bytes;
 
             // -- For now we are assuming that all payloads are of the same size
-            cout << "Word: type " << static_cast<uint32_t>(hdr->word_type)
-            << " ts roll " << hdr->ts_rollover << endl;
+            //cout << "Word: type " << static_cast<uint32_t>(hdr->word_type)
+            //<< " ts roll " << hdr->ts_rollover << endl;
             switch(hdr->word_type) {
-              case ptb::content::word::t_fback:
-              cout << "Received a warning!!! This is rare! Do something smart to fix the problem" << endl;
-                // advance the pointer by the size of this payload
+	    case ptb::content::word::t_fback:
+		//cout << "Received a warning!!! This is rare! Do something smart to fix the problem" << endl;
+	      data = reinterpret_cast<uint8_t*>(&(word->wbody));
+	      for (size_t i = 0; i < 16; ++i) {
+		printf("%X ",data[i]);
+	      }
+	      printf("\n");
+	      
+              // advance the pointer by the size of this payload
               pos += ptb::content::word::body_t::size_bytes;
               break;
-              case ptb::content::word::t_gt:
+	    case ptb::content::word::t_gt:
               cout << "Received a global trigger. Do something here on how to parse it" << endl;
                 // advance the pointer by the size of this payload
               pos += ptb::content::word::body_t::size_bytes;
               break;
-              case ptb::content::word::t_lt:
+	    case ptb::content::word::t_lt:
               cout << "Received a low level trigger. Do something here on how to parse it" << endl;
                 // advance the pointer by the size of this payload
               pos += ptb::content::word::body_t::size_bytes;
               break;
-              case ptb::content::word::t_ts:
-              ptb::content::word::payload::timestamp_t *ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(&(word->wbody));
-              cout << "Received timestamp " << ts->timestamp() << endl;
+	    case ptb::content::word::t_ts:
+              ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(&(word->wbody));
+              //cout << "Received timestamp " << ts->timestamp() << endl;
                 // -- Alternative way is going through the body_t structure
               pld = &(word->wbody);
               ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(pld);
-              cout << "Received timestamp (xcheck)" << ts->timestamp() << endl;
+              //cout << "Received timestamp (xcheck)" << ts->timestamp() << endl;
               pos += ptb::content::word::body_t::size_bytes;
               break;
+	    case ptb::content::word::t_ch:
+	      chs = reinterpret_cast<ptb::content::word::payload::ch_status_t *>(&(word->wbody));
+	      val = chs->pds;
+	      cout << "CH: " << std::hex << val << std::dec << " " << std::bitset<24>(val) << endl;
+	      pos += ptb::content::word::body_t::size_bytes;
+	      break;
+	    default:
+	      cout << "WARNING: Unknown header" << endl;
+	      break;
             }
           }
         }

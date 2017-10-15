@@ -51,7 +51,7 @@ namespace ptb {
     namespace word {
 
 
-      enum word_type {t_fback=0x0,t_lt=0x1,t_gt=0x2,t_chksum=0x4,t_ts=0x7};
+      enum word_type {t_fback=0x0,t_lt=0x1,t_gt=0x2, t_ch=0x3,t_chksum=0x4,t_ts=0x7};
 
 
 
@@ -168,7 +168,7 @@ namespace ptb {
 
         // -- This is not being used at the moment.
         // It is left here for future development
-#ifdef CHANNEL_STATUS_WORD
+	//#ifdef CHANNEL_STATUS_WORD
 
         // there are 67 data bits
         // everything else up to the size of a full word payload (96 bits)
@@ -176,17 +176,17 @@ namespace ptb {
         // FIXME: Decide if the padding should be added to the lsb or msb
         typedef struct ch_status_t {
             typedef uint64_t channel_set_t;
+            channel_set_t padding : 29;
+            channel_set_t beam    : 9;
             channel_set_t crt     : 32;
             channel_set_t pds     : 24;
-            channel_set_t beam    : 11;
-            channel_set_t padding : 29;
 
             static size_t const size_bytes      = 2*sizeof(uint64_t);
             static size_t const size_u32        = 2*sizeof(uint64_t)/sizeof(uint32_t);
 
             static size_t const n_bits_crt      = 32;
             static size_t const n_bits_pds      = 24;
-            static size_t const n_bits_beam     = 11;
+            static size_t const n_bits_beam     = 9;
             static size_t const n_bits_padding  = 29;
 
             // aux_functions
@@ -205,7 +205,7 @@ namespace ptb {
         //      ch_status_t word;
         //
         //  } ch_status;
-#endif
+	//#endif
         // How big should a trigger word be?
         // Let's go with 32 bits
         // 16 for trigger ID
