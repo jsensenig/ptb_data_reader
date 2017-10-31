@@ -8,7 +8,7 @@
 #ifndef PTBREADER_H_
 #define PTBREADER_H_
 
-#include "CompilerOptions.h"
+#include "config.h"
 
 #include <string>
 #include <iostream>
@@ -16,18 +16,15 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdint>
-
-#if defined(LOCKFREE)
+#include <thread>
+#if defined(BOOST)
+#include <boost/lockfree/spsc_queue.hpp>
+#elif defined(LOCKFREE)
 #include "atomicops.h"
 #include "readerwriterqueue.h"
 #else
 #include <queue>
 #endif
-
-extern "C" {
-#include<pthread.h>
-//#include <stdio.h>
-}
 
 #if defined(SIMULATION)
 #else
@@ -35,9 +32,14 @@ extern "C" {
  #if defined(ARM_XDMA)
  #include "xdma.h"
  #elif defined(ARM_SG_DMA) // needed to use the LocalRegister structure
- #include "pothos_zynq_dma_driver.h"
- #endif
+//  struct pzdud_t;
+#include "pothos_zynq_dma_driver.h"
+
 #endif
+#endif
+
+#include "content.h"
+
 class TCPSocket;
 
 namespace ptb {
@@ -56,9 +58,12 @@ namespace ptb {
 class board_reader {
  public:
   
+    // NFB : The data structure specification had been moved outside into content.h
+
   /// Bunch of structures that help manipulating the data.
   /// These *must* be kept in sync with lbne-raw-data
 
+#ifdef OLD_WORDS
     /// Header of ethernet packet
     struct Header {
     
@@ -590,6 +595,9 @@ class board_reader {
   static const Payload_Header::data_packet_type_t DataTypeChecksum  = 0x4; //0b100
   static const Payload_Header::data_packet_type_t DataTypeTimestamp = 0x7; //0b111
 
+
+#endif
+
   /** 
    * Implementation of the PTBReader class
    **/
@@ -692,25 +700,29 @@ protected:
   void data_transmitter();
 
   void dump_packet(uint32_t* buffer, uint32_t tot_size);
-
+#ifdef ARM_SG_DMA
+  void clean_and_shutdown_dma();
+#endif /*ARM_SG_DMA*/
 private:
 //  static void * ClientCollectorFunc(void * this) {((board_reader *)This)->data_collector(); return NULL;}
 //  static void * ClientTransmitterFunc(void * this) {((board_reader *)This)->data_transmitter(); return NULL;}
 
   // -- Structures for data socket connection
 
-  unsigned short tcp_port_;
-  std::string tcp_host_;
+  unsigned short  tcp_port_;
+  std::string     tcp_host_;
 
-  TCPSocket *data_socket_;
+  TCPSocket *     data_socket_;
 
-  pthread_t client_thread_collector_;
-  pthread_t client_thread_transmitter_;
+  std::thread     *client_thread_collector_;
+  std::thread     *client_thread_transmitter_;
 
 #ifdef ENABLE_FRAG_BLOCKS
   uint32_t packet_rollover_;
 #endif
   bool ready_;
+
+
 
 #if defined(SIMULATION)
   uint32_t * memory_pool_;
@@ -718,11 +730,6 @@ private:
 
 #elif defined(ARM_XDMA)
 // declare a bunch of variables that are common to the program
-  #if defined(LOCKFREE)
-    moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
-  #else
-    std::queue<uint32_t*> buffer_queue_;
-  #endif
   struct xdma_dev xdma_device;
   struct xdma_chan_cfg xdma_dst_cfg;
   struct xdma_buf_info xdma_buf;
@@ -731,28 +738,41 @@ private:
 
 #elif defined(ARM_MMAP)
 
+  ///! Number of frames possible to buffer in the RAM memory
+  /// Increased from 2M to 8M => 32MB
+  static const uint32_t buffer_size_frames = 8*1024*1024;
+
+
+
   // Keeps frames stored
   ptb::util::mem_reg control_register_;
   ptb::util::mem_reg data_register_;
-  #if defined(LOCKFREE)
-    moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
-  #else
-    std::queue<uint32_t*> buffer_queue_;
-  #endif
   uint32_t * memory_pool_;
   void * mapped_data_base_addr_;
 #elif defined(ARM_SG_DMA)
   pzdud_t *s2mm;
   static const size_t num_buffs_ = 1024;
   static const size_t buff_size_ = 4096; // bytes
-  uint32_t addr[num_buffs_];
+  uint32_t buff_addr_[num_buffs_];
 #else
 #error DMA mode not specified
 #endif
 
+#if defined(BOOST)
+//  boost::lockfree::spsc_queue<ptb::content::buffer_t> buffer_queue_{num_buffs_};
+  boost::lockfree::spsc_queue<ptb::content::buffer_t, boost::lockfree::capacity<num_buffs_> >buffer_queue_;
+#elif defined(LOCKFREE)
+  moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
+#else
+  std::queue<uint32_t*> buffer_queue_;
+#endif
+
+//  // Warning pre_computed words
+//  static const uint32_t WARN_TIMEOUT = 0x04000000;
+//  static const uint32_t WARN_UNKNOWN_DATA = 0x02000000;
+
 
   // A few auxiliary constants
-
   static const uint32_t eth_buffer_size_u32 = 0xFFFF; // Max possible ethernet packet
   static const uint32_t frame_size_bits   = 0x80;   // the buffer is 128 bits
   static const uint32_t frame_size_bytes  = 0x10;   // 16 bytes
@@ -761,18 +781,10 @@ private:
   // Could easily do something else, or even set this as a configuration
   // parameter
   // FIXME: Change to a fhicl param
-  ///! Number of frames possible to buffer in the RAM memory
-  /// Increased from 2M to 8M => 32MB
-  static const uint32_t buffer_size_frames = 8*1024*1024;
-
-
-  // Warning pre_computed words
-  static const uint32_t WARN_TIMEOUT = 0x04000000;
-  static const uint32_t WARN_UNKNOWN_DATA = 0x02000000;
 
 
   // A few more constants that are important
-  static const uint32_t fw_version_ = 0x5;
+  static const uint32_t fw_version_ = FIRMWARE_REVISION;
 
   // Frame sequence number
   uint32_t seq_num_;
@@ -790,7 +802,7 @@ uint32_t timeout_cnt_;
 const uint32_t timeout_cnt_threshold_ = 10000;
 #endif
 
-bool dry_run_; // Run the PTB without collecting data
+bool dry_run_; // Run the reader without collecting data
 bool error_state_;
 std::string error_messages_;
 
@@ -802,7 +814,7 @@ std::string error_messages_;
   uint32_t num_word_tstamp_;
   uint32_t bytes_sent_;
   std::map<int,int> counter_stats_;
-  std::map<Payload_Trigger::trigger_type_t,int> trigger_stats_;
+  std::map<ptb::content::word::trigger_code_t,int> trigger_stats_;
 
 };
 

@@ -42,6 +42,8 @@ extern "C" {
  * IP takes care of inverting it
  */
 
+//FIXME: Make sure that the default control register has this value after
+// a hard reset
 #define CTL_BASE_REG_VAL 0x00000000
 
 namespace ptb {
@@ -113,15 +115,15 @@ void board_manager::exec_command(const std::string &cmd,std::string &answers) {
         Log(warning,"A run is already running. Starting new run." );
         msgs_ << "<warning>Board already taking data. Restarting new run.Might miss the sync pulse.</warning>";
         stop_run();
-        start_run();
       } else {
         // Start the run
         Log(verbose,"Starting a new Run." );
         start_run();
       }
+      start_run();
       break;
     case SOFTRESET:
-      //
+      Log(info,"Applying a soft reset");
       set_reset_bit(true);
       // Sleep for 100 microseconds to make sure that reset has taken place
       std::this_thread::sleep_for (std::chrono::microseconds(100));
@@ -187,7 +189,6 @@ void board_manager::start_run() {
   }
 
   try {
-    // As of Dec-2015 the connection is supposed to be open here. No warning should now be issued.
     // Open the connection. It should not be open yet
     if (!reader_->get_ready()) {
       //    msgs_ << "<warning>Connection to board reader is not opened yet. Trying to reopen.</warning>";

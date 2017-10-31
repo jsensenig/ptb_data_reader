@@ -13,6 +13,11 @@
 ///
 ///
 
+#define FIRMWARE_REVISION 0x5
+
+// To enable parsing and status word awareness.
+#undef CHANNEL_STATUS_WORD
+#undef OLD_WORDS
 /// -- Some extra debug operations. Add significant overhead and verbosity to code
 //#define DEBUG 1
 #undef DEBUG
@@ -27,9 +32,11 @@
 
 /// -- Define whether a standard mutex base code should be used, or
 /// -- the contributed moodycamel lock-free implementation
-#define LOCKFREE 1
+//#define LOCKFREE 1
 //#undef LOCKFREE
-
+// -- use boost features
+#define BOOST 1
+//#define MUTEX
 /// -- Data transfer method for PL-PS.
 /// -- Three options exist:
 /// ARM_XDMA : The original implementation using the xdma polling kernel driver.

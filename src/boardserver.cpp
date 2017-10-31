@@ -33,9 +33,7 @@
 #include "boardreader.h"
 #include "boardserver.h"
 
-//extern "C" {
-//#include <stdio.h>
-//}
+
 using std::string;
 namespace ptb {
 //-- Assignment of the static variables
@@ -43,9 +41,7 @@ std::string board_server::tcp_buffer_ = "";
 unsigned int board_server::num_instances_ = 0;
 unsigned int board_server::port_ = 8991;
 board_manager *board_server::board_manager_ = NULL;
-//std::list<const char*> socket_server::queue_ = std::list<const char*>();
 static std::queue<std::string> queue_;
-//pthread_t socket_server::thread_id_ = 0;
 bool board_server::shutdown_requested_= false;
 TCPSocket* board_server::client_socket_ = nullptr;
 std::string board_server::msg_answer_ = "";
@@ -53,23 +49,9 @@ std::string board_server::msg_answer_ = "";
 board_server::board_server() {
   // Use the practical socket to establish a connection
   Log(verbose,"Building socket server");
+  Log(verbose,"Attaching default board manager");
   // -- Construct a board manager along with it
   board_manager_ = new board_manager();
-
-  //-- Create a thread in C++11 mode (simpler)
-
-  // Why is the listener a new thread and not simply this thread? in listening mode?
-  // We might need to spawn a new thread and a connection is requested, but until then
-  // We can certainly live on this thread, can't we?
-  //  std::thread listener(listen);
-  //  thread_id_ = listener.get_id();
-  // Start a new thread to handle the TCP server socket
-  // for the control channel
-  //  if (pthread_create(&thread_id_, NULL, &(socket_server::listen),(void*)NULL) != 0) {
-  //    Log(error,"Unable to create master thread.");
-  //  }
-  //  Log(info,"Master server thread created. [%p]",thread_id_);
-
 
 }
 
@@ -265,14 +247,11 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
           // Don't understand what this sleep is doing here
           //std::this_thread::sleep_for (std::chrono::seconds(2));
           process_request(tcp_buffer_.c_str(),msg_answer_);
-          //sprintf(instBuffer,"<success>true</success>");
           sprintf(instBuffer,"<feedback>%s</feedback>",msg_answer_.c_str());
-          //delete [] answer;
         }
         catch (std::string &e) {
           Log(error,"Config exception caught : %s",e.c_str());
           // Return a failure signal.
-          //sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.c_str());
           std::ostringstream msg;
           msg << "<error>" << e.c_str() << "</error>";
           msg_answer_ += msg.str();
@@ -288,10 +267,8 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
         catch (...) {
         	Log(error,"Unknown exception caught");
             msg_answer_ += "<error>Unknown failure</error>";
-//          sprintf(instBuffer,"<feedback><error>Unknown failure</error></feedback>");
         }
         Log(verbose,"Returning answer : %s",msg_answer_.c_str());
-//        client_socket_->send(instBuffer,strlen(instBuffer));
         client_socket_->send(msg_answer_.c_str(),msg_answer_.size());
       } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
         Log(verbose,"Found a command block.");
@@ -299,7 +276,6 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
         // Found the end of a command block.
         // Pass that buffer to process and erase it from the string
         // 9 = strlen("</config>")
-        //Log(debug,"POS %u LEN %u",pos,strlen("</command>"));
 
         tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
         // Remove the entry from localBuffer
@@ -310,21 +286,22 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
 
           Log(verbose,"Processing command buffer [%s]",tcp_buffer_.c_str() );
           process_request(tcp_buffer_,msg_answer_);
-          //sprintf(instBuffer,"<success>true</success>");
-          //sprintf(instBuffer,"<feedback>%s</feedback>",answer);
-          //delete [] answer;
         }
         catch (std::string &e) {
           Log(error,"Config exception caught : %s",e.c_str());
           // Return a failure signal.
-          //sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.c_str());
           std::ostringstream msg;
           msg << "<error>" << e.c_str() << "</error>";
           msg_answer_ += msg.str();
         }
         catch (ptb::op_exception &e) {
           Log(error,"Operational exception caught : %s",e.what());
-//          sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.what());
+          std::ostringstream msg;
+          msg << "<error>" << e.what() << "</error>";
+          msg_answer_ += msg.str();
+        }
+        catch (std::runtime_error &e) {
+          Log(error,"STD runtime_error exception caught : %s", e.what());
           std::ostringstream msg;
           msg << "<error>" << e.what() << "</error>";
           msg_answer_ += msg.str();
@@ -332,14 +309,12 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
         catch (std::exception &e) {
           Log(error,"STD exception caught : %s", e.what());
           // Return a failure signal.
-          //sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.what());
           std::ostringstream msg;
           msg << "<error>" << e.what() << "</error>";
           msg_answer_ += msg.str();
 
         }
         catch (...) {
-          //sprintf(instBuffer,"<feedback><error>Unknown error</error></feedback>");
         	Log(error,"Unknown error caught");
             msg_answer_ += "<error>Unidentified error</error>";
         }
@@ -374,25 +349,10 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
 }
 
 
-//void* ConfigServer::ThreadMain() {
-//  // Guarantees that thread resources are deallocated upon return
-//  // pthread_detach(pthread_self());
-//
-//
-//  // Extract socket file descriptor from argument
-//  //HandleTCPClient((TCPSocket *) clntSocket);
-//  TCPSocket * socket = static_cast<TCPSocket *>(clntSocket);
-//  HandleTCPClient(socket);
-//  // this does not
-//  delete socket; socket = nullptr;
-//
-//  return NULL;
-//}
-
 board_server::~board_server() {
   num_instances_--;
   if (num_instances_ <= 0) {
-    Log(info,"Reached last instance. Destroying myself.");
+    Log(info,"Reached last instance. Destroying myself...or not?");
   }
 }
 
@@ -412,6 +372,7 @@ void board_server::process_request(const std::string &buffer,std::string &answer
   // Have to copy the string into the queue
 
   if (board_manager_ == NULL) {
+    answer += "<warning>Request received without valid board manager</warning>";
     Log(warning,"Attempting to process a transmission without a valid data Manager. Queueing.");
     Log(verbose,"[%s]",buffer.c_str());
 
@@ -440,12 +401,16 @@ void board_server::process_request(const std::string &buffer,std::string &answer
   // 2.) There are both config and command nodes
   if (command == NULL &&  config == NULL) {
     Log(error,"Neither config nor command blocks were found. Ignoring the data.");
+    throw std::runtime_error("No valid command blocks found.");
+    //answer += "<error>Unknown command block</error>";
     //    std::ostringstream docstr;
     //    doc.print(docstr);
     //    throw PTBexception(docstr.str().c_str());
 
   } else if (command != NULL and config != NULL){
     Log(error,"Found both a config and a command node. This is not supported yet.");
+    throw std::runtime_error("Found both config and command blocks.");
+
   } else if (config != NULL) {
     Log(verbose,"Processing config %s : %s ",config.name(),config.child_value());
     Log(verbose,"Name: [%s]",config.name());
@@ -464,8 +429,6 @@ void board_server::process_request(const std::string &buffer,std::string &answer
     Log(verbose,"Config processed with answer [%s]",answer.c_str());
   } else if (command != NULL){
     Log(verbose,"Processing command [%s] : [%s]",command.name(),command.child_value());
-//    const char* cmd = command.child_value();
-//    Log(debug,"Checking command [%s]",cmd);
 
     board_manager_->exec_command(command.child_value(),answer);
     Log(debug,"Returning from ProcessCommand with answer [%s].",answer.c_str());
@@ -475,25 +438,6 @@ void board_server::process_request(const std::string &buffer,std::string &answer
   }
 }
 
-//
-//// -- The Philosophy is that the data manager is registered into this class to manage the board
-//// TODO: It could probably be better to merge socket_server and session_manager
-//void socket_server::register_board_manager(board_manager *manager)  {
-//  board_manager_ = manager;
-//  if (queue_.size() > 0) {
-//    Log(debug,"Processing outstanding transmission queue.");
-//    while (queue_.size() > 0) {
-//      Log(verbose,"Processing an entry");
-//      char *answer = NULL;
-//      process_request(queue_.front(),answer);
-//      Log(verbose,"Transmission processed. Answer: %s",answer);
-//      // In this case ignore the answers, since we don't know if they already timed out upstream
-//      delete [] answer;
-//      queue_.pop_front();
-//    }
-//  }
-//}
-//
 void board_server::register_board_manager(board_manager* newmgr) {
   Log(warning,"Replacing existing instance of board manager.");
   if (board_manager_!= nullptr) {

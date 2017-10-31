@@ -32,83 +32,66 @@ extern "C" {
 
 #include <cstring>
 
+#ifdef ARM_SG_DMA
+#include "pothos_zynq_dma_driver.h"
+#endif
+
 using namespace ptb;
 
-/// Const definitions from the base structures
-board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TA;
-board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TB;
-board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TC;
-board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TD;
+///// Const definitions from the base structures
+//board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TA;
+//board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TB;
+//board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TC;
+//board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TD;
 
 
 
 
-
-#ifdef ARM_XDMA
+#if defined(ARM_XDMA)
 // declare a bunch of variables that are used by the DMA driver
 
 static int g_dma_fd;              // mmapped file descriptor
 static uint8_t *g_dma_mem_map;    /* mmapped array of bytes representing the transferred memory */
 #define DMA_BUFFER_SIZE 33554432  // 32 MB buffer for the DMA trasaction. Should give plenty of
 // contigency for the CPU
-#endif /*ARM_XDMA*/
-
-#ifdef ARM_MMAP
+#elif defined(ARM_MMAP)
 // This contains the data register
 mapped_register data_reg;
 
 struct read_status {
-  typedef uint8_t state_t;
-  typedef uint8_t index_t;
-  index_t idx : 1;
-  state_t state :2;
-  static const state_t  states[2];
-  uint32_t get_next_read() {
-    state = states[++idx];
-    return static_cast<uint32_t>(state);
-  }
+    typedef uint8_t state_t;
+    typedef uint8_t index_t;
+    index_t idx : 1;
+    state_t state :2;
+    static const state_t  states[2];
+    uint32_t get_next_read() {
+      state = states[++idx];
+      return static_cast<uint32_t>(state);
+    }
 };
 
 const read_status::state_t  read_status::states[2] = {0x1,0x2};
 
+#else
+// nothing to do
 #endif
-void print_bits(void* memstart, size_t nbytes) {
 
-  std::cout << "The " << nbytes << "-byte chunk of memory beginning at " 
-      << static_cast<void*>(memstart) << " is : [" << std::endl;
 
-  for(unsigned int i = 0; i < nbytes; i++) {
-    std::cout << std::bitset<8>(*((reinterpret_cast<uint8_t*>(memstart))+i)) << " ";
-  }
-  std::cout << "\n]" << std::endl;
-}
-
-std::string display_bits(void* memstart, size_t nbytes) {
-
-  std::stringstream bitstr;
-  bitstr << "The " << nbytes << "-byte chunk of memory beginning at " 
-      << static_cast<void*>(memstart) << " is : [";
-
-  for(unsigned int i = 0; i < nbytes; i++) {
-    bitstr << std::bitset<8>(*((reinterpret_cast<uint8_t*>(memstart))+i)) << " ";
-  }
-  bitstr << "]";
-  return bitstr.str();
-}
 
 
 
 board_reader::board_reader() : tcp_port_(0), tcp_host_(""),
     data_socket_(nullptr),
-    #ifdef ENABLE_FRAG_BLOCKS
+#if defined(ENABLE_FRAG_BLOCKS)
     packet_rollover_(0),fragmented_(false),
 #endif
     client_thread_collector_(0),client_thread_transmitter_(0),ready_(false),
 #ifdef ARM_MMAP
     memory_pool_(nullptr),mapped_data_base_addr_(0),
-#endif
-#ifdef ARM_XDMA
+#elif defined(ARM_XDMA)
     dma_buffer_(nullptr),
+#elif defined(ARM_SG_DMA)
+    s2mm(nullptr),
 #endif
     seq_num_(0),
     keep_transmitting_(true),
@@ -121,7 +104,10 @@ board_reader::board_reader() : tcp_port_(0), tcp_host_(""),
 {
 
 
-#ifndef LOCKFREE
+#ifdef BOOST
+  // -- Nothing to be done here
+#elif defined(LOCKFREE)
+#elif defined(MUTEX)
   // Init the mutex for the queue
   if (pthread_mutex_init(&lock_, NULL) != 0)
   {
@@ -134,7 +120,7 @@ board_reader::board_reader() : tcp_port_(0), tcp_host_(""),
 
 board_reader::~board_reader() {
   Log(debug,"Destroying the reader." );
-#ifndef LOCKFREE
+#ifdef MUTEX
   pthread_mutex_destroy(&lock_);
 #endif
   ready_ = false;
@@ -152,9 +138,10 @@ void board_reader::clear_threads() {
     Log(info,"Joining collector thread.");
     // Kill the collector thread first
     // Ideally we would prefer to join the thread
-    if (client_thread_collector_ != 0) {
-      pthread_join(client_thread_collector_,NULL);
-      client_thread_collector_ = 0;
+    if (client_thread_collector_ != nullptr) {
+      client_thread_collector_->join();
+      delete client_thread_collector_;
+      client_thread_collector_ = nullptr;
     }
     // Kill the transmitter thread.
 
@@ -164,20 +151,20 @@ void board_reader::clear_threads() {
     std::this_thread::sleep_for (std::chrono::milliseconds(200));
     // -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
     Log(info,"Killing transmitter thread.");
-    if (client_thread_transmitter_) {
-      pthread_join(client_thread_transmitter_,NULL);
-      client_thread_transmitter_ = 0;
+    if (client_thread_transmitter_ != nullptr) {
+      client_thread_transmitter_->join();
+      delete client_thread_transmitter_;
+      client_thread_transmitter_ = nullptr;
     }
     Log(info,"Threads cleared");
   }
 }
 
 void board_reader::stop_data_taking() {
-  // This should be a full stop. 
-  // However there should aso be a PauseDataTaking, that does not destroy the threads
-  // and simply waits for a StartRun to come again.
+  // This stops the data taking completely.
+
   // Clean up the threads
-  ClearThreads();
+  clear_threads();
 
   // Prepare everything so that the PTB gets ready again
 
@@ -206,6 +193,9 @@ void board_reader::stop_data_taking() {
   Log(info,"Deleting memory pool...");
   delete [] memory_pool_;
   // The file is closed when the configuration registers are unmapped
+#elif defined(ARM_SG_DMA)
+//  Log(warning,"Shutting down the DMA engine.");
+//  clean_and_shutdown_dma();
 #endif /*ARM_MMAP*/
 
   Log(info,"Data taking stopped.");
@@ -289,24 +279,68 @@ void board_reader::start_data_taking() {
       mapped_data_base_addr_ = MapPhysMemory(data_reg.base_addr,data_reg.high_addr);
       control_register_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_data_base_addr_) + data_reg.addr_offset[0]);
       data_register_.address = reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_data_base_addr_) + data_reg.addr_offset[1]);
-#endif /*ARM_MMAP*/
+#elif defined(ARM_SG_DMA)
+
+      int retstat = 0;
+      Log(debug,"Initializing DMA engine");
+      // -- NFB: Here 0 is the engine number
+      s2mm = pzdud_create(0, PZDUD_S2MM);
+
+      if (s2mm == nullptr) {
+        Log(error,"Failed to establish connection to device");
+        throw ptb::op_exception("Failed DMA 'create' stage.");
+      }
+      Log(debug,"Allocating DMA buffers");
+      retstat = pzdud_alloc(s2mm, num_buffs_, buff_size_);
+      Log(debug,"Received answer %d\n", retstat);
+      if (retstat != PZDUD_OK) {
+        Log(error,"Failed to allocate DMA buffers");
+        throw ptb::op_exception("Failed DMA 'alloc' stage.");
+      }
+      Log(debug,"Initializing buffer table");
+      for (size_t i = 0; i < num_buffs_; i++) {
+        buff_addr_[i] = (uint32_t)pzdud_addr(s2mm,i);
+        Log(verbose,"Buffer %u : 0x%p",i,buff_addr_[i]);
+        printf("Buffer %u : 0x%X\n",i,buff_addr_[i]);
+      }
+      Log(debug,"Initializing the DMA engine...");
+      retstat = pzdud_init(s2mm, true);
+      Log(debug,"Received answer %d\n", retstat);
+      if (retstat != PZDUD_OK) {
+        Log(error,"Failed to initialize DMA engine");
+        throw ptb::op_exception("Failed DMA 'init' stage.");
+      }
+      Log(info,"DMA engine ready to take data");
+
+#endif /*ARM_SG_DMA*/
 
       // We are ready to do business. Start reading the DMA into the queue.
-      Log(verbose, "==> Creating collector\n" );
+      Log(verbose, "==> Creating collector thread\n" );
       keep_collecting_ = true;
-      if (pthread_create(&client_thread_collector_,NULL,&(board_reader::ClientCollectorFunc),this) != 0) {
-        Log(error,"Unable to create client thread. Failing..." );
+      client_thread_collector_ = new std::thread(&board_reader::data_collector,this);
+      if (client_thread_collector_ == nullptr) {
+        Log(error,"Unable to create collector thread . Failing..." );
         throw op_exception("Unable to create data collector.");
-        return;
       }
+      //      if (pthread_create(&client_thread_collector_,NULL,&(board_reader::ClientCollectorFunc),this) != 0) {
+      //        Log(error,"Unable to create client thread. Failing..." );
+      //        throw op_exception("Unable to create data collector.");
+      //        return;
+      //      }
       // We are ready to do business. Start reading the DMA into the queue.
       Log(verbose, "==> Creating transmitter\n" );
       keep_transmitting_ = true;
-      if (pthread_create(&client_thread_transmitter_,NULL,&(board_reader::ClientTransmitterFunc),this) != 0) {
-        Log(error,"Unable to create client thread. Failing..." );
-        throw op_exception("Unable to create transmitter thread.");
-        return;
+      client_thread_transmitter_ = new std::thread(&board_reader::data_transmitter,this);
+      if (client_thread_transmitter_ == nullptr) {
+        Log(error,"Unable to create collector thread . Failing..." );
+        throw op_exception("Unable to create data transmitter.");
       }
+
+      //      if (pthread_create(&client_thread_transmitter_,NULL,&(board_reader::ClientTransmitterFunc),this) != 0) {
+      //        Log(error,"Unable to create client thread. Failing..." );
+      //        throw op_exception("Unable to create transmitter thread.");
+      //        return;
+      //      }
 
     } else {
       Log(error,"Calling to start data taking but connection is not ready yet." );
@@ -318,7 +352,12 @@ void board_reader::start_data_taking() {
 void board_reader::reset_buffers() {
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
-#if defined(LOCKFREE)
+#if defined(BOOST)
+  bool has_data = true;
+  while(buffer_queue_.pop()) {
+    counter++;
+  }
+#elif defined(LOCKFREE)
   bool has_data = true;
   do {
     has_data = buffer_queue_.pop();
@@ -496,14 +535,14 @@ void board_reader::data_collector() {
 
     // DMA transaction was successful.
     // FIXME: Replace this by lock free queue
-  #if defined(LOCKFREE)
+#if defined(LOCKFREE)
     buffer_queue_.enqueue(&dma_buffer_[pos]);
-  #else
+#else
     pthread_mutex_lock(&lock_);
     buffer_queue_.push(&dma_buffer_[pos]);
     //buffer_queue_.push(&frame[pos]);
     pthread_mutex_unlock(&lock_);
-  #endif
+#endif
     //Log(debug,"Done storing the buffer");
     pos += frame_size_u32;
     //pos_pool += frame_size_bytes; 
@@ -556,7 +595,7 @@ void board_reader::data_collector() {
 #endif
 #endif
 
-   // force position to always start at 0
+  // force position to always start at 0
   pos = 0;
   read_status stat;
   // Initialize the index
@@ -600,36 +639,36 @@ void board_reader::data_collector() {
 #if defined(MEASURE_PERFORMANCE)
     //    // Check if there is valid data in the register
     //    if (((control_register_.value() >> 1 ) & 0x1) == 0x1) {
-      if (first) {
-        begin = std::chrono::high_resolution_clock::now();
-        begin_trf = std::chrono::high_resolution_clock::now();
-        first = false;
-      }
+    if (first) {
+      begin = std::chrono::high_resolution_clock::now();
+      begin_trf = std::chrono::high_resolution_clock::now();
+      first = false;
+    }
 #endif
-      // A transation was completed
-      // there is data to be collected
-      std::memcpy(&memory_pool_[pos],data_register_.address,frame_size_bytes);
+    // A transation was completed
+    // there is data to be collected
+    std::memcpy(&memory_pool_[pos],data_register_.address,frame_size_bytes);
 #if defined(MEASURE_PERFORMANCE)
-      auto end_trf = std::chrono::high_resolution_clock::now();
-      total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();
-      iterations++;
+    auto end_trf = std::chrono::high_resolution_clock::now();
+    total_duration += std::chrono::duration_cast<std::chrono::microseconds>(end_trf-begin_trf).count();
+    iterations++;
 
 #endif
 #ifdef DEBUG
 
-      printf("%08X %08X %08X %08X\n",memory_pool_[pos],memory_pool_[pos+1],memory_pool_[pos+2],memory_pool_[pos+3]);
+    printf("%08X %08X %08X %08X\n",memory_pool_[pos],memory_pool_[pos+1],memory_pool_[pos+2],memory_pool_[pos+3]);
 #endif
-      // DMA transaction was successful.
+    // DMA transaction was successful.
 #if defined(LOCKFREE)
-      buffer_queue_.enqueue(&memory_pool_[pos]);
+    buffer_queue_.enqueue(&memory_pool_[pos]);
 #else
-      pthread_mutex_lock(&lock_);
-      buffer_queue_.push(&memory_pool_[pos]);
-      pthread_mutex_unlock(&lock_);
+    pthread_mutex_lock(&lock_);
+    buffer_queue_.push(&memory_pool_[pos]);
+    pthread_mutex_unlock(&lock_);
 #endif
-      pos += frame_size_u32;
+    pos += frame_size_u32;
 
-      if (pos+frame_size_u32 >= buffer_size_frames) {
+    if (pos+frame_size_u32 >= buffer_size_frames) {
       pos = 0;
     }
   } // while keep_collecting
@@ -645,12 +684,66 @@ void board_reader::data_collector() {
       << total_duration/(double)iterations << " us/iteration" << std::endl;
 #else
   Log(info,"Stopped collecting data.");
-  #endif
+#endif
+
+#elif defined(ARM_SG_DMA)
+  static size_t len;
+  static int handle;
+  ptb::content::buffer_t dma_buffer;
+
+  while(keep_collecting_) {
+    if (!keep_collecting_) {
+      Log(warning,"Received signal to stop acquiring data. Cleaning out...");
+      break;
+    }
+    dma_buffer.handle = pzdud_acquire(s2mm, &len);
+    // Deal with the case that there is no data transferred yet
+    if (dma_buffer.handle < 0)
+    {
+      // Failed because there are no complete
+      // transactions in RAM yet
+      // -- This is not really a failure
+      // Could avoid it by implementing a kernel
+      // signaling to be caught here
+      if (dma_buffer.handle == PZDUD_ERROR_COMPLETE) {
+        // -- Set the system to sit for a few usec
+        pzdud_wait(s2mm,5);
+        continue;
+      }
+      // Failed because it timed out
+      // (meaning that the DMA didn't answer back)
+      // This is dangerous and usually means that
+      // something went belly up
+      if (dma_buffer.handle == PZDUD_ERROR_TIMEOUT) {
+        Log(error,"Failed to acquire data with timeout . Returned %i",dma_buffer.handle);
+//        keep_collecting_ = false;
+//        clean_and_shutdown_dma();
+      }
+      Log(error,"Failed to acquire data. Returned %i",dma_buffer.handle);
+      keep_collecting_ = false;
+      clean_and_shutdown_dma();
+    }
+    // -- Push the transfer to the queue
+    //dma_buffer.handle = handle;
+    dma_buffer.len = len;
+    buffer_queue_.push(dma_buffer);
+  }
+  Log(info,"Clearing the DMA access");
 
 #else
-#error No DMA mode defined.
+#error No PL/PS transfer mode defined.
 
 #endif /*ARM_MMAP*/
+}
+
+
+void board_reader::clean_and_shutdown_dma() {
+  Log(debug,"Halting the S2MM transition stream");
+  pzdud_halt(s2mm);
+  Log(debug,"Freeing allocated buffers associated with the S2MM transition stream");
+  pzdud_free(s2mm);
+  Log(debug,"Destroying the handle over the S2MM channel of the DMA engine");
+  pzdud_destroy(s2mm);
 }
 
 #if defined(ARM_XDMA) || defined(ARM_MMAP)
@@ -754,8 +847,8 @@ void board_reader::data_transmitter() {
       }
       // break out if a stop was requested while waiting for data to be available.
       if (!keep_transmitting_) {
-	Log(info,"Received request to stop transmitting.");
-	break;
+        Log(info,"Received request to stop transmitting.");
+        break;
       }
 #else
       if (buffer_queue_.size() == 0) {
@@ -803,7 +896,7 @@ void board_reader::data_transmitter() {
         if ((frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
           //#ifdef DEBUG
           Log(warning,"Dropping ghost frame %s",std::bitset<32>(frame[0]).to_string().c_str());
-//          Log(warning,"Dropping ghost frame");
+          //          Log(warning,"Dropping ghost frame");
           //#endif
           continue;
         }
@@ -844,8 +937,8 @@ void board_reader::data_transmitter() {
 
         // Don't forget to apply the ptb_offset!!
         std::memcpy(&eth_buffer[ipck],
-                    &(frame[Payload_Timestamp::payload_offset_u32]),
-                    Payload_Timestamp::size_bytes);
+            &(frame[Payload_Timestamp::payload_offset_u32]),
+            Payload_Timestamp::size_bytes);
         ipck += Payload_Timestamp::size_u32;
 #ifdef DEBUG
         //Log(verbose,"Intermediate packet:");
@@ -874,79 +967,79 @@ void board_reader::data_transmitter() {
       // debugging pointer for later use
 
       switch(frame_header->data_packet_type) {
-      case DataTypeCounter:
+        case DataTypeCounter:
 #ifdef DEBUG
-        // The counter words now require even more special handling
-        Log(verbose,"Counter word");
+          // The counter words now require even more special handling
+          Log(verbose,"Counter word");
 #endif
-        // The data that is in the header is from the BSU's, so we can simply copy the payload
-        // and then just add the 2 additional bits from the header at the end
-        // I put it hardcoded so that I don't end up messing up with it
-        // Since the firmware sends little endian data, the bytes are reversed
-        std::memcpy(&eth_buffer[ipck],
-            &(frame[Payload_Counter::payload_offset_u32]),
-            Payload_Counter::size_words_ptb_bytes);
-        tmp_idx = ipck;
-        ipck += Payload_Counter::size_words_ptb_u32;
-        // Now add the remaining 2 bits to the lsb of the next u32
-        // and pad the rest with zeros
-        // 0x3 is the two lsb's
-        eth_buffer[ipck] = 0x3 & frame_header->padding;
-        ipck+=1;
+          // The data that is in the header is from the BSU's, so we can simply copy the payload
+          // and then just add the 2 additional bits from the header at the end
+          // I put it hardcoded so that I don't end up messing up with it
+          // Since the firmware sends little endian data, the bytes are reversed
+          std::memcpy(&eth_buffer[ipck],
+              &(frame[Payload_Counter::payload_offset_u32]),
+              Payload_Counter::size_words_ptb_bytes);
+          tmp_idx = ipck;
+          ipck += Payload_Counter::size_words_ptb_u32;
+          // Now add the remaining 2 bits to the lsb of the next u32
+          // and pad the rest with zeros
+          // 0x3 is the two lsb's
+          eth_buffer[ipck] = 0x3 & frame_header->padding;
+          ipck+=1;
 #ifdef DATA_STATISTICS
-        // Log(verbose,"Intermediate packet:");
-        // print_bits(eth_buffer,ipck);
-        cp = reinterpret_cast<Payload_Counter*>(&eth_buffer[tmp_idx]);
-        // -- Collect the statistics of the present counter word
-        for (uint32_t i = 0; i < 98; ++i) {
-          if (cp->get_counter_status(i)) {
+          // Log(verbose,"Intermediate packet:");
+          // print_bits(eth_buffer,ipck);
+          cp = reinterpret_cast<Payload_Counter*>(&eth_buffer[tmp_idx]);
+          // -- Collect the statistics of the present counter word
+          for (uint32_t i = 0; i < 98; ++i) {
+            if (cp->get_counter_status(i)) {
               counter_stats_[i]++;
+            }
           }
-        }
-        num_word_counter_++;
+          num_word_counter_++;
 #endif
-        break;
-      case DataTypeTrigger:
-	// Log(info,"Trigger word : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
-        // Log(info,"Trigger word [%s] \n[%s] \n[%s] \n[%s]",
-	//     std::bitset<32>(frame[0]).to_string().c_str(),
-	//     std::bitset<32>(frame[1]).to_string().c_str(),
-	//     std::bitset<32>(frame[2]).to_string().c_str(),
-	//     std::bitset<32>(frame[3]).to_string().c_str());
-	// Log(info,"Copying [%s]",std::bitset<32>(frame[TriggerPayload::payload_offset_u32]).to_string().c_str());
-	// tp = reinterpret_cast<TriggerPayload*>(&frame[TriggerPayload::payload_offset_u32]);
-	// Log(info,"Trigger info type [%s] id_muon [%s] id_calib [%s]",
-	//     std::bitset<5>(tp->trigger_type).to_string().c_str(),
-	//     std::bitset<4>(tp->trigger_id_muon).to_string().c_str(),
-	//     std::bitset<4>(tp->trigger_id_calib).to_string().c_str());
+          break;
+        case DataTypeTrigger:
+          // Log(info,"Trigger word : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
+          // Log(info,"Trigger word [%s] \n[%s] \n[%s] \n[%s]",
+          //     std::bitset<32>(frame[0]).to_string().c_str(),
+          //     std::bitset<32>(frame[1]).to_string().c_str(),
+          //     std::bitset<32>(frame[2]).to_string().c_str(),
+          //     std::bitset<32>(frame[3]).to_string().c_str());
+          // Log(info,"Copying [%s]",std::bitset<32>(frame[TriggerPayload::payload_offset_u32]).to_string().c_str());
+          // tp = reinterpret_cast<TriggerPayload*>(&frame[TriggerPayload::payload_offset_u32]);
+          // Log(info,"Trigger info type [%s] id_muon [%s] id_calib [%s]",
+          //     std::bitset<5>(tp->trigger_type).to_string().c_str(),
+          //     std::bitset<4>(tp->trigger_id_muon).to_string().c_str(),
+          //     std::bitset<4>(tp->trigger_id_calib).to_string().c_str());
 
-        std::memcpy(&eth_buffer[ipck],
-                    &frame[Payload_Trigger::payload_offset_u32],
-                    Payload_Trigger::size_bytes);
-        ipck += Payload_Trigger::size_u32;
+          std::memcpy(&eth_buffer[ipck],
+              &frame[Payload_Trigger::payload_offset_u32],
+              Payload_Trigger::size_bytes);
+          ipck += Payload_Trigger::size_u32;
 #ifdef DATA_STATISTICS
-        // Log(verbose,"Intermediate packet:");
-        // print_bits(eth_buffer,ipck);
+          // Log(verbose,"Intermediate packet:");
+          // print_bits(eth_buffer,ipck);
 
-        tp = reinterpret_cast<Payload_Trigger*>(&frame[Payload_Trigger::payload_offset_u32]);
-        trigger_stats_[tp->trigger_id_muon]++;
+          tp = reinterpret_cast<Payload_Trigger*>(&frame[Payload_Trigger::payload_offset_u32]);
+          trigger_stats_[tp->trigger_id_muon]++;
 
-        num_word_trigger_++;
+          num_word_trigger_++;
 #endif
-        break;
-      case DataTypeWarning:
-        Log(warning,
-            "+++ Received a FIFO warning of type %08X .+++",
-            (reinterpret_cast_checked<uint32_t*>(frame))[0]);
+          break;
+        case DataTypeWarning:
+          Log(warning,
+              "+++ Received a FIFO warning of type %08X .+++",
+              (reinterpret_cast_checked<uint32_t*>(frame))[0]);
 #ifdef DATA_STATISTICS
-        num_word_warning_++;
+          num_word_warning_++;
 #endif
-        break;
-      default:
-        eth_buffer[ipck] = WARN_UNKNOWN_DATA;
-        ipck += 1;
-        Log(warning,"Unknown data type [%X]",frame[0] & 0xFF);
-        Log(warning,"Bits : %s",display_bits(&frame_header,sizeof(frame_header)).c_str());
+          break;
+        default:
+          eth_buffer[ipck] = WARN_UNKNOWN_DATA;
+          ipck += 1;
+          Log(warning,"Unknown data type [%X]",frame[0] & 0xFF);
+          Log(warning,"Bits : %s",display_bits(&frame_header,sizeof(frame_header)).c_str());
       } // case
 
 
@@ -1021,7 +1114,7 @@ void board_reader::data_transmitter() {
       num_eth_fragments_++;
       bytes_sent_ += packet_size;
 #endif
-      }
+    }
     catch(SocketException &e) {
       Log(error,"Socket exception : %s",e.what() );
       // Stop collecting and transmitting
@@ -1095,6 +1188,627 @@ void board_reader::data_transmitter() {
   // Should be safe to delete the memory_pool here as well.
   // Close the socket as well
 }
+
+#elif defined(ARM_SG_DMA)
+void board_reader::data_transmitter() {
+  Log(debug, "Starting data transmitter\n");
+
+  // Allocate a memory buffer to build eth packets.
+
+  //FIXME: Implement fragmentation
+  // this builds an array of 64k ints = 256 kbytes
+  // Should correspond to several ethernet packets in worst case scenario
+  uint32_t *global_eth_buffer = new uint32_t[eth_buffer_size_u32]();
+
+  // Local pointer that is effectively used to build the eth packet
+  uint32_t *eth_buffer = nullptr;
+  // pointer that keeps track of the offset within the global buffer
+  uint32_t global_eth_pos = 0;
+
+  /** Statistics collection variables
+   */
+  error_state_ = false;
+  error_messages_ = "";
+  // Debugging information that is passed down in the end of the run
+  num_eth_fragments_ = 0;
+  num_word_counter_ = 0;
+  num_word_trigger_ = 0;
+  num_word_tstamp_ = 0;
+  num_word_warning_ = 0;
+  bytes_sent_ = 0;
+  //  for (int i = 0; i < 98; ++i) counter_stats_[i]=0;
+  //  trigger_stats_[ptb::board_reader::Payload_Trigger::TA] = 0;
+  //  trigger_stats_[board_reader::Payload_Trigger::TB] = 0;
+  //  trigger_stats_[board_reader::Payload_Trigger::TC] = 0;
+  //  trigger_stats_[board_reader::Payload_Trigger::TD] = 0;
+  //  Payload_Trigger *tp= nullptr;
+  //  Payload_Counter *cp= nullptr;
+
+  // This will keep track on the number of u32 words
+  // In the end the size of the buffer will be ipck*sizeof(uint32_t);
+  static uint32_t n_u32_words = 0;
+  static uint32_t n_bytes_sent = 0;
+//  static uint32_t tmp_idx = 0;
+//  static bool carry_on = true;
+//  static bool ts_arrived = false;
+
+  // Temporary variables that will end up making part of the eth packet
+  static uint32_t packet_size = 0;
+//  uint32_t eth_checksum = 0;
+
+  // pointer to a new word
+  ptb::content::buffer_t dma_buffer;
+  //uint32_t* buffer = nullptr;
+//  uint32_t* raw_frame  = nullptr;
+  // A couple of temp pointers that make sense to avoid copying stuff around and help parsing
+//  ptb::content::word::word * full_word;
+//  ptb::content::word::header                  * fr_header;
+//  ptb::content::word::payload::global_trigger * ht_word;
+//  ptb::content::word::payload::low_trigger    * lt_word;
+//  ptb::content::word::payload::timestamp      * ts_word;
+//  ptb::content::word::payload::warning        * wn_word;
+//  ts_arrived = false;
+  //  static uint32_t tmpcount = 0;
+  seq_num_ = 1;
+
+  // Assign the skelleton packet header
+  // This would be nice to go out of the loop but it
+  //eth_header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
+  ptb::content::tcp_header eth_header;
+  eth_header.word.format_version = (fw_version_ << 4) | ((~fw_version_) & 0xF);
+
+
+
+
+  // The whole method runs on an infinite loop with a control variable
+  // That is set from the main thread.
+  // Wonder if sometimes there could be a conflict when both a write and a read are issued over the variable.
+  while(keep_transmitting_) {
+
+    // Set the local pointer to the place pointer by the global pointer
+    eth_buffer = &global_eth_buffer[global_eth_pos];
+
+    // !!!! Start by not doing any size modifications into the memory
+    // simply wrap the whole thing with a header and ship.
+
+    // This will allow to do zero-copy transfer
+
+    // !!! Caveat: we cannot allow the full buffer to fill. Add a provision for that...
+
+    // FW decides when the packet is ready to be sent.
+    // The TS word marks that a packet has to be sent.
+
+    // 2 conditions to be careful of:
+    //
+    // 1. If time time based rollover is reached.
+    // 2. If the size based rollover is reached. (not implemented)
+
+
+    /// -- Start by generating a header
+
+    // ipck   : Counter of u32
+    n_u32_words = 0;
+    n_bytes_sent = 0;
+//    carry_on = true;
+
+    eth_header.word.sequence_id = seq_num_;
+
+    // -- Pop a buffer
+    if (!buffer_queue_.pop(dma_buffer)) {
+      // -- should some sort of wait be put here?
+      // Might hurt since it will require some sort of mutex
+      continue;
+    }
+
+    // -- at this point there is a buffer available
+    // Assign the size to the header
+    eth_header.word.packet_size = dma_buffer.len & 0xFFFF;
+    std::memcpy(&(eth_buffer[0]),&eth_header,sizeof(eth_header));
+    // -- copy the whole buffer
+    std::memcpy(&(eth_buffer[1]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
+
+    // -- Send the data
+    try {
+      n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
+      n_u32_words = n_bytes_sent*sizeof(uint32_t);
+      data_socket_->send(eth_buffer,n_bytes_sent);
+
+      global_eth_pos += (n_u32_words+4);
+      // add 4 bytes of padding just to make sure that there are no overlaps
+      // for occasional small packets troubles could happen.
+      if ((global_eth_pos+(3*n_u32_words)) > eth_buffer_size_u32) {
+        // reset the pointer to the beginning
+        global_eth_pos = 0;
+      }
+      // -- release the memory buffer
+
+      pzdud_release(s2mm, dma_buffer.handle, 0);
+
+    }
+    catch(SocketException &e) {
+      Log(error,"Socket exception : %s",e.what() );
+      // Stop collecting and transmitting
+      //
+      error_state_ = true;
+      error_messages_ += "<error>Data socket exception [";
+      std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+      std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+      std::tm now_tm = *std::localtime(&now_c);
+      char date[128];
+      strftime(date, sizeof(date), "%A %c", &now_tm);
+      error_messages_ += date;
+      error_messages_ += "] : ";
+      error_messages_ += e.what();
+      error_messages_ += "</error>";
+      keep_collecting_ = false;
+      keep_transmitting_ = false;
+      //
+    }
+
+    // increment the sequence number
+    seq_num_++;
+    // if (seq_num_ >= 5) {
+    //   Log(warning,"FIXME: Forcing to stop after the first packet being generated");
+    //   keep_collecting_ = false;
+    //   keep_transmitting_ = false;
+    //   // sleep for a while waiting for the generators to stop
+    //   std::this_thread::sleep_for (std::chrono::seconds(5));
+
+  } // -- while(keep_transmitting_)
+  // Exited the  run loop. Return.
+
+  Log(info,"Exited transmission loop.");
+  if (error_state_) {
+    Log(warning,"Transmission loop exited with error state.");
+  }
+
+  // wait for a few moments before deallocating the memory so that the kernel does not go ballistic
+  // in case it hans't yet committed all the buffers
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  // Deallocate the memory
+  delete [] global_eth_buffer;
+  // Finish the connection
+  Log(warning,"Closing data socket.");
+  close_data_connection();
+  Log(info,"Data socket closed.");
+}
+
+
+#ifdef OLD_CODE
+
+    // Register eth packet sequence number
+    // eth_header = SetBitRange(eth_header,(seq_num_  << 16) & 0xFF0000,16,8);
+    //    n_u32_words += 1;
+    //    tmpcount = 0;
+
+    // Log(verbose, "Temp HEADER : %x (%x [%u] %x [%u])\n",eth_buffer[0],fw_version_,fw_version_,seq_num_,seq_num_);
+
+    // while a packet_sending_condition is not reached
+    // keep the loop going...
+    // Needs some extra protection for when the StopRun is called,
+    // otherwise the loop does not
+    // really stop since it will waiting forever for a
+    // timestamp word that will never arrive.
+    while(carry_on and keep_transmitting_) {
+
+      // Grab a frame...if there is one to grab
+#if defined(BOOST)
+      if (!buffer_queue_.pop(dma_buffer)) {
+        // -- should some sort of wait be put here?
+        // Might hurt since it will require some sort of mutex
+        continue;
+      }
+      // -- if it reached this state, there should be something in the buffer
+
+
+#elif defined(LOCKFREE)
+      while (!buffer_queue_.try_dequeue(frame) && keep_transmitting_) {
+        continue;
+      }
+      // break out if a stop was requested while waiting for data to be available.
+      if (!keep_transmitting_) {
+        Log(info,"Received request to stop transmitting.");
+        break;
+      }
+#elif defined(MUTEX)
+      if (buffer_queue_.size() == 0) {
+        continue;
+      }
+      // FIXME: Replace this by a lock free queue
+      //Log(debug,"Grabbing from queue");
+      pthread_mutex_lock(&lock_);
+      frame = buffer_queue_.front();
+      buffer_queue_.pop();
+      pthread_mutex_unlock(&lock_);
+#else
+#error Unknown cross-domain controller mechanism
+#endif
+
+      // NFB : Important. In the SG mode, a buffer can have a random amount of words
+      //      There's 2 conditions that define a buffer:
+      // 1. The amount of memory transferred reaching the memory address width (4kb)
+      // 2. Tlast being asserted on the PL
+      //
+      // 1 should never happen! If it does, one will need to define fragmented packets
+
+      // Write the size into the header and copy the whole thing into the eth_buffer
+      eth_header.word.packet_size = dma_buffer.len & 0xFFFF;
+
+
+      // Another important piece of information
+      // in SG mode, each dma buffer has an integer amount of words of the size
+      // of the AXIS bus. In my case this is 128 bits
+
+      // -- Yet another important detail: endianess...the root of all evil
+
+      // -- So, we always know that if we get a TS word, we are at the end of the buffer.
+      // but we will check it nonetheless
+
+      for (size_t iw = 0; iw < (dma_buffer.len/16); iw+=ptb::content::word::word_t::word_size_u32) {
+        raw_frame = reinterpret_cast<uint32_t*>(dma_buffer.data[iw]);
+
+        full_word = reinterpret_cast<ptb::content::word::word *>(raw_frame);
+
+        // -- parse the object
+        // Copy the header to the sending buffer
+        std::memcpy(&eth_buffer[n_u32_words],raw_frame,ptb::content::word::header_t::size_bytes);
+
+        switch (full_word->frame.header.word.word_type) {
+          case ptb::content::word::t_ts:
+          {
+            break;
+          }
+          case ptb::content::word::t_warn:
+          {
+            break;
+          }
+          case ptb::content::word::t_lt:
+          {
+            break;
+          }
+          case ptb::content::word::t_gt:
+          {
+            break;
+          }
+          case ptb::content::word::t_chksum:
+          {
+            Log(warning,"Seeing an unexpected checksum word. This has not been implemented yet!");
+            break;
+          }
+
+        }
+        // Let's parse this frame in parts
+        ptb::content::word::word * full_word;
+        ptb::content::word::header                  * fr_header;
+        ptb::content::word::payload::global_trigger * ht_word;
+        ptb::content::word::payload::low_trigger    * lt_word;
+        ptb::content::word::payload::timestamp      * ts_word;
+        ptb::content::word::payload::warning        * wn_word;
+
+
+
+      }
+
+//      // Start parsing the
+//      if (tmpcount < 50) {
+//        Log(debug,"Grabbed : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
+//        tmpcount++;
+//      }
+      // Grab the header, that now should be at the 4 lsB
+      Payload_Header *frame_header = reinterpret_cast_checked<Payload_Header *>(frame);
+      //Word_Header *frame_header = reinterpret_cast<Word_Header *>(frame);
+
+      // Very first check to discard "ghost frames"
+      // -- Ghost frames are caused by the NOvA timing not being fully initialized by
+      // the time the word was generated. These usually occur because there
+      // is a delay between the sync pulse and the timestamps starting
+      // to be populated in the NOvA firmware.
+      // Unfortunately it doesn't seem that anything can be done about it
+
+      // Conditions that must be checked before the first timestamp arrives
+      if (!ts_arrived) {
+        // FIXME: Get rid of ghost frames on the FW side
+        // Ghost frames are a mess. For the moment keep them but need to set
+        // up something more reliable.
+        // Most likely on the firmware side
+        // after the first TS arrives ignore ghost frames
+
+        if ((frame_header->short_nova_timestamp & 0x7FFFFFF) == 0x0) {
+          //#ifdef DEBUG
+          Log(warning,"Dropping ghost frame %s",std::bitset<32>(frame[0]).to_string().c_str());
+          //          Log(warning,"Dropping ghost frame");
+          //#endif
+          continue;
+        }
+
+        // FIXME: This is just temporary. Have to fix the firmware to grab
+        // the proper data
+        // This problem is strongly related with the previous.
+        // Will have to fix it on the firmware side to ensure that the very
+        // first word is a timestamp
+        if ((frame_header->data_packet_type != DataTypeTimestamp)) {
+          //#ifdef DEBUG
+          Log(warning,"Dropping frames until a timestamp shows up.");
+          //#endif
+          continue;
+        }
+      } // ts_arrived
+
+
+      /// -- Check if the packet is a TS frame
+      if(frame_header->data_packet_type == DataTypeTimestamp) {
+        ts_arrived = true;
+        // This is a timestamp word.
+        // Check if this is the first TS after StartRun
+        // Log(verbose, "Timestamp frame...\n");
+#ifdef DEBUG
+        Payload_Timestamp *t = reinterpret_cast<Payload_Timestamp *>(&(frame[Payload_Timestamp::payload_offset_u32]));
+        Log(verbose,"Timestamp first estimate  %" PRIX64 " (%" PRIu64 ")",t->nova_timestamp,t->nova_timestamp);
+        std::cout << "Just to make sure: " << t->nova_timestamp << std::endl;
+
+        // Log(verbose,"Timestamp full packet:");
+        // print_bits(frame,16);
+        // Log(verbose,"Timestamp estimation:");
+        // print_bits(&frame[Word_Header::size_words+TimestampPayload::ptb_offset],16-(Word_Header::size_words+TimestampPayload::ptb_offset));
+        // print_bits(t,8);
+#endif
+        std::memcpy(&eth_buffer[n_u32_words],frame,Payload_Header::size_bytes);
+        n_u32_words += Payload_Header::size_u32;
+
+        // Don't forget to apply the ptb_offset!!
+        std::memcpy(&eth_buffer[n_u32_words],
+            &(frame[Payload_Timestamp::payload_offset_u32]),
+            Payload_Timestamp::size_bytes);
+        n_u32_words += Payload_Timestamp::size_u32;
+#ifdef DEBUG
+        //Log(verbose,"Intermediate packet:");
+        //print_bits(eth_buffer,ipck);
+        // No support for
+#ifdef ENABLE_FRAG_BLOCKS
+        fragmented_ = false;
+#endif
+#endif
+
+#ifdef DATA_STATISTICS
+        num_word_tstamp_++;
+#endif
+        // break out of the cycle to send the packet
+        carry_on = false;
+        break;
+      }
+
+      /// --  Not a TS packet...just accumulate it
+      // -- Grab the header (valid for all situations
+      // Log(verbose, "Grabbing the header\n");
+
+      std::memcpy(&eth_buffer[n_u32_words],frame,Payload_Header::size_bytes);
+      n_u32_words += Payload_Header::size_u32;
+
+      // debugging pointer for later use
+
+      switch(frame_header->data_packet_type) {
+        case DataTypeCounter:
+#ifdef DEBUG
+          // The counter words now require even more special handling
+          Log(verbose,"Counter word");
+#endif
+          // The data that is in the header is from the BSU's, so we can simply copy the payload
+          // and then just add the 2 additional bits from the header at the end
+          // I put it hardcoded so that I don't end up messing up with it
+          // Since the firmware sends little endian data, the bytes are reversed
+          std::memcpy(&eth_buffer[n_u32_words],
+              &(frame[Payload_Counter::payload_offset_u32]),
+              Payload_Counter::size_words_ptb_bytes);
+          tmp_idx = n_u32_words;
+          n_u32_words += Payload_Counter::size_words_ptb_u32;
+          // Now add the remaining 2 bits to the lsb of the next u32
+          // and pad the rest with zeros
+          // 0x3 is the two lsb's
+          eth_buffer[n_u32_words] = 0x3 & frame_header->padding;
+          n_u32_words+=1;
+#ifdef DATA_STATISTICS
+          // Log(verbose,"Intermediate packet:");
+          // print_bits(eth_buffer,ipck);
+          cp = reinterpret_cast<Payload_Counter*>(&eth_buffer[tmp_idx]);
+          // -- Collect the statistics of the present counter word
+          for (uint32_t i = 0; i < 98; ++i) {
+            if (cp->get_counter_status(i)) {
+              counter_stats_[i]++;
+            }
+          }
+          num_word_counter_++;
+#endif
+          break;
+        case DataTypeTrigger:
+          // Log(info,"Trigger word : %08X %08X %08X %08X",frame[0],frame[1],frame[2],frame[3]);
+          // Log(info,"Trigger word [%s] \n[%s] \n[%s] \n[%s]",
+          //     std::bitset<32>(frame[0]).to_string().c_str(),
+          //     std::bitset<32>(frame[1]).to_string().c_str(),
+          //     std::bitset<32>(frame[2]).to_string().c_str(),
+          //     std::bitset<32>(frame[3]).to_string().c_str());
+          // Log(info,"Copying [%s]",std::bitset<32>(frame[TriggerPayload::payload_offset_u32]).to_string().c_str());
+          // tp = reinterpret_cast<TriggerPayload*>(&frame[TriggerPayload::payload_offset_u32]);
+          // Log(info,"Trigger info type [%s] id_muon [%s] id_calib [%s]",
+          //     std::bitset<5>(tp->trigger_type).to_string().c_str(),
+          //     std::bitset<4>(tp->trigger_id_muon).to_string().c_str(),
+          //     std::bitset<4>(tp->trigger_id_calib).to_string().c_str());
+
+          std::memcpy(&eth_buffer[n_u32_words],
+              &frame[Payload_Trigger::payload_offset_u32],
+              Payload_Trigger::size_bytes);
+          n_u32_words += Payload_Trigger::size_u32;
+#ifdef DATA_STATISTICS
+          // Log(verbose,"Intermediate packet:");
+          // print_bits(eth_buffer,ipck);
+
+          tp = reinterpret_cast<Payload_Trigger*>(&frame[Payload_Trigger::payload_offset_u32]);
+          trigger_stats_[tp->trigger_id_muon]++;
+
+          num_word_trigger_++;
+#endif
+          break;
+        case DataTypeWarning:
+          Log(warning,
+              "+++ Received a FIFO warning of type %08X .+++",
+              (reinterpret_cast_checked<uint32_t*>(frame))[0]);
+#ifdef DATA_STATISTICS
+          num_word_warning_++;
+#endif
+          break;
+        default:
+          eth_buffer[n_u32_words] = WARN_UNKNOWN_DATA;
+          n_u32_words += 1;
+          Log(warning,"Unknown data type [%X]",frame[0] & 0xFF);
+          Log(warning,"Bits : %s",display_bits(&frame_header,sizeof(frame_header)).c_str());
+      } // case
+
+
+#ifdef ENABLE_FRAG_BLOCKS
+      // Size Rollover reached. Produce a fragmented block;
+      // Keep collecting only until the next TS word
+      if ((n_u32_words+frame_size_u32) >= packet_rollover_) {
+        Log(warning,"Issuing a fragmented packet. THis is going to cause trouble.");
+        fragmented_ = true;
+        break;
+      }
+#endif
+    } // -- carry_on && keep transmitting
+
+    // -- if keep_transmitting was called out (eg. run ended),
+    // don't send this data. The board reader won't like to receive an incomplete packet without
+    // timestamp word
+    if (!keep_transmitting_) {
+      Log(info,"Stopping transmission requested. Breaking out.");
+      break;
+    }
+    // Transmit the data.
+    // Log(verbose, "Packet completed. Calculating the checksum.\n");
+
+    // Add one word to account for the checksum
+    packet_size = (n_u32_words+1)*sizeof(uint32_t);
+    // Log(verbose,"Size was calculated to be %u",packet_size);
+
+
+    eth_header = SetBitRange(eth_header,packet_size,0,16);
+    std::memcpy(&(eth_buffer[0]),&eth_header,sizeof(eth_header));
+
+    // Calculate the checksum
+    //
+    // -- Followed the recipe in
+    //    https://en.wikipedia.org/wiki/BSD_checksum
+    static uint16_t checksum = 0x0;
+#ifdef DEBUG
+    checksum = 0x0;
+    //    uint8_t*ch_buff = reinterpret_cast<uint8_t*>(eth_buffer);
+    uint8_t*ch_buff = eth_buffer;
+    for (uint32_t i = 0; i < n_u32_words; ++i) {
+
+      checksum = (checksum >> 1) + ((checksum & 0x1) << 15) ;
+      checksum += ch_buff[i];
+      checksum &= 0xFFFF;
+      //Log(debug," Byte %u : %08X Chksum %08X (%hu)",i,ch_buff[i],checksum,checksum);
+    }
+    // Log(verbose,"Checksum : %hu",checksum);
+    // Calculate 16 bit checksum of the packet
+#endif
+    // Add the checksum to the last packet
+    eth_checksum = (0x4 << 29) | checksum;
+    std::memcpy(&eth_buffer[n_u32_words],&eth_checksum,sizeof(eth_checksum));
+    n_u32_words += 1;
+    //packet_size = ipck*sizeof(uint32_t);
+#ifdef DEBUG
+    Log(debug,"Sending packet with %u bytes (including header)",packet_size);
+    print_bits(eth_buffer,packet_size);
+
+#endif
+    try {
+      data_socket_->send(eth_buffer,packet_size);
+      global_eth_pos += (n_u32_words+4);
+      // add 4 bytes of padding just to make sure that there are no overlaps
+      // for occasional small packets troubles could happen.
+      if ((global_eth_pos+(4*n_u32_words)) > eth_buffer_size_u32) {
+        // reset the pointer to the beginning
+        global_eth_pos = 0;
+      }
+#ifdef DATA_STATISTICS
+      num_eth_fragments_++;
+      bytes_sent_ += packet_size;
+#endif
+    }
+    catch(SocketException &e) {
+      Log(error,"Socket exception : %s",e.what() );
+      // Stop collecting and transmitting
+      //
+      error_state_ = true;
+      error_messages_ += "<error>Data socket exception [";
+      error_messages_ += currentDateTime();
+      error_messages_ += "] : ";
+      error_messages_ += e.what();
+      error_messages_ += "</error>";
+      keep_collecting_ = false;
+      keep_transmitting_ = false;
+      //
+    }
+
+    // FIXME: Add support for fragmented blocks.
+    // Require the board reader to hold the data
+    // in a buffer until the whole microslice is parsed
+#ifdef ENABLE_FRAG_BLOCKS
+    if (!fragmented_) {
+      seq_num_++;
+      fragmented_ =false;
+    } else {
+      seq_num_ = seq_num_;
+      Log(error,"Fragmented packets are not currently supported.");
+      //throw PTBexception("Fragmented packets are not supported.");
+      keep_transmitting_ = false;
+      keep_collecting_ = false;
+    }
+#else
+    seq_num_++;
+#endif
+    // if (seq_num_ >= 5) {
+    //   Log(warning,"FIXME: Forcing to stop after the first packet being generated");
+    //   keep_collecting_ = false;
+    //   keep_transmitting_ = false;
+    //   // sleep for a while waiting for the generators to stop
+    //   std::this_thread::sleep_for (std::chrono::seconds(5));
+
+  } // -- while(keep_transmitting_)
+  // Exited the  run loop. Return.
+
+  Log(info,"Exited transmission loop.");
+  if (error_state_) {
+    Log(warning,"Transmission loop exited with error state.");
+  }
+#ifdef DATA_STATISTICS
+  std::ostringstream str;
+  for (uint32_t i = 0; i < counter_stats_.size(); ++i) {
+    str << counter_stats_[i] << ":" ;
+    if ((i==9) || (i==19) || (i==29) || (i==39) || (i==49) || (i==59) || (i==69) || (i==79) || (i==89)) {
+      str << "\n";
+    }
+  }
+  str << "||";
+  for (std::map<Payload_Trigger::trigger_type_t,int>::const_iterator it = trigger_stats_.begin(); it != trigger_stats_.end();++it) {
+    str << std::bitset<8>(it->first) << "=" << it->second << ":";
+  }
+  Log(info,"Counter statistics: \n %s \n",str.str().c_str());
+#endif
+
+  // wait for a few moments before deallocating the memory so that the kernel does not go ballistic
+  // in case it hans't yet committed all the buffers
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  // Deallocate the memory
+  delete [] global_eth_buffer;
+  // Finish the connection
+  Log(warning,"Closing data socket.");
+  close_data_connection();
+  Log(info,"Data socket closed.");
+  // Should be safe to delete the memory_pool here as well.
+  // Close the socket as well
+}
+#endif
 
 #else
 #error No DMA mode defined.
