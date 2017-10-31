@@ -6,8 +6,12 @@ The data transfer is performed through UIO interface for the DMA data transmissi
 
 The communication with the DAQ backend is performed through 2 TCP socket connections: a control stream and a data stream. The control stream is responsible to receive the configuration and pass that to the manager that sets the registers. The data stream is a pure data transmission connection, directly from the DMA mapped memory.
 
-TODO List:
+Several updates were added over the time and the system is now being adjusted to the protoDUNE CTB mkii. 
+There are still a couple of edges to clean, but overall the software has been shown to work as intended.
 
-* Finish implementation of the data stream (PTBReader)
-* Implementation of a monitoring channel accessible from the board reader.
+# TODO list
 
+* Integrate SG DMA driver
+* Adjust configuration as it becomes more clear on the CTB
+* Implement I2C programming of the PDS discriminators 
+* Crosscheck PTBManager code to start, configure, reset and stop the runs

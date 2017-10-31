@@ -6,11 +6,11 @@
  */
 
 #include "Logger.h"
-#include "ConfigServer.h"
-#include "PTBManager.h"
-
 #include <thread>         // std::this_thread::sleep_for
 #include <chrono>         // std::chrono::seconds
+
+#include "../src/boardmanager.h"
+#include "../src/boardserver.h"
 
 extern "C" {
 #include <pthread.h>         // For POSIX threads
@@ -23,8 +23,8 @@ void* shutdown(void *arg) {
      Log(info,"%d seconds elapsed.",i+1);
    }
 
-   ConfigServer *cfg = (ConfigServer*)arg;
-   cfg->Shutdown();
+   socket_server *cfg = (socket_server*)arg;
+   cfg->shutdown();
   return NULL;
 }
 
@@ -35,12 +35,12 @@ int main() {
    // This doesn't work since the thread gets stuck in the constructor of ConfigServer
    // Need to make the acceptance of the client into a separate thread.
 
-   ConfigServer*cfg = ConfigServer::get();
+   socket_server*cfg = socket_server::get();
 
    Log(debug,"Going to sleep");
    std::this_thread::sleep_for (std::chrono::seconds(10));
    Log(info,"Starting manager");
-   PTBManager manager;
+   board_manager manager;
    Log(info,"Waiting for thread [%x] to finish.",cfg->getThreadId());
    Log(info,"Adding a new thread to shutdown eventually...");
    pthread_t threadID;

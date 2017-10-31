@@ -1,5 +1,5 @@
 /*
- * PTBReader.h
+ * PTBReadefr.h
  *
  *  Created on: Jun 8, 2015
  *      Author: nbarros
@@ -29,16 +29,18 @@ extern "C" {
 //#include <stdio.h>
 }
 
-
-#if defined(ARM_XDMA)
-#include "xdma.h"
-#elif defined(ARM_MMAP) // needed to use the LocalRegister structure
+#if defined(SIMULATION)
+#else
 #include "util.h"
+ #if defined(ARM_XDMA)
+ #include "xdma.h"
+ #elif defined(ARM_SG_DMA) // needed to use the LocalRegister structure
+ #include "pothos_zynq_dma_driver.h"
+ #endif
 #endif
-
 class TCPSocket;
 
-
+namespace ptb {
 
 /**
  * This class is responsible for reading the DMA and transferring the data to
@@ -51,7 +53,7 @@ class TCPSocket;
  * assembles the TCP packets and sends them to the board reader.
  *
  */
-class PTBReader {
+class board_reader {
  public:
   
   /// Bunch of structures that help manipulating the data.
@@ -592,41 +594,41 @@ class PTBReader {
    * Implementation of the PTBReader class
    **/
 
-  PTBReader();
+  board_reader();
   
-  virtual ~PTBReader();
+  virtual ~board_reader();
   
-  bool isReady() const {
+  bool get_ready() const {
     return ready_;
   }
   
-  void setReady(bool ready) {
+  void set_ready(bool ready) {
     ready_ = ready;
   }
 
-  const std::string& getTcpHost() const {
+  const std::string& get_tcp_host() const {
     return tcp_host_;
   }
 
-  void setTcpHost(const std::string& tcpHost) {
+  void set_tcp_host(const std::string& tcpHost) {
     tcp_host_ = tcpHost;
   }
 
-  unsigned short getTcpPort() const {
+  unsigned short get_tcp_port() const {
     return tcp_port_;
   }
 
-  void setTcpPort(unsigned short tcpPort) {
+  void set_tcp_port(unsigned short tcpPort) {
     tcp_port_ = tcpPort;
   }
 
   // FIXME: Implement this along with the fragmented blocks
 #ifdef ENABLE_FRAG_BLOCKS
-  uint32_t getPacketRollover() const {
+  uint32_t get_packet_rollover() const {
     return packet_rollover_;
   }
 
-  void setPacketRollover(uint32_t packetRollover) {
+  void set_packet_rollover(uint32_t packetRollover) {
     packet_rollover_ = packetRollover;
   }
 #endif
@@ -635,93 +637,92 @@ class PTBReader {
    * Important in the case that one wants to delete the object 
    * without having started a run.
    */
-  void ClearThreads();
+  void clear_threads();
 
   /** 
    * Function called by the manager to cleanly stop 
    * the data transmission and connection
    */
-  void StopDataTaking();
+  void stop_data_taking();
 
   /** Starts the collection and transmission threads
    * if the class was instanciated in "dry run" mode, 
    * it does nothing. 
    **/
-  void StartDataTaking();
+  void start_data_taking();
 
   /**
    * Resets the buffers. The run should already be stopped.
    */
-  void ResetBuffers();
+  void reset_buffers();
   
   /** Start the connection to the board reader **/
-  void InitConnection(bool force = false);
-  void CloseConnection();
+  void init_data_connection(bool force = false);
+  void close_data_connection();
 
-  bool TestSocket();
+  bool test_socket();
 
-  bool getConnectionValid() const {
+  bool get_data_connection_valid() const {
     // This might not be necessarily the best option
-    return (socket_ != NULL);
+    return (data_socket_ != NULL);
   }
   
   // -- Statistics methods:
-  uint32_t GetNumFragmentsSent() {return num_eth_fragments_;};
-  uint32_t GetNumCounterWords() {return num_word_counter_;};
-  uint32_t GetNumTriggerWords() {return num_word_trigger_;};
-  uint32_t GetNumFIFOWarnings() {return num_word_fifo_warning_;};
-  uint32_t GetNumTimestampWords() {return num_word_tstamp_;};
-  uint32_t GetBytesSent() {return bytes_sent_;};
+  uint32_t get_n_sent_frags() {return num_eth_fragments_;};
+  uint32_t get_n_status() {return num_word_counter_;};
+  uint32_t get_n_triggers() {return num_word_trigger_;};
+  uint32_t get_n_warns() {return num_word_warning_;};
+  uint32_t get_n_timestamps() {return num_word_tstamp_;};
+  uint32_t get_sent_bytes() {return bytes_sent_;};
 
 
-  void SetDryRun(bool status) {dry_run_ = status;};
+  void set_dry_run(bool status) {dry_run_ = status;};
 
-  bool GetDryRun() {return dry_run_;};
+  bool get_dry_run() {return dry_run_;};
 
-  bool GetErrorState() {return error_state_;};
+  bool get_error_state() {return error_state_;};
 
-  std::string GetErrorMessages() {return error_messages_;};
+  std::string get_error_msgs() {return error_messages_;};
 
 protected:
   /** Data collector function into the queue. Runs on it's own thread**/
-  void ClientCollector();
+  void data_collector();
 
   /** Data transmitter **/
-  void ClientTransmitter();
+  void data_transmitter();
 
-  void DumpPacket(uint32_t* buffer, uint32_t tot_size);
+  void dump_packet(uint32_t* buffer, uint32_t tot_size);
 
 private:
-  static void * ClientCollectorFunc(void * This) {((PTBReader *)This)->ClientCollector(); return NULL;}
-  static void * ClientTransmitterFunc(void * This) {((PTBReader *)This)->ClientTransmitter(); return NULL;}
+//  static void * ClientCollectorFunc(void * this) {((board_reader *)This)->data_collector(); return NULL;}
+//  static void * ClientTransmitterFunc(void * this) {((board_reader *)This)->data_transmitter(); return NULL;}
 
   // -- Structures for data socket connection
 
   unsigned short tcp_port_;
   std::string tcp_host_;
 
-  TCPSocket *socket_;
+  TCPSocket *data_socket_;
 
   pthread_t client_thread_collector_;
   pthread_t client_thread_transmitter_;
-
-#ifndef LOCKFREE
-  pthread_mutex_t lock_;
-#endif
 
 #ifdef ENABLE_FRAG_BLOCKS
   uint32_t packet_rollover_;
 #endif
   bool ready_;
 
+#if defined(SIMULATION)
+  uint32_t * memory_pool_;
+  void * mapped_data_base_addr_;
 
-#if defined(ARM_XDMA)
+#elif defined(ARM_XDMA)
 // declare a bunch of variables that are common to the program
-#if defined(LOCKFREE)
-  moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
+  #if defined(LOCKFREE)
+    moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
   #else
-  std::queue<uint32_t*> buffer_queue_;
-#endif
+    std::queue<uint32_t*> buffer_queue_;
+  #endif
   struct xdma_dev xdma_device;
   struct xdma_chan_cfg xdma_dst_cfg;
   struct xdma_buf_info xdma_buf;
@@ -731,15 +732,20 @@ private:
 #elif defined(ARM_MMAP)
 
   // Keeps frames stored
-  LocalRegister control_register_;
-  LocalRegister data_register_;
-#if defined(LOCKFREE)
-  moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
+  ptb::util::mem_reg control_register_;
+  ptb::util::mem_reg data_register_;
+  #if defined(LOCKFREE)
+    moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
   #else
-  std::queue<uint32_t*> buffer_queue_;
-#endif
+    std::queue<uint32_t*> buffer_queue_;
+  #endif
   uint32_t * memory_pool_;
   void * mapped_data_base_addr_;
+#elif defined(ARM_SG_DMA)
+  pzdud_t *s2mm;
+  static const size_t num_buffs_ = 1024;
+  static const size_t buff_size_ = 4096; // bytes
+  uint32_t addr[num_buffs_];
 #else
 #error DMA mode not specified
 #endif
@@ -747,7 +753,7 @@ private:
 
   // A few auxiliary constants
 
-  static const uint32_t eth_buffer_size_u32   = 0xFFFF; // Max possible ethernet packet
+  static const uint32_t eth_buffer_size_u32 = 0xFFFF; // Max possible ethernet packet
   static const uint32_t frame_size_bits   = 0x80;   // the buffer is 128 bits
   static const uint32_t frame_size_bytes  = 0x10;   // 16 bytes
   static const uint32_t frame_size_u32    = 0x4;    // 4xuint32_t
@@ -792,7 +798,7 @@ std::string error_messages_;
   uint32_t num_eth_fragments_;
   uint32_t num_word_counter_;
   uint32_t num_word_trigger_;
-  uint32_t num_word_fifo_warning_;
+  uint32_t num_word_warning_;
   uint32_t num_word_tstamp_;
   uint32_t bytes_sent_;
   std::map<int,int> counter_stats_;
@@ -800,5 +806,6 @@ std::string error_messages_;
 
 };
 
+}
 
 #endif /* PTBREADER_H_ */

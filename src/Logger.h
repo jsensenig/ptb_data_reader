@@ -11,7 +11,6 @@
 #include <iostream>
 #include <mutex>
 #include "CompilerOptions.h"
-#include "readerwriterqueue.h"
 
 //-- A few helpful defines
 // -- This expands into multiple ##

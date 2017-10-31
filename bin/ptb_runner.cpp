@@ -6,10 +6,11 @@
  */
 
 #include "Logger.h"
-#include "ConfigServer.h"
-#include "PTBManager.h"
-#include "PTBReader.h"
 #include <bitset>
+
+#include "../src/boardmanager.h"
+#include "../src/boardreader.h"
+#include "../src/boardserver.h"
 #include "PracticalSocket.h"
 extern "C" {
 #include <pthread.h>         // For POSIX threads
@@ -27,9 +28,9 @@ void handler(int signal) {
   if (signal == SIGINT) {
     Log(warning,"Received a SIGINT request. Attempting a clean stop.");
     g_relaunch = false;
-    ConfigServer*cfg = ConfigServer::get();
-    cfg->Shutdown(false);
-    cfg->CheckInstances();
+    socket_server*cfg = socket_server::get();
+    cfg->shutdown(false);
+    cfg->get_num_instances();
     Log(info,"Cleaning the config server itself");
     //pthread_join(cfg->getThreadId(),NULL);
     cfg = NULL;
@@ -41,17 +42,17 @@ void handler(int signal) {
 
 void run() {
 
-    ConfigServer*cfg = ConfigServer::get();
+    socket_server*cfg = socket_server::get();
 
     //Log(debug) << "Going to sleep" <<endlog;
     //std::this_thread::sleep_for (std::chrono::seconds(10));
     Log(info,"Starting manager");
     // Start in emulating mode.
-    PTBManager manager;
-    manager.DumpConfigurationRegisters();
+    board_manager manager;
+    manager.dump_config_registers();
 
     // Get the reader
-    const PTBReader* reader = manager.getReader();
+    const board_reader* reader = manager.getReader();
     Log(info,"Showing the reader: %X",reader);
     //manager.StartRun();
 

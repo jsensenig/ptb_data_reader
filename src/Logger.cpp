@@ -7,11 +7,10 @@
  */
 
 #include "Logger.h"
+#include "readerwriterqueue.h"
 
 #include <sstream>
-#include <cstdlib>
 #include <cstdarg>
-#include <cstdio>
 
 #include "util.h"
 
@@ -26,6 +25,7 @@ static struct nullstream:
       } m_sbuf;
       nullstream(): std::ios(&m_sbuf), std::ostream(&m_sbuf) {}
     } devnull;
+
 
 Logger::severity Logger::_sev = Logger::info;
 std::ostream* Logger::_ostream (&std::cout);
@@ -80,7 +80,7 @@ void Logger::message(Logger::severity sev, const char* where, const char* fmt,..
 
 
     char header[250];
-    sprintf(header,"%s:%s:%s:",tostr(sev),where,currentDateTime().c_str());
+    sprintf(header,"%s:%s:%s:",tostr(sev),where,ptb::util::current_DateTime().c_str());
     std::string tmp_fmt = header;
     tmp_fmt += fmt;
     char msg[2048];

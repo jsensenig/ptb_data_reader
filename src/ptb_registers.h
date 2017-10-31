@@ -11,6 +11,7 @@
 #define PTB_REGISTERS_H_
 
 #include <cstdint>
+#include <new>
 extern "C" {
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -18,33 +19,38 @@ extern "C" {
 #include <sys/mman.h>
 #include <unistd.h>
 }
-#include <new>
 
 #include "Logger.h"
+
+namespace ptb {
+
+namespace config {
 
 /**
  * Structure containing the information of the configuration registers.
  * This structure is populated further down in the file and then used in the software.
  */
 typedef struct mapped_register {
-    uint32_t dev_id;
-    uint32_t base_addr;
-    uint32_t high_addr;
-    uint32_t n_registers;
-    uint32_t *addr_offset;
+	uint32_t dev_id;
+	uint32_t base_addr;
+	uint32_t high_addr;
+	uint32_t n_registers;
+	uint32_t *addr_offset;
 } mapped_register;
 
-//uint32_t g_n_registers_;
 extern int g_mem_fd;
 
 extern mapped_register conf_reg;
 
-
+#ifdef ARM_MMAP
 extern mapped_register data_reg;
-
-void SetupConfRegisters();
 void SetupDataRegisters();
 
+#endif
+void SetupConfRegisters();
+
+}
+}
 //void WriteRegister()
 
 //uint32_t ReadRegister()

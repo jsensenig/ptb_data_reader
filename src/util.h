@@ -7,20 +7,29 @@
 
 #ifndef UTIL_H_
 #define UTIL_H_
-#include <cstdlib>
-#include <sstream>
+
 #include "Logger.h"
 
-uint32_t CreateMask(uint32_t begin, uint32_t end);
-uint32_t SetBitRange(uint32_t content, uint32_t value, uint32_t pos, uint32_t len);
-const std::string currentDateTime();
+#include <cstdlib>
+#include <map>
+#include <sstream>
 
-typedef struct LocalRegister {
-  void      *address;
+namespace ptb {
+namespace util {
+
+uint32_t create_mask(const uint32_t &begin, const uint32_t &end);
+uint32_t set_bit_range(const uint32_t &content, const uint32_t &value, const uint32_t &pos, const uint32_t &len);
+const std::string current_DateTime();
+
+typedef struct mem_reg {
+  void      *addr;
   // Should use this method to access the value held in address
   // since it shortens the command
-  volatile uint32_t& value () {return *(static_cast<volatile uint32_t*>(address));}
-} LocalRegister;
+  volatile uint32_t& value () {return *(static_cast<volatile uint32_t*>(addr));}
+} mem_reg;
+
+
+//std::map<uint32_t, mem_reg> bla;
 
 // JCF, Jul-16-2015
 
@@ -48,8 +57,9 @@ template <typename S, typename T>
 }
 
 // PTBregisters declarations
-void *MapPhysMemory(uint32_t base_addr, uint32_t high_addr);
-void UnmapPhysMemory(void * address, size_t size, bool close_file = false);
+void* map_physical_memory(const uint32_t &base_addr, const uint32_t &high_addr);
+void  unmap_physical_memory(void * address, const size_t &size, bool close_file = false);
+
 uint32_t Xil_In32(uint32_t Addr);
 void Xil_Out32(uint32_t OutAddress, uint32_t Value);
 
@@ -59,4 +69,6 @@ void Xil_Out32(uint32_t OutAddress, uint32_t Value);
 #define ReadReg(BaseAddress, RegOffset) \
     Xil_In32((BaseAddress) + (RegOffset))
 
+}
+}
 #endif /* UTIL_H_ */

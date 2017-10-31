@@ -6,14 +6,15 @@
  */
 
 #include "Logger.h"
-#include "ConfigServer.h"
-#include "PTBManager.h"
-#include "PTBReader.h"
 #include <bitset>
 #include <thread>         // std::this_thread::sleep_for
 #include <chrono>         // std::chrono::seconds
 #include <string>
 #include <fstream>
+
+#include "../src/boardmanager.h"
+#include "../src/boardreader.h"
+#include "../src/boardserver.h"
 #include "PracticalSocket.h"
 extern "C" {
 #include <pthread.h>         // For POSIX threads
@@ -90,7 +91,7 @@ void* reader_thread(void *arg) {
 	  Log(info,"--> Received a client request.");
 
 
-   const PTBReader *reader = (const PTBReader *) arg;
+   const board_reader *reader = (const board_reader *) arg;
    if (reader == NULL) {
      Log(error,"There is no reader");
      return NULL;
@@ -200,16 +201,16 @@ int main() {
   //Log(debug) << "Going to sleep" <<endlog;
   //std::this_thread::sleep_for (std::chrono::seconds(10));
   Log(info,"Starting manager");
-  PTBManager manager;
+  board_manager manager;
 
-  manager.DumpConfigurationRegisters();
+  manager.dump_config_registers();
 
   Log(info,"Creating control thread");
   std::thread t1(control_thread);
 
 
   // Get the reader
-  const PTBReader* reader = manager.getReader();
+  const board_reader* reader = manager.getReader();
   Log(info,"Showing the reader: 0x%X", reader);
   //manager.StartRun();
 

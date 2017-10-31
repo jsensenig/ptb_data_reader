@@ -2,9 +2,9 @@
 MACHINE    := $(shell uname -m)
 CC         := g++
 BIN        := $(PWD)/bin
-DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket 
+DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket -I$(PWD)/contrib/linux_dma/zynq-xdma
+DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/pothos-zynq/driver -I$(PWD)/contrib/linux_dma/pothos-zynq/kernel
 DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src -I./
-
 
 #ifeq (($MACHINE),armv7l)
 #   $(info Adding extra flags for uZed compilation...)
@@ -33,10 +33,12 @@ ifeq ($(MACHINE), armv7l)
    OBJ      := $(PWD)/.ptb_obj
 # Server Build
 else
-   $(info +++ Compiling for Server) 
+   $(info +++ Compiling for Server)
+   CC         := arm-xilinx-linux-gnueabi-g++ 
    DEF      := 
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
-   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 -m32 
+#   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 -m32 
+   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 
    LFLAGS   := $(DEF_LFLAGS) 
    EXT_TARS := 
    CLN      := server_clean

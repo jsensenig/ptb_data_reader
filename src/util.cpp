@@ -8,15 +8,19 @@
 #include <cstdint>
 #include <ctime>
 #include <string>
+#include <cstring>
+#include <sstream>
 
 #include "util.h"
 #include "Logger.h"
 #include "ptb_registers.h"
 
-uint32_t CreateMask(uint32_t begin, uint32_t end) {
+namespace ptb {
+namespace util {
 
+uint32_t create_mask(const uint32_t &begin, const uint32_t &end) {
   if (begin > end) {
-    Log(error,"Trying to create an invalid mask [%u,%u]", begin ,end );
+    Log(error,"Trying to create an invalid mask [%u,%u] | [0x%X,0x%X]", begin ,end,begin ,end );
     return 0;
   }
   uint32_t mask = 0;
@@ -26,14 +30,15 @@ uint32_t CreateMask(uint32_t begin, uint32_t end) {
   return mask;
 }
 
-
-uint32_t SetBitRange(uint32_t content, uint32_t value, uint32_t pos, uint32_t len) {
+// -- This sets len bits starting at position pos
+uint32_t set_bit_range(const uint32_t &content, const uint32_t &value, const uint32_t &pos, const uint32_t &len) {
+	// -- build a mask of len starting at pos
 	uint32_t mask = (((uint32_t)1 << len)-1) << pos;
 	uint32_t result = (content & ~mask) | (value & mask);
 	return result;
 }
 
-const std::string currentDateTime() {
+const std::string current_DateTime() {
     time_t     now = time(0);
     struct tm  tstruct;
     char       buf[80];
@@ -52,7 +57,7 @@ const std::string currentDateTime() {
 int g_mem_fd = 0;
 
 
-void *MapPhysMemory(uint32_t base_addr, uint32_t high_addr) {
+void *map_physical_memory(const uint32_t &base_addr, const uint32_t &high_addr) {
   //int memfd;
   void *mapped_addr;
   off_t dev_base = base_addr;
@@ -65,21 +70,29 @@ void *MapPhysMemory(uint32_t base_addr, uint32_t high_addr) {
     }
   }
   // Map into user space the area of memory containing the device
-  mapped_addr = mmap(0, (high_addr-base_addr), PROT_READ | PROT_WRITE, MAP_SHARED, g_mem_fd, dev_base & ~(high_addr-base_addr-1));
-  if ( reinterpret_cast<int32_t>(mapped_addr) == -1) {
-    Log(error,"Failed to map register [0x%08X 0x%08X] into virtual address.",base_addr,high_addr);
-    mapped_addr = NULL;
-  }
 
-  // not sure this can actually be done this way
-  //FIXME: Check if /dev/mem can actually be closed after mmap
-  //close(memfd);
+  //parameters
+  // -- I am using variables because I don't want to forget again
+  // the defintion of each argument.
+  void *p_addr = NULL;
+  size_t len = high_addr-base_addr;
+  int protection = PROT_READ | PROT_WRITE;
+  int flags = MAP_SHARED;
+  int fd = ptb::util::g_mem_fd;
+  off_t offset = dev_base & ~(high_addr-base_addr-1);
+  mapped_addr = mmap(p_addr,len,protection,flags,fd,offset);
+  //  mapped_addr = mmap(0, (high_addr-base_addr), PROT_READ | PROT_WRITE, MAP_SHARED, g_mem_fd, dev_base & ~(high_addr-base_addr-1));
+  if ( mapped_addr == MAP_FAILED) {
+    Log(error,"Failed to map register [0x%08X 0x%08X] into virtual address.",base_addr,high_addr);
+    Log(error,"Kernel message : %s",strerror(errno));
+    mapped_addr = nullptr;
+  }
 
   return mapped_addr;
 
 }
-
-void UnmapPhysMemory(void * address, size_t size, bool close_file) {
+void unmap_physical_memory(void * address, const size_t &size, bool close_file) {
+//void UnmapPhysMemory(void * address, size_t size, bool close_file) {
   // If it is open
   munmap(address,size);
   if (g_mem_fd && close_file) {
@@ -87,6 +100,7 @@ void UnmapPhysMemory(void * address, size_t size, bool close_file) {
   }
 }
 
+// These are shamelessly imported from the Vivado examples
 uint32_t Xil_In32(uint32_t Addr)
 {
   return *(volatile uint32_t *) Addr;
@@ -98,4 +112,5 @@ void Xil_Out32(uint32_t OutAddress, uint32_t Value)
   *(volatile uint32_t *) OutAddress = Value;
 }
 
-
+}
+}

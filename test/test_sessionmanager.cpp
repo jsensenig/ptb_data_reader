@@ -5,9 +5,9 @@
  *      Author: nbarros
  */
 
+#include "../src/boardmanager.h"
+#include "../src/boardserver.h"
 #include "Logger.h"
-#include "ConfigServer.h"
-#include "PTBManager.h"
 
 // #include <thread>         // std::this_thread::sleep_for
 // #include <chrono>         // std::chrono::seconds

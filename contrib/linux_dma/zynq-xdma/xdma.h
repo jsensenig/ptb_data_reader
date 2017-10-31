@@ -15,7 +15,7 @@ typedef uint32_t dma_cookie_t;
 #endif
 
 #define MODULE_NAME	"xdma"
-#define DMA_LENGTH	(32*1024*1024)
+#define DMA_LENGTH	(4*1024)
 #define MAX_DEVICES     4
 
 #define XDMA_IOCTL_BASE	'W'

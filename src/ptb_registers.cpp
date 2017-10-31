@@ -6,6 +6,8 @@
  */
 
 #include "ptb_registers.h"
+namespace ptb {
+namespace config {
 
 void SetupConfRegisters() {
   conf_reg.dev_id = 0;
@@ -26,10 +28,9 @@ void SetupConfRegisters() {
   Log(debug,"Configuration registers set.");
 }
 
-
+#ifdef ARM_MMAP
 void SetupDataRegisters() {
   data_reg.dev_id = 0;
-  // FIXME: Update this to the IP address
   data_reg.base_addr = 0x43C10000;
   data_reg.high_addr = 0x43C1FFFF;
   data_reg.n_registers = 6;
@@ -47,4 +48,6 @@ void SetupDataRegisters() {
   Log(debug,"Data registers set.");
 }
 
-
+#endif
+}
+}

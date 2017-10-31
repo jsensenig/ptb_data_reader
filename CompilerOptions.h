@@ -36,12 +36,19 @@
 ///            this driver does a simple polling DMA and works fine, except for the
 ///            fact that it is unbearably slow. Kept getting latencies of ~3 ms
 ///            on DMA data transfers
+///				To use, one has to add the 'cma=NM' parameter to the bootargs
 /// ARM_MMAP  : Memory mapped register. The process is simple and seems to work fine.
 ///             Data is collected one frame at a time and essentially implements my own
 ///             DMA by mapping 4 registers aligned in memory so that the contents can be collected
 ///             in a single transaction
+/// ARM_SG_DMA : The Pothos driver-based SG DMA implementation. Latency depends on the size of the transfers
+//              but typically are located in the ~2-3 us. It does not require any special boot paramters
+///				but uses a substantially larger amount of resources in the PL.
 #undef ARM_XDMA
-#define ARM_MMAP 1
+#undef ARM_MMAP
+#undef ARM_SG_DMA
+#define ARM_SG_DMA 1
+#undef SIMULATION
 
 /// ENABLE_FRAG_BLOCKS
 /// Define whether fragmented blocks are enabled or not. For the moment they are not

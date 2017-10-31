@@ -5,10 +5,11 @@
  *      Author: nbarros
  */
 
-#include "PTBReader.h"
+#include "boardreader.h"
+
 #include "Logger.h"
+#include "opexception.h"
 #include "PracticalSocket.h"
-#include "PTBexception.h"
 #include "util.h"
 #include "ptb_registers.h"
 
@@ -31,12 +32,13 @@ extern "C" {
 
 #include <cstring>
 
+using namespace ptb;
 
 /// Const definitions from the base structures
-PTBReader::Payload_Trigger::trigger_type_t const PTBReader::Payload_Trigger::TA;
-PTBReader::Payload_Trigger::trigger_type_t const PTBReader::Payload_Trigger::TB;
-PTBReader::Payload_Trigger::trigger_type_t const PTBReader::Payload_Trigger::TC;
-PTBReader::Payload_Trigger::trigger_type_t const PTBReader::Payload_Trigger::TD;
+board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TA;
+board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TB;
+board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TC;
+board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TD;
 
 
 
@@ -96,8 +98,8 @@ std::string display_bits(void* memstart, size_t nbytes) {
 
 
 
-PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
-    socket_(nullptr),
+board_reader::board_reader() : tcp_port_(0), tcp_host_(""),
+    data_socket_(nullptr),
     #ifdef ENABLE_FRAG_BLOCKS
     packet_rollover_(0),fragmented_(false),
 #endif
@@ -114,7 +116,7 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
     // below this point all these are debugging variables
     dry_run_(false), error_state_(false),error_messages_(""),
     num_eth_fragments_(0),
-    num_word_counter_(0),num_word_trigger_(0),num_word_fifo_warning_(0),
+    num_word_counter_(0),num_word_trigger_(0),num_word_warning_(0),
     num_word_tstamp_(0),bytes_sent_(0)
 {
 
@@ -124,13 +126,13 @@ PTBReader::PTBReader() : tcp_port_(0), tcp_host_(""),
   if (pthread_mutex_init(&lock_, NULL) != 0)
   {
     Log(error,"\n Failed to create the mutex for the data queue\n" );
-    throw PTBexception("Failed to create the mutex for the data queue.");
+    throw op_exception("Failed to create the mutex for the data queue.");
   }
 #endif
 
 }
 
-PTBReader::~PTBReader() {
+board_reader::~board_reader() {
   Log(debug,"Destroying the reader." );
 #ifndef LOCKFREE
   pthread_mutex_destroy(&lock_);
@@ -138,7 +140,7 @@ PTBReader::~PTBReader() {
   ready_ = false;
 }
 
-void PTBReader::ClearThreads() {
+void board_reader::clear_threads() {
   if (dry_run_) {
     // the threads only exist in transmission mode. 
     return;
@@ -170,7 +172,7 @@ void PTBReader::ClearThreads() {
   }
 }
 
-void PTBReader::StopDataTaking() {
+void board_reader::stop_data_taking() {
   // This should be a full stop. 
   // However there should aso be a PauseDataTaking, that does not destroy the threads
   // and simply waits for a StartRun to come again.
@@ -209,7 +211,7 @@ void PTBReader::StopDataTaking() {
   Log(info,"Data taking stopped.");
 }
 
-void PTBReader::StartDataTaking() {
+void board_reader::start_data_taking() {
   if (dry_run_) { // in dry run don't launch anything
     return;
   } else {
@@ -276,7 +278,7 @@ void PTBReader::StartDataTaking() {
       if (status < 0) {
         Log(error,"Failed to initialize the DMA engine for data collection (status = %d).",status);
         // FIXME: Get rid of the exceptions. Too slow.
-        throw PTBexception("Failed to initialize the DMA engine for PTB data collection.");
+        throw op_exception("Failed to initialize the DMA engine for PTB data collection.");
         return;
       }
 #elif defined(ARM_MMAP)
@@ -292,28 +294,28 @@ void PTBReader::StartDataTaking() {
       // We are ready to do business. Start reading the DMA into the queue.
       Log(verbose, "==> Creating collector\n" );
       keep_collecting_ = true;
-      if (pthread_create(&client_thread_collector_,NULL,&(PTBReader::ClientCollectorFunc),this) != 0) {
+      if (pthread_create(&client_thread_collector_,NULL,&(board_reader::ClientCollectorFunc),this) != 0) {
         Log(error,"Unable to create client thread. Failing..." );
-        throw PTBexception("Unable to create data collector.");
+        throw op_exception("Unable to create data collector.");
         return;
       }
       // We are ready to do business. Start reading the DMA into the queue.
       Log(verbose, "==> Creating transmitter\n" );
       keep_transmitting_ = true;
-      if (pthread_create(&client_thread_transmitter_,NULL,&(PTBReader::ClientTransmitterFunc),this) != 0) {
+      if (pthread_create(&client_thread_transmitter_,NULL,&(board_reader::ClientTransmitterFunc),this) != 0) {
         Log(error,"Unable to create client thread. Failing..." );
-        throw PTBexception("Unable to create transmitter thread.");
+        throw op_exception("Unable to create transmitter thread.");
         return;
       }
 
     } else {
       Log(error,"Calling to start data taking but connection is not ready yet." );
-      throw PTBexception("Connection not available.");
+      throw op_exception("Connection not available.");
     }
   }
 }
 
-void PTBReader::ResetBuffers() {
+void board_reader::reset_buffers() {
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
 #if defined(LOCKFREE)
@@ -335,19 +337,19 @@ void PTBReader::ResetBuffers() {
 }
 
 // Only does one thing and that is killing the data connection.
-void PTBReader::CloseConnection() {
-  bool socket_good = TestSocket();
+void board_reader::close_data_connection() {
+  bool socket_good = test_socket();
   // only call for delete if the socket is good
-  if ((socket_ != nullptr) && socket_good) delete socket_;
-  socket_ = nullptr;
+  if ((data_socket_ != nullptr) && socket_good) delete data_socket_;
+  data_socket_ = nullptr;
   ready_ = false;
 }
 
-bool PTBReader::TestSocket() {
+bool board_reader::test_socket() {
   // -- test if the socket yields something usable
   bool socket_good = true;
   try {
-    socket_->getForeignPort();
+    data_socket_->getForeignPort();
   }
   catch(...) {
     // if an exception is caught here, then the socket is no longer good.
@@ -356,18 +358,18 @@ bool PTBReader::TestSocket() {
   return socket_good;
 }
 
-void PTBReader::InitConnection(bool force) {
+void board_reader::init_data_connection(bool force) {
   //-- If a connection exists, assume it is correct and continue to use it
   // FIXME: A ghost connection can exist
   // Try first if the connection is good
-  if (socket_ != nullptr) {
-    bool socket_good = TestSocket();
+  if (data_socket_ != nullptr) {
+    bool socket_good = test_socket();
 
     if (socket_good) {
       if (force) {
         Log(warning,"Destroying existing socket!");
-        delete socket_;
-        socket_ = nullptr;
+        delete data_socket_;
+        data_socket_ = nullptr;
       } else {
         Log(info,"Reusing existing connection.");
         return;
@@ -380,9 +382,9 @@ void PTBReader::InitConnection(bool force) {
 
     try{
       Log(debug, "Opening socket connection : %s : %hu",tcp_host_.c_str(),tcp_port_ );
-      socket_ = new TCPSocket(tcp_host_.c_str(),tcp_port_);
+      data_socket_ = new TCPSocket(tcp_host_.c_str(),tcp_port_);
 
-      if (socket_ == nullptr) {
+      if (data_socket_ == nullptr) {
         Log(error,"Unable to establish the client socket. Failing." );
         ready_ = false;
       }
@@ -394,36 +396,36 @@ void PTBReader::InitConnection(bool force) {
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what() );
       ready_ = false;
-      if (socket_) delete socket_;
-      socket_ = nullptr;
+      if (data_socket_) delete data_socket_;
+      data_socket_ = nullptr;
       throw;
     }
     catch(std::exception &e) {
       ready_ = false;
-      if (socket_) delete socket_;
-      socket_ = nullptr;
+      if (data_socket_) delete data_socket_;
+      data_socket_ = nullptr;
       Log(error,"STD exception caught : %s",e.what() );
       throw;
     }
     catch(...) {
       ready_ = false;
-      if (socket_) delete socket_;
-      socket_ = nullptr;
+      if (data_socket_) delete data_socket_;
+      data_socket_ = nullptr;
       Log(error,"Unknown exception caught." );
       throw;
     }
   } else {
     Log(error,"Calling to start connection without defining connection parameters." );
     ready_ = false;
-    if (socket_) delete socket_;
-    socket_ = nullptr;
-    throw PTBexception("Calling to start connection without defining connection parameters.");
+    if (data_socket_) delete data_socket_;
+    data_socket_ = nullptr;
+    throw op_exception("Calling to start connection without defining connection parameters.");
   }
   Log(verbose,"Connection opened successfully");
 }
 
 
-void PTBReader::ClientCollector() {
+void board_reader::data_collector() {
   Log(info, "Starting data collector\n" );
 
 #ifdef ARM_XDMA
@@ -652,7 +654,7 @@ void PTBReader::ClientCollector() {
 }
 
 #if defined(ARM_XDMA) || defined(ARM_MMAP)
-void PTBReader::ClientTransmitter() {
+void board_reader::data_transmitter() {
   Log(debug, "Starting data transmitter\n");
 
 
@@ -676,13 +678,13 @@ void PTBReader::ClientTransmitter() {
   num_word_counter_ = 0;
   num_word_trigger_ = 0;
   num_word_tstamp_ = 0;
-  num_word_fifo_warning_ = 0;
+  num_word_warning_ = 0;
   bytes_sent_ = 0;
   for (int i = 0; i < 98; ++i) counter_stats_[i]=0;
-  trigger_stats_[PTBReader::Payload_Trigger::TA] = 0;
-  trigger_stats_[PTBReader::Payload_Trigger::TB] = 0;
-  trigger_stats_[PTBReader::Payload_Trigger::TC] = 0;
-  trigger_stats_[PTBReader::Payload_Trigger::TD] = 0;
+  trigger_stats_[board_reader::Payload_Trigger::TA] = 0;
+  trigger_stats_[board_reader::Payload_Trigger::TB] = 0;
+  trigger_stats_[board_reader::Payload_Trigger::TC] = 0;
+  trigger_stats_[board_reader::Payload_Trigger::TD] = 0;
   Payload_Trigger *tp= nullptr;
   Payload_Counter *cp= nullptr;
 
@@ -937,7 +939,7 @@ void PTBReader::ClientTransmitter() {
             "+++ Received a FIFO warning of type %08X .+++",
             (reinterpret_cast_checked<uint32_t*>(frame))[0]);
 #ifdef DATA_STATISTICS
-        num_word_fifo_warning_++;
+        num_word_warning_++;
 #endif
         break;
       default:
@@ -1007,7 +1009,7 @@ void PTBReader::ClientTransmitter() {
 
 #endif
     try {
-      socket_->send(eth_buffer,packet_size);
+      data_socket_->send(eth_buffer,packet_size);
       global_eth_pos += (ipck+4);
       // add 4 bytes of padding just to make sure that there are no overlaps
       // for occasional small packets troubles could happen.
@@ -1088,7 +1090,7 @@ void PTBReader::ClientTransmitter() {
   delete [] global_eth_buffer;
   // Finish the connection
   Log(warning,"Closing data socket.");
-  CloseConnection();
+  close_data_connection();
   Log(info,"Data socket closed.");
   // Should be safe to delete the memory_pool here as well.
   // Close the socket as well
@@ -1096,7 +1098,7 @@ void PTBReader::ClientTransmitter() {
 
 #else
 #error No DMA mode defined.
-void PTBReader::ClientTransmitter() {
+void board_reader::data_transmitter() {
 }
 #endif
 
