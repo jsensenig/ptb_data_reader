@@ -1,0 +1,3 @@
+[submodule "contrib/linux_dma/zynq-xdma"]
+	path = contrib/linux_dma/zynq-xdma
+	url = git@github.com:nbarros/zynq-xdma.git
