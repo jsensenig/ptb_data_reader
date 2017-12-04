@@ -9,7 +9,7 @@
 namespace ptb {
 namespace config {
 
-void SetupConfRegisters() {
+void setup_ptb_registers() {
   conf_reg.dev_id = 0;
   conf_reg.base_addr = 0x43C00000;
   conf_reg.high_addr = 0x43C0FFFF;

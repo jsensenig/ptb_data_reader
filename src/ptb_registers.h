@@ -47,7 +47,7 @@ extern mapped_register data_reg;
 void SetupDataRegisters();
 
 #endif
-void SetupConfRegisters();
+void setup_ptb_registers();
 
 }
 }

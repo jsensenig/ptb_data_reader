@@ -15,9 +15,10 @@
 #include <map>
 #include <cstdint>
 #include <sstream>
+#include <thread>
 
 #include "pugixml.hpp"
-#include "CompilerOptions.h"
+#include "config.h"
 
 #include "ptb_registers.h"
 
@@ -89,6 +90,7 @@ public:
    */
   void restore_config_registers();
 
+  void free_registers();
 
 protected:
   // Commands that need to be implemented
@@ -97,7 +99,6 @@ protected:
   void start_run();
   void stop_run();
   void soft_reset();
-  void free_registers();
 
 
 private:
@@ -170,7 +171,7 @@ private:
 
   // The class responsible for the data reading.
   board_reader *reader_;
-  board_server *cfg_srv_;
+  //board_server *cfg_srv_;
   pugi::xml_node config_;
 
   // This is a cache of what is in each register now

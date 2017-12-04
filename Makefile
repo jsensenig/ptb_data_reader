@@ -34,11 +34,12 @@ ifeq ($(MACHINE), armv7l)
 # Server Build
 else
    $(info +++ Compiling for Server)
-   CC         := arm-xilinx-linux-gnueabi-g++ 
+#   CC         := arm-xilinx-linux-gnueabi-g++ 
+   CC         := g++ 
    DEF      := 
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 -m32 
-   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 
+   CFLAGS   := $(DEF_CFLAGS) -fpermissive 
    LFLAGS   := $(DEF_LFLAGS) 
    EXT_TARS := 
    CLN      := server_clean

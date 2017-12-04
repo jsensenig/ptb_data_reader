@@ -10,6 +10,7 @@
 #include <string>
 #include <cstring>
 #include <sstream>
+#include <bitset>
 
 #include "util.h"
 #include "Logger.h"
