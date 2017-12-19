@@ -128,8 +128,8 @@ namespace ptb {
       } header;
 
       typedef struct word_t {
-          body  body;
-          header header;
+          body_t   wbody;
+          header_t wheader;
 
           static size_t const word_size_bytes   = 4*sizeof(uint32_t); //128 bit payload.
           static size_t const word_size_u32     = 4; //128 bit payload.

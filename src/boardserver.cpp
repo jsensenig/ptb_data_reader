@@ -41,7 +41,7 @@ std::string board_server::tcp_buffer_ = "";
 unsigned int board_server::num_instances_ = 0;
 unsigned int board_server::port_ = 8991;
 board_manager *board_server::board_manager_ = NULL;
-static std::queue<std::string> queue_;
+  std::queue<std::string> board_server::queue_;
 bool board_server::shutdown_requested_= false;
 TCPSocket* board_server::client_socket_ = nullptr;
 std::string board_server::msg_answer_ = "";

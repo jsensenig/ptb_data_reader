@@ -9,6 +9,8 @@
 namespace ptb {
 namespace config {
 
+  mapped_register conf_reg;
+
 void setup_ptb_registers() {
   conf_reg.dev_id = 0;
   conf_reg.base_addr = 0x43C00000;
@@ -47,7 +49,7 @@ void SetupDataRegisters() {
   }
   Log(debug,"Data registers set.");
 }
-
+  
 #endif
 }
 }

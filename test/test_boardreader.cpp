@@ -21,6 +21,8 @@ extern "C" {
 }
 
 using namespace std;
+using ptb::board_reader;
+using ptb::board_manager;
 
 void control_thread() {
   std::thread::id thread_id = std::this_thread::get_id();
@@ -97,7 +99,7 @@ void* reader_thread(void *arg) {
      return NULL;
    }
    Log(info,"Waiting for reader to be ready...");
-   while (!reader->isReady()) {
+   while (!reader->get_ready()) {
      ;
    }
    Log(info,"Reader is ready... let's start the show!!!");

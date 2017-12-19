@@ -22,9 +22,15 @@
 
 #include <csignal>
 #include "../src/boardreader.h"
+#include "../src/boardmanager.h"
+#include "../src/boardserver.h"
 
 using std::cout;
 using std::cerr;
+
+using ptb::board_reader;
+using ptb::board_manager;
+using ptb::board_server;
 
 bool g_stop_requested;
 bool g_is_configured;
@@ -170,7 +176,7 @@ void* reader_thread(void *arg) {
      return NULL;
    }
    Log(info,"Waiting for reader to be ready...");
-   while (!reader->isReady()) {
+   while (!reader->get_ready()) {
      ;
    }
    Log(info,"Reader is ready... let's start the show!!!");
@@ -271,8 +277,8 @@ void receive_data() {
       // grab a header
       sock->recv(&header,sizeof(header));
       // Cast the result into the header
-      board_reader::Header *pkg_hdr = reinterpret_cast<board_reader::Header *>(&header);
-      pckt_size = pkg_hdr->num_bits_size;
+      ptb::content::tcp_header_t *pkg_hdr = reinterpret_cast<ptb::content::tcp_header_t*>(&header);
+      pckt_size = pkg_hdr->packet_size;
       while (bytes_collected != pckt_size) {
         sock->recv(&body[bytes_collected],(int)(pckt_size-bytes_collected));
       }

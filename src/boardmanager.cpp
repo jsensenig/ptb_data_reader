@@ -316,17 +316,19 @@ void board_manager::setup_registers() {
 #if !defined(SIMULATION)
   ptb::config::setup_ptb_registers();
   // First get the virtual address for the mapped physical address
-  mapped_conf_base_addr_ = ptb::util::map_physical_memory(conf_reg.base_addr,conf_reg.high_addr);
+  Log(debug,"Mapping physical address [0x%X 0x%X]",ptb::config::conf_reg.base_addr,ptb::config::conf_reg.high_addr);
+  mapped_conf_base_addr_ = ptb::util::map_physical_memory(ptb::config::conf_reg.base_addr,ptb::config::conf_reg.high_addr);
+  
   Log(debug,"Received virtual address for configuration : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_conf_base_addr_));
   // Cross check that we have at least as many offsets as registers expected
-  if (conf_reg.n_registers < num_registers_) {
-    Log(warning,"Have less configured registers than the ones required. (%u != %u)",conf_reg.n_registers,num_registers_);
+  if (ptb::config::conf_reg.n_registers < num_registers_) {
+    Log(warning,"Have less configured registers than the ones required. (%u != %u)",ptb::config::conf_reg.n_registers,num_registers_);
   }
 
-  register_map_[0].addr =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_conf_base_addr_) + conf_reg.addr_offset[0]);
+  register_map_[0].addr =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_conf_base_addr_) + ptb::config::conf_reg.addr_offset[0]);
   register_map_[0].value() = CTL_BASE_REG_VAL;
   for (uint32_t i = 1; i < num_registers_; ++i) {
-    register_map_[i].addr =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_conf_base_addr_) + conf_reg.addr_offset[i]);
+    register_map_[i].addr =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_conf_base_addr_) + ptb::config::conf_reg.addr_offset[i]);
     register_map_[i].value() = 0;
   }
 
@@ -341,7 +343,7 @@ void board_manager::setup_registers() {
 void board_manager::free_registers() {
   Log(info,"Cleaning up the allocated configuration registers." );
 #if defined(ARM_XDMA) || defined(ARM_MMAP)
-  size_t range = conf_reg.high_addr-conf_reg.base_addr;
+  size_t range = ptb::config::conf_reg.high_addr-ptb::config::conf_reg.base_addr;
   munmap(mapped_conf_base_addr_,range);
   // Close the file
   Log(info,"Closing /dev/mem");
@@ -433,7 +435,6 @@ void board_manager::process_config(pugi::xml_node config,std::string &answers) {
 
     // -- For the moment do nothing.
 
-/**
     // This is the workhorse of the configuration.
     // At this point the registers should already be mapped and things should be flowing
 //    std::ostringstream document;
@@ -466,8 +467,11 @@ void board_manager::process_config(pugi::xml_node config,std::string &answers) {
         Log(debug,"DaqPort port %hu",data_socket_port_ );
         reader_->set_tcp_port(data_socket_port_);
         Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
+      }
+    }
 
-        // -- Get if it is a dry run
+    /**
+     // -- Get if it is a dry run
         {
           std::string dry_run_state = it->child("DryRun").child_value();
           if (!dry_run_state.compare("true")) {
@@ -822,9 +826,10 @@ void board_manager::process_config(pugi::xml_node config,std::string &answers) {
   // Check if we got an error. If so, do not commit.
   if (has_error) {
     // Don't commit. Just go back and throw the error.
-    msgs_str_ = msgs_.str();
-    answers = new char[msgs_str_.size()+1];
-    sprintf(answers,"%s",msgs_str_.c_str());
+    answers += msgs_.str();
+    // msgs_str_ = msgs_.str();
+    // answers = new char[msgs_str_.size()+1];
+    // sprintf(answers,"%s",msgs_str_.c_str());
     return;
   }
 
@@ -901,18 +906,20 @@ void board_manager::process_config(pugi::xml_node config,std::string &answers) {
     //   Log(warning,"Connection failed to establish. This might cause troubles later.");
     // }
     msgs_ << "<success>true</success>";
-    msgs_str_ = msgs_.str();
-    answers = new char[msgs_str_.size()+1];
-    sprintf(answers,"%s",msgs_str_.c_str());
+    answers += msgs_.str();
+    // msgs_str_ = msgs_.str();
+    // answers = new char[msgs_str_.size()+1];
+    // sprintf(answers,"%s",msgs_str_.c_str());
 
   } else {
     // Don't commit. Just go back and throw the error.
-    msgs_str_ = msgs_.str();
-    answers = new char[msgs_str_.size()+1];
-    sprintf(answers,"%s",msgs_str_.c_str());
+    answers += msgs_.str();
+    // msgs_str_ = msgs_.str();
+    // answers = new char[msgs_str_.size()+1];
+    // sprintf(answers,"%s",msgs_str_.c_str());
   }
   // Most likely the connection will fail at this point. Not a big problem.
-  Log(verbose,"Returning from SetConfig with answer [%s]",answers);
+  Log(verbose,"Returning from SetConfig with answer [%s]",answers.c_str());
 }
 
 
