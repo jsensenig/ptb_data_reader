@@ -429,7 +429,11 @@ void board_manager::process_config(pugi::xml_node config,std::string &answers) {
     set_reset_bit(false);
 
     //FIXME: Finish implementing the configuration parser
+    Log(warning,"Still in development. No configu registers are being set");
 
+    // -- For the moment do nothing.
+
+/**
     // This is the workhorse of the configuration.
     // At this point the registers should already be mapped and things should be flowing
 //    std::ostringstream document;
@@ -804,6 +808,7 @@ void board_manager::process_config(pugi::xml_node config,std::string &answers) {
       // Log(verbose," Content val : %s",it->value());
       // Log(verbose," Content child : %s",it->child_value() );
     } // for
+**/
   }
   // -- Only catch something deriving from std::exception and unspecified
   catch(std::exception &e) {
@@ -837,16 +842,27 @@ void board_manager::process_config(pugi::xml_node config,std::string &answers) {
     msgs_ << "<error>Failed set to set the configuration bit. ACK not received. Control register : "
         << std::hex << register_map_.at(0).value() << std::dec
         << ". Control register after reset : ";
+    Log(warning,"Failed to set configuration bit. ACK not received. Control register %X",register_map_.at(0).value());
 
     set_enable_bit(false);
+    Log(debug,"Control after disable: %X", register_map_.at(0).value());
     set_config_bit(false);
+    Log(debug,"Control after disable config : %X", register_map_.at(0).value());
     // the hard reset also includes a complete reset of the local buffers
     set_reset_bit(true);
+    Log(debug,"Control after reset enable: %X", register_map_.at(0).value());
+
     // Sleep for 10 microseconds to make sure that reset has taken place
     std::this_thread::sleep_for (std::chrono::microseconds(10));
     set_reset_bit(false);
+    Log(debug,"Control after reset disable: %X", register_map_.at(0).value());
+
     zero_config_registers();
+    Log(debug,"Control zero config registers: %X", register_map_.at(0).value());
+
     set_config_bit(false);
+    Log(debug,"Control after disable config again: %X", register_map_.at(0).value());
+
     msgs_ << std::hex << register_map_.at(0).value() << std::dec;
     msgs_ << "</error>";
     Log(error,"Failed set to set the configuration bit. ACK not received. Resetting back.");
