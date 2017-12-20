@@ -51,7 +51,7 @@ namespace ptb {
     namespace word {
 
 
-      enum wtype {t_warn=0x0,t_lt=0x1,t_gt=0x2,t_chksum=0x4,t_ts=0x7};
+      enum word_type {t_warn=0x0,t_lt=0x1,t_gt=0x2,t_chksum=0x4,t_ts=0x7};
 
 
 
@@ -65,6 +65,8 @@ namespace ptb {
       typedef struct body_t {
           uint32_t data[3];
 
+          static size_t const size_bytes = 3*sizeof(uint32_t);
+          static size_t const size_u32 = 3*sizeof(uint32_t)/sizeof(uint32_t);
       } body_t;
 
       typedef union body {
@@ -150,14 +152,15 @@ namespace ptb {
 
         // The warning only uses the top 32 bits
         typedef struct warning_t {
+            uint64_t padding;
             uint32_t code   : 16;
             uint32_t source : 16;
         } warning_t;
 
-        typedef union warning {
-            warning_t word;
-            uint32_t  value;
-        } warning;
+//        typedef union warning {
+//            warning_t word;
+//            uint32_t  value;
+//        } warning;
 
 
 
@@ -209,37 +212,40 @@ namespace ptb {
         // 16 for subsystem
 
         typedef struct timestamp_t {
-            uint64_t timestamp;
+          uint32_t padding;
+          uint64_t timestamp;
         } timestamp_t;
 
-        typedef union timestamp {
-            timestamp_t word;
-            uint64_t    value;
-        } timestamp;
+//        typedef union timestamp {
+//            timestamp_t word;
+//            uint64_t    value;
+//        } timestamp;
 
 
         typedef struct low_trigger_t {
+            uint64_t padding;
             trigger_code_t trigger_id : 16;
             uint32_t subsystem  : 8;
             uint32_t padding    : 8;
         } low_trigger_t;
 
-        typedef union low_trigger {
-            low_trigger_t word;
-            uint32_t      value;
-        } low_trigger;
+//        typedef union low_trigger {
+//            low_trigger_t word;
+//            uint32_t      value;
+//        } low_trigger;
 
         // How big should a trigger word be?
         typedef struct global_trigger_t {
             //uint32_t word : 32;
+            uint64_t padding;
             trigger_code_t trigger_id : 16;
             uint32_t padding    : 16;
         } global_trigger_t;
 
-        typedef union global_trigger {
-            global_trigger_t word;
-            uint32_t         value;
-        } global_trigger;
+//        typedef union global_trigger {
+//            global_trigger_t word;
+//            uint32_t         value;
+//        } global_trigger;
 
       } // -- namespace payload
     } // -- namespace word
