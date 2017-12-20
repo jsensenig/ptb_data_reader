@@ -140,6 +140,7 @@ void board_reader::clear_threads() {
     // Ideally we would prefer to join the thread
     if (client_thread_collector_ != nullptr) {
       client_thread_collector_->join();
+      Log(debug,"Collector thread just joined");
       delete client_thread_collector_;
       client_thread_collector_ = nullptr;
     }
@@ -153,6 +154,7 @@ void board_reader::clear_threads() {
     Log(info,"Killing transmitter thread.");
     if (client_thread_transmitter_ != nullptr) {
       client_thread_transmitter_->join();
+      Log(debug,"Transmitter thread just joined");
       delete client_thread_transmitter_;
       client_thread_transmitter_ = nullptr;
     }
