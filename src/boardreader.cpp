@@ -1327,7 +1327,7 @@ void board_reader::data_transmitter() {
 
     log(debug,"Reinterpreting...");
     // -- cast the buffer into a payload
-    ptb::content::word::word *frame = ptb::util::reinterpret_cast_checked<ptb::content::word::word*>(buff_addr_[dma_buffer.handle]);
+    ptb::content::word::word *frame = reinterpret_cast<ptb::content::word::word*>(buff_addr_[dma_buffer.handle]);
     uint32_t roll = static_cast<uint32_t>(frame->frame.wheader.ts_rollover);
     Log(debug,"word type : %h ts %u (%h)",static_cast<uint32_t>(frame->frame.wheader.word_type),roll,roll);
     // -- Send the data
