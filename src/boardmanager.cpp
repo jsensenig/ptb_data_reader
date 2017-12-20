@@ -118,7 +118,7 @@ void board_manager::exec_command(const std::string &cmd,std::string &answers) {
       } else {
         // Start the run
         Log(verbose,"Starting a new Run." );
-        start_run();
+        //start_run();
       }
       start_run();
       break;
