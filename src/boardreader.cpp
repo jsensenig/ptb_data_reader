@@ -699,7 +699,7 @@ void board_reader::data_collector() {
       err_msg  << "<error>Failed to acquire data. Returned " << dma_buffer.handle << "</error>";
 
       // Stop just the collection thread
-      error_messages_ += err_msg;
+      error_messages_ += err_msg.str();
       error_state_ = true;
       keep_collecting_ = false;
       break;
