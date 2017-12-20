@@ -235,6 +235,9 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
         catch(std::range_error &e) {
           Log(error,"Range error : %s",e.what());
         }
+        catch(ptb::op_exception &e) {
+        	Log(error,"PTB internal exception: %e",e.what());
+        }
         // Generic
         catch(std::exception &e) {
           Log(error,"Caught std exception : %s",e.what());
@@ -256,10 +259,14 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
           msg << "<error>" << e.c_str() << "</error>";
           msg_answer_ += msg.str();
         }
+        catch(ptb::op_exception &e) {
+        	Log(error,"PTB internal exception: %e",e.what());
+            std::ostringstream msg;
+            msg << "<error>" << e.what() << "</error>";
+            msg_answer_ += msg.str();
+        }
         catch (std::exception &e) {
           Log(error,"STD exception caught : %s",e.what());
-          // Return a failure signal.
-//          sprintf(instBuffer,"<feedback><error>%s</error></feedback>",e.what());
           std::ostringstream msg;
           msg << "<error>" << e.what() << "</error>";
           msg_answer_ += msg.str();

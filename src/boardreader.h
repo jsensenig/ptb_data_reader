@@ -702,6 +702,7 @@ protected:
   void dump_packet(uint32_t* buffer, uint32_t tot_size);
 #ifdef ARM_SG_DMA
   void clean_and_shutdown_dma();
+  void init_dma();
 #endif /*ARM_SG_DMA*/
 private:
 //  static void * ClientCollectorFunc(void * this) {((board_reader *)This)->data_collector(); return NULL;}
@@ -751,8 +752,8 @@ private:
   void * mapped_data_base_addr_;
 #elif defined(ARM_SG_DMA)
   pzdud_t *s2mm;
-  static const size_t num_buffs_ = 1024;
-  static const size_t buff_size_ = 4096; // bytes
+  static const size_t num_buffs_ = 4096; // number of allocated buffers for the DMA
+  static const size_t buff_size_ = 4096; // size of each individual buffer (1 memory page) in bytes
   uint32_t buff_addr_[num_buffs_];
 #else
 #error DMA mode not specified
@@ -794,7 +795,7 @@ private:
   bool keep_transmitting_;
   bool keep_collecting_;
   uint64_t time_rollover_;
-
+  bool dma_initialized_;
   // -- Debugging and control variables
   // timeouts don't make sense with MMAP
 #if defined(ARM_XDMA)

@@ -98,7 +98,7 @@ void board_manager::exec_command(const std::string &cmd,std::string &answers) {
   msgs_.clear();
   msgs_.str("");
   error_state_ = false;
-  Log(debug,"Received command [%s]", cmd);
+  Log(debug,"Received command [%s]", cmd.c_str());
   std::map<std::string, command>::iterator it;
 #if defined(DEBUG)
   for (it = commands_.begin(); it != commands_.end(); ++it) {
