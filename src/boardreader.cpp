@@ -1328,7 +1328,7 @@ void board_reader::data_transmitter() {
     if (!buffer_queue_.pop(dma_buffer)) {
       // -- should some sort of wait be put here?
       // Might hurt since it will require some sort of mutex
-      //std::this_thread::sleep_for (std::chrono::microseconds(3));
+      std::this_thread::sleep_for (std::chrono::microseconds(1000));
       continue;
     }
 
