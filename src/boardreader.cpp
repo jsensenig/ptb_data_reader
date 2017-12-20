@@ -1343,7 +1343,7 @@ void board_reader::data_transmitter() {
     // -- cast the buffer into a payload
     ptb::content::word::word *frame = reinterpret_cast<ptb::content::word::word*>(buff_addr_[dma_buffer.handle]);
     uint32_t roll = static_cast<uint32_t>(frame->frame.wheader.ts_rollover);
-    uint64_t fts = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(frame->frame.wbody)->timestamp;
+    uint64_t fts = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(frame->frame.wbody.data)->timestamp;
     Log(debug,
         "word type : %X ts %u (%X) %" PRIu64 " %" PRIx64,
         static_cast<uint32_t>(frame->frame.wheader.word_type),roll,roll,fts,fts);

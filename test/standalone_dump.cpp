@@ -335,7 +335,7 @@ void receive_data() {
 
         // -- For now we are assuming that all payloads are of the same size
         switch(hdr->word.word_type) {
-        case ptb::content::word::t_warn:
+        case ptb::content::word::t_fback:
           cout << "Received a warning!!! This is rare! Do something smart to fix the problem" << endl;
           // advance the pointer by the size of this payload
           pos += ptb::content::word::body_t::size_bytes;
