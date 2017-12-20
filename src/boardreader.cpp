@@ -324,7 +324,7 @@ void board_reader::reset_buffers() {
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
 #if defined(BOOST)
-  bool has_data = true;
+  //bool has_data = true;
   while(buffer_queue_.pop()) {
     counter++;
   }
@@ -659,7 +659,7 @@ void board_reader::data_collector() {
 
 #elif defined(ARM_SG_DMA)
   static size_t len;
-  static int handle;
+  //static int handle;
   ptb::content::buffer_t dma_buffer;
 
   while(keep_collecting_) {
@@ -1325,7 +1325,7 @@ void board_reader::data_transmitter() {
     // -- copy the whole buffer
     std::memcpy(&(eth_buffer[1]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
 
-    log(debug,"Reinterpreting...");
+    Log(debug,"Reinterpreting...");
     // -- cast the buffer into a payload
     ptb::content::word::word *frame = ptb::util::reinterpret_cast_checked<ptb::content::word::word*>(buff_addr_[dma_buffer.handle]);
     uint32_t roll = static_cast<uint32_t>(frame->frame.wheader.ts_rollover);
