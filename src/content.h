@@ -51,7 +51,7 @@ namespace ptb {
     namespace word {
 
 
-      enum word_type {t_warn=0x0,t_lt=0x1,t_gt=0x2,t_chksum=0x4,t_ts=0x7};
+      enum word_type {t_fback=0x0,t_lt=0x1,t_gt=0x2,t_chksum=0x4,t_ts=0x7};
 
 
 
@@ -140,7 +140,7 @@ namespace ptb {
 
       typedef union word{
           word_t frame;
-          uint8_t *get_byes() {return reinterpret_cast<uint8_t*>(&frame);}
+          uint8_t *get_bytes() {return reinterpret_cast<uint8_t*>(&frame);}
       } word;
 
 
@@ -151,11 +151,11 @@ namespace ptb {
 
 
         // The warning only uses the top 32 bits
-        typedef struct warning_t {
+        typedef struct feedback_t {
             uint64_t padding;
             uint32_t code   : 16;
             uint32_t source : 16;
-        } warning_t;
+        } feedback_t;
 
 //        typedef union warning {
 //            warning_t word;
