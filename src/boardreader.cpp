@@ -663,7 +663,7 @@ void board_reader::data_collector() {
   static size_t len;
   //static int handle;
   ptb::content::buffer_t dma_buffer;
-
+  std::ostringstream err_msg;
   while(keep_collecting_) {
     if (!keep_collecting_) {
       Log(warning,"Received signal to stop acquiring data. Cleaning out...");
@@ -689,14 +689,25 @@ void board_reader::data_collector() {
       // something crapped out
       if (dma_buffer.handle == PZDUD_ERROR_TIMEOUT) {
         Log(error,"Failed to acquire data with timeout . Returned %i",dma_buffer.handle);
+        err_msg << "<error>Failed to acquire data with timeout</error>";
       }
       if (dma_buffer.handle == PZDUD_ERROR_CLAIMED) {
         Log(error,"Failed to acquire data due to claimed buffers.");
+        err_msg << "<error>Failed to acquire data due to claimed buffers</error>";
       }
       Log(error,"Failed to acquire data. Returned %i",dma_buffer.handle);
+      err_msg  << "<error>Failed to acquire data. Returned " << dma_buffer.handle << "</error>";
+
+      // Stop just the collection thread
+      error_messages_ += err_msg;
+      error_state_ = true;
       keep_collecting_ = false;
-      stop_data_taking();
       break;
+//      if (keep_collecting_) {
+//        keep_collecting_ = false;
+//        stop_data_taking();
+//        break;
+//      }
     }
     // -- Push the transfer to the queue
     //dma_buffer.handle = handle;
@@ -704,7 +715,7 @@ void board_reader::data_collector() {
     dma_buffer.len = len;
     buffer_queue_.push(dma_buffer);
   }
-  Log(info,"Clearing the DMA access");
+  Log(info,"Stopping the data collection");
 
 #else
 #error No PL/PS transfer mode defined.
