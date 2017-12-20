@@ -718,12 +718,16 @@ void board_reader::data_collector() {
 //        keep_collecting_ = false;
 //        clean_and_shutdown_dma();
       }
+      if (dma_buffer.handle == PZDUD_ERROR_CLAIMED) {
+    	  Log(error,"Failed to acquire data due to claimed buffers.");
+      }
       Log(error,"Failed to acquire data. Returned %i",dma_buffer.handle);
       keep_collecting_ = false;
       clean_and_shutdown_dma();
     }
     // -- Push the transfer to the queue
     //dma_buffer.handle = handle;
+    Log(debug,"Acquired %u (%u bytes)",dma_buffer.handle,dma_buffer.len);
     dma_buffer.len = len;
     buffer_queue_.push(dma_buffer);
   }
