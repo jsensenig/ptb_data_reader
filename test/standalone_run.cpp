@@ -86,11 +86,22 @@ public:
     is_conf_ = true;
   }
 
+  void process_quit()
+  {
+    if (is_running_) {
+      // if we are taking data, stop it
+      send_stop();
+    } else {
+      // If we are not, stop execution
+      stop_req_ = true;
+    }
+  }
+
 
   void run() {
-    enum commands {init=1,start=2,stop=3};
+    enum commands {init=1,start=2,stop=3,quit=4};
     // Set the stop condition to false to wait for the data
-    std::signal(SIGINT, ctb_robot::static_sig_handler);
+    //std::signal(SIGINT, ctb_robot::static_sig_handler);
   int command = -1;
   int result = 0;
     // Now make the receiving thread
@@ -102,9 +113,11 @@ public:
       cout << "### Select command : " << endl;
       cout << " 1 : Init" << endl;
       cout << " 2 : Start Run" << endl;
-      cout << "\n\n After starting a run, you can stop the run with Ctrl+C\n\n" << endl;
+      cout << " 3 : Stop Run" << endl;
+      cout << " 4 : Quit" << endl;
+//      cout << " q : Quit"
+//      cout << "\n\n After starting a run, you can stop the run with Ctrl+C\n\n" << endl;
 
-  //    cout << " 3 : Stop Run" << endl;
   //    cout << " 4 : Soft Reset" << endl;
   //    cout << " 5 : Hard Reset" << endl;
 
@@ -116,12 +129,11 @@ public:
         case start:
           send_start();
           break;
-  //      case stop:
-  //        result = stop_run(&socksrv);
-  //        if (result) {
-  //          cout << "Failed to issue command." << endl;
-  //        }
-  //        break;
+        case stop:
+          send_stop();
+          break;
+        case quit:
+          process_quit();
         default:
           cout << "Wrong option (" << command << ")." << endl;
           break;
@@ -223,22 +235,12 @@ public:
 
   }
 
-  void sig_handler (int signum)
-  {
-    if (is_running_) {
-      // if we are taking data, stop it
-      send_stop();
-    } else {
-      // If we are not, stop execution
-      stop_req_ = true;
-    }
-  }
 
 
-  static void static_sig_handler(int signum)
-  {
-      instance.sig_handler(signum);
-  }
+//  static void static_sig_handler(int signum)
+//  {
+//      instance.sig_handler(signum);
+//  }
 
 private:
   TCPSocket client_sock;
@@ -252,7 +254,7 @@ private:
   char answer_[1024];
 
   // Static instance so we can play with the signal handler
-  static ctb_robot instance;
+//  static ctb_robot instance;
 };
 
 int main() {
