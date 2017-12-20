@@ -1380,9 +1380,9 @@ void board_reader::data_transmitter() {
       error_messages_ += "] : ";
       error_messages_ += e.what();
       error_messages_ += "</error>";
-      stop_data_taking();
-      // keep_collecting_ = false;
-      // keep_transmitting_ = false;
+      //stop_data_taking();
+      keep_collecting_ = false;
+      keep_transmitting_ = false;
       //
     }
 
