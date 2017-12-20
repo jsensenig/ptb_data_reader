@@ -301,7 +301,6 @@ void board_reader::start_data_taking() {
       for (size_t i = 0; i < num_buffs_; i++) {
         buff_addr_[i] = (uint32_t)pzdud_addr(s2mm,i);
         Log(verbose,"Buffer %u : 0x%p",i,buff_addr_[i]);
-        printf("Buffer %u : 0x%X\n",i,buff_addr_[i]);
       }
       Log(debug,"Initializing the DMA engine...");
       retstat = pzdud_init(s2mm, true);
