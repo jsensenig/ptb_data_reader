@@ -468,6 +468,32 @@ void board_manager::process_config(pugi::xml_node config,std::string &answers) {
         reader_->set_tcp_port(data_socket_port_);
         Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
       }
+
+      uint32_t duration;
+      strVal <<it->child("RolloverClocks").child_value();
+      strVal >> std::dec >> duration;
+
+      // Microslice duration is now a full number...check if it fits into 27 bits
+      Log(debug,"MicroSlice Duration [%s] (%u) [0x%X][%s]",strVal.str().c_str(),duration,duration, std::bitset<27>(duration).to_string().c_str());
+      if (duration >= (1<<27)) {
+        msgs_ << "<warning>Input value of [" << duration << "] above the allowed limit of 27 bits. Setting to maximum allowed.";
+        Log(warning,"Input value of [%u] above maximum rollover [27]. Truncating to maximum.",duration);
+        duration = (1<<27)-1;
+      }
+
+      // 1 ms in a 50MHz clock
+      if (duration <= 50000) {
+        msgs_ << "<warning>Input value of ["<< duration << "] below recommended limit of 1 ms (50000). ";
+        msgs_ << "Will allow but this setting is likely to cause overload of the ethernet connection. </warning>";
+
+      }
+
+      SetBitRangeRegister(6,duration,0,27);
+      Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
+      strVal.clear();
+      strVal.str("");
+
+
     }
 
     /**
