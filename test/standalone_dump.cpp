@@ -37,27 +37,8 @@ bool g_is_running;
 bool g_is_configured;
 //FILE*outfile;
 
-void signalHandler( int signum )
-{
-    cout << "Interrupt signal (" << signum << ") received.\n";
+TCPSocket *socket;
 
-    // If it is running (taking a run), stop the run
-    if (g_is_running) {
-      // -- Stop the run
-      stop_run();
-      return;
-    }
-    // otherwise stop the application completely
-    g_stop_requested = true;
-
-    // cleanup and close up stuff here
-    // terminate program
-
-    //exit(signum);
-    //g_stop_requested = true;
-    //std::this_thread::sleep_for(std::chrono::seconds(5));
-    //::exit(0);
-}
 
 int send_reset(TCPSocket *sock) {
   Log(info,"Sending a reset");
@@ -113,6 +94,29 @@ void send_config(TCPSocket *socksrv) {
   g_is_configured = true;
   //return 0;
 }
+
+void signalHandler( int signum )
+{
+    cout << "Interrupt signal (" << signum << ") received.\n";
+
+    // If it is running (taking a run), stop the run
+    if (g_is_running) {
+      // -- Stop the run
+      stop_run(socket);
+      return;
+    }
+    // otherwise stop the application completely
+    g_stop_requested = true;
+
+    // cleanup and close up stuff here
+    // terminate program
+
+    //exit(signum);
+    //g_stop_requested = true;
+    //std::this_thread::sleep_for(std::chrono::seconds(5));
+    //::exit(0);
+}
+
 /*
 void control_thread() {
   std::thread::id thread_id = std::this_thread::get_id();
@@ -272,7 +276,7 @@ void receive_data() {
   std::thread::id thread_id = std::this_thread::get_id();
   std::ostringstream stream;
   stream << std::hex << thread_id << " " << std::dec << thread_id;
-  cout << "#### Receiving thread: %s",stream.str() << endl;
+  cout << "#### Receiving thread: %s" << stream.str() << endl;
 
   // Create a server that is meant to receive the data from the
   // PTB and keep dumping the contents into somewhere...like a binary file
@@ -314,7 +318,6 @@ void receive_data() {
       count++;
       if (!(count%1000)) cout << "Counting " << count << "packets received..." << endl;
       // check the number of bytes in this packet
-      while ()
       bytes_collected = 0;
       // Cast the result into the header
 //      ptb::content::tcp_header_t *pkg_hdr = reinterpret_cast<ptb::content::tcp_header_t*>(&header);
@@ -387,7 +390,10 @@ int command = -1;
 int result = 0;
 try{
   cout << "### Establishing control connection to the PTB" << endl;
+  //*socket = TCPSocket("localhost",8991);
+  //socket = new TCPSocket("localhost",8991);
   TCPSocket socksrv("localhost", 8991);
+  socket = &socksrv;
   std::this_thread::sleep_for(std::chrono::seconds(3));
 
   // Now make the receiving thread
@@ -407,10 +413,10 @@ try{
     cin >> command;
     switch(command) {
       case init:
-        send_config(&socksrv);
+        send_config(socket);
         break;
       case start:
-        result = start_run(&socksrv);
+        result = start_run(socket);
         if (result) {
           cout << "Failed to issue command." << endl;
         }

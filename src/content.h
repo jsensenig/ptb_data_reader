@@ -223,7 +223,7 @@ namespace ptb {
 
 
         typedef struct low_trigger_t {
-            uint64_t padding;
+            uint64_t padding_low;
             trigger_code_t trigger_id : 16;
             uint32_t subsystem  : 8;
             uint32_t padding    : 8;
@@ -237,7 +237,7 @@ namespace ptb {
         // How big should a trigger word be?
         typedef struct global_trigger_t {
             //uint32_t word : 32;
-            uint64_t padding;
+            uint64_t padding_low;
             trigger_code_t trigger_id : 16;
             uint32_t padding    : 16;
         } global_trigger_t;

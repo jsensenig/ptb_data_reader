@@ -8,6 +8,10 @@ server_address = ('localhost', 8992)
 print >>sys.stderr, 'starting up on %s port %s' % server_address
 print "Your configuration should be : "
 print "<config><DataBuffer><DaqHost>localhost</DaqHost><DaqPort>8992</DaqPort></DataBuffer></config>"
+print "And the running command should be :"
+print "<command>StartRun</command>"
+print "And eventually the stopping command:"
+print "<command>StopRun</command>"
 sock.bind(server_address)
 # Listen for incoming connections
 sock.listen(1)
@@ -21,8 +25,11 @@ while True:
 
         # Receive the data in small chunks and retransmit it
         while True:
-            data = connection.recv(16)
-            print >>sys.stderr, 'received "%s"' % data
+            data = connection.recv(4096)
+            if data:
+                #print >>sys.stderr, 'received "%s"' % data
+                print >>sys.stderr, " ".join("{:02x}".format(ord(c)) for c in data)
+                
             #if data:
             #    print >>sys.stderr, 'sending data back to the client'
             #    connection.sendall(data)
