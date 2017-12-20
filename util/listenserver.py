@@ -7,7 +7,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_address = ('localhost', 8992)
 print >>sys.stderr, 'starting up on %s port %s' % server_address
 print "Your configuration should be : "
-print "<config><DataBuffer><DaqHost>localhost</DaqHost><DaqPort>8992</DaqPort></DataBuffer></config>"
+print "<config><DataBuffer><DaqHost>localhost</DaqHost><DaqPort>8992</DaqPort></DataBuffer><RolloverClocks>25000000</RolloverClocks></config>"
 print "And the running command should be :"
 print "<command>StartRun</command>"
 print "And eventually the stopping command:"

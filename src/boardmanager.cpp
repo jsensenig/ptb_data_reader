@@ -487,8 +487,8 @@ void board_manager::process_config(pugi::xml_node config,std::string &answers) {
         msgs_ << "Will allow but this setting is likely to cause overload of the ethernet connection. </warning>";
 
       }
-
-      SetBitRangeRegister(6,duration,0,27);
+      set_bit_range_register(6,duration,0,27);
+      //SetBitRangeRegister(6,duration,0,27);
       Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
       strVal.clear();
       strVal.str("");
