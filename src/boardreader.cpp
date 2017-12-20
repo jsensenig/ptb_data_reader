@@ -326,7 +326,7 @@ void board_reader::reset_buffers() {
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
 #if defined(BOOST)
-  bool has_data = true;
+  //bool has_data = true;
   while(buffer_queue_.pop()) {
     counter++;
   }
@@ -661,7 +661,7 @@ void board_reader::data_collector() {
 
 #elif defined(ARM_SG_DMA)
   static size_t len;
-  static int handle;
+  //static int handle;
   ptb::content::buffer_t dma_buffer;
 
   while(keep_collecting_) {
@@ -695,7 +695,8 @@ void board_reader::data_collector() {
       }
       Log(error,"Failed to acquire data. Returned %i",dma_buffer.handle);
       keep_collecting_ = false;
-      clean_and_shutdown_dma();
+      stop_data_taking();
+      break;
     }
     // -- Push the transfer to the queue
     //dma_buffer.handle = handle;
@@ -1316,7 +1317,7 @@ void board_reader::data_transmitter() {
     if (!buffer_queue_.pop(dma_buffer)) {
       // -- should some sort of wait be put here?
       // Might hurt since it will require some sort of mutex
-      std::this_thread::sleep_for (std::chrono::microseconds(3));
+      //std::this_thread::sleep_for (std::chrono::microseconds(3));
       continue;
     }
 
@@ -1327,11 +1328,11 @@ void board_reader::data_transmitter() {
     // -- copy the whole buffer
     std::memcpy(&(eth_buffer[1]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
 
-    log(debug,"Reinterpreting...");
+    Log(debug,"Reinterpreting...");
     // -- cast the buffer into a payload
     ptb::content::word::word *frame = reinterpret_cast<ptb::content::word::word*>(buff_addr_[dma_buffer.handle]);
     uint32_t roll = static_cast<uint32_t>(frame->frame.wheader.ts_rollover);
-    Log(debug,"word type : %h ts %u (%h)",static_cast<uint32_t>(frame->frame.wheader.word_type),roll,roll);
+    Log(debug,"word type : %X ts %u (%X)",static_cast<uint32_t>(frame->frame.wheader.word_type),roll,roll);
     // -- Send the data
     try {
       n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
@@ -1346,7 +1347,7 @@ void board_reader::data_transmitter() {
         global_eth_pos = 0;
       }
       // -- release the memory buffer
-
+      Log(debug,"Releasing buffer %u",dma_buffer.handle);
       pzdud_release(s2mm, dma_buffer.handle, 0);
 
     }
@@ -1365,8 +1366,9 @@ void board_reader::data_transmitter() {
       error_messages_ += "] : ";
       error_messages_ += e.what();
       error_messages_ += "</error>";
-      keep_collecting_ = false;
-      keep_transmitting_ = false;
+      stop_data_taking();
+      // keep_collecting_ = false;
+      // keep_transmitting_ = false;
       //
     }
 
