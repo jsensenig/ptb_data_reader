@@ -24,9 +24,9 @@ ifeq ($(MACHINE), armv7l)
    $(info ======================)
     LFLAGS   := -g $(DEF_LFLAGS)
 #   CFLAGS   := -g -O0 $(DEF_CFLAGS)
-#   CFLAGS   := -O3 -march=armv7-a -mcpu=cortex-a9 -mfpu=neon-fp16 $(DEF_CFLAGS)
+   CFLAGS   := -O3 -march=armv7-a $(DEF_CFLAGS) $(DMA_TYPE)
 #   CFLAGS   := -O1 -march=armv7-a -mcpu=cortex-a9 $(DEF_CFLAGS)
-   CFLAGS   := -g -march=armv7-a -O0 $(DEF_CFLAGS) $(DMA_TYPE)
+#   CFLAGS   := -g -march=armv7-a -O0 $(DEF_CFLAGS) $(DMA_TYPE)
    EXT_TARS := 
    CLN      := 
    UTL_DIR  := $(PWD)/util/ptb
@@ -98,7 +98,7 @@ clean: $(CLN)
 	rm -f $(UTL_BIN)
 	rm -f $(TEST_BIN)
 	rm -rf $(APP_BIN)
-	
+
 server_clean:
 	echo ""
 
