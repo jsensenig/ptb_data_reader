@@ -38,15 +38,6 @@ extern "C" {
 
 using namespace ptb;
 
-///// Const definitions from the base structures
-//board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TA;
-//board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TB;
-//board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TC;
-//board_reader::Payload_Trigger::trigger_type_t const board_reader::Payload_Trigger::TD;
-
-
-
-
 #if defined(ARM_XDMA)
 // declare a bunch of variables that are used by the DMA driver
 
@@ -1335,23 +1326,52 @@ void board_reader::data_transmitter() {
     // -- at this point there is a buffer available
     // Assign the size to the header
     eth_header.word.packet_size = dma_buffer.len & 0xFFFF;
+    Log(debug,"Header : [%X]",eth_header.value);
     std::memcpy(&(eth_buffer[0]),&eth_header,sizeof(eth_header));
+    Log(debug,"Header (xcheck) : [%X]",*(&eth_buffer[0]));
     // -- copy the whole buffer
     std::memcpy(&(eth_buffer[1]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
 
     Log(debug,"Reinterpreting...");
     // -- cast the buffer into a payload
-    ptb::content::word::word *frame = reinterpret_cast<ptb::content::word::word*>(buff_addr_[dma_buffer.handle]);
-    uint32_t roll = static_cast<uint32_t>(frame->frame.wheader.ts_rollover);
-    uint64_t fts = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(frame->frame.wbody.data)->timestamp;
+    ptb::content::word::word_t *frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]);
+    uint8_t *tad = reinterpret_cast<uint8_t*>(buff_addr_[dma_buffer.handle]);
+    for (size_t i = 0; i < dma_buffer.len; i++) {
+      printf("%02X ",tad[i]);
+    }
+    printf("\n");
+    Log(debug,"Size word %u",sizeof(ptb::content::word::word_t));
+    Log(debug,"Size header %u",sizeof(ptb::content::word::header_t));
+    Log(debug,"Size body %u",sizeof(ptb::content::word::body_t));
+    Log(debug,"Size timestamp %u",sizeof(ptb::content::word::payload::timestamp_t));
+    ptb::content::word::body_t *wbd = &(frame->wbody);
+    ptb::content::word::payload::timestamp_t*wts2 = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(wbd->data);
+    ptb::content::word::payload::timestamp_t*wts = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(frame->wbody.data);
+    uint8_t * wdt = frame->wbody.data;
+    uint64_t fts = wts->timestamp();
+    Log(debug," PD %X TS %" PRIx64,wts->padding,wts->timestamp());
+    Log(debug," PD2 %X TS2 %" PRIx64,wts2->padding,wts2->timestamp());
+    Log(debug," TS parts %X %X %X",wts->padding,wts->time_low,wts->time_up);
+    Log(debug," TS ");
+    for (size_t i = 0; i < 12; i++) {
+      printf("%X ",wdt[i]);
+    }
+    printf("\n");
+    
+    uint32_t roll = static_cast<uint32_t>(frame->wheader.ts_rollover);
     Log(debug,
         "word type : %X ts %u (%X) %" PRIu64 " %" PRIx64,
-        static_cast<uint32_t>(frame->frame.wheader.word_type),roll,roll,fts,fts);
+        static_cast<uint32_t>(frame->wheader.word_type),roll,roll,fts,fts);
     // -- Send the data
     try {
+      Log(debug,"%X",eth_buffer[0]);
       n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
-      n_u32_words = n_bytes_sent*sizeof(uint32_t);
+      // -- release the memory buffer
+
+      n_u32_words = n_bytes_sent/sizeof(uint32_t);
       data_socket_->send(eth_buffer,n_bytes_sent);
+      Log(debug,"Releasing buffer %u",dma_buffer.handle);
+      pzdud_release(s2mm, dma_buffer.handle, 0);
 
       global_eth_pos += (n_u32_words+4);
       // add 4 bytes of padding just to make sure that there are no overlaps
@@ -1360,9 +1380,8 @@ void board_reader::data_transmitter() {
         // reset the pointer to the beginning
         global_eth_pos = 0;
       }
-      // -- release the memory buffer
-      Log(debug,"Releasing buffer %u",dma_buffer.handle);
-      pzdud_release(s2mm, dma_buffer.handle, 0);
+
+      bytes_sent_ += n_bytes_sent;
 
     }
     catch(SocketException &e) {
