@@ -1234,7 +1234,8 @@ void board_reader::data_transmitter() {
   // Debugging information that is passed down in the end of the run
   num_eth_fragments_ = 0;
   num_word_counter_ = 0;
-  num_word_trigger_ = 0;
+  num_word_gtrigger_ = 0;
+  num_word_ltrigger_ = 0;
   num_word_tstamp_ = 0;
   num_word_feedback_ = 0;
   bytes_sent_ = 0;
@@ -1311,7 +1312,7 @@ void board_reader::data_transmitter() {
     size_t tpos = 0;
     while (tpos < dma_buffer.len) {
        frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]+tpos);
-       wh = frame->wheader;
+       wh = &(frame->wheader);
        switch(wh->word_type) {
          case ptb::content::word::t_fback:
            num_word_feedback_++;

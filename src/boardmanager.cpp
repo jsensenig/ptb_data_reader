@@ -262,7 +262,8 @@ namespace ptb {
     msgs_ << "<run_statistics num_eth_packets=\"";
     msgs_ << reader_->get_n_sent_frags();
     msgs_ << "\" num_word_counter=\"" << reader_->get_n_status();
-    msgs_ << "\" num_word_trigger=\"" << reader_->get_n_triggers();
+    msgs_ << "\" num_global_trigger=\"" << reader_->get_n_gtriggers();
+    msgs_ << "\" num_low_trigger=\"" << reader_->get_n_ltriggers();
     msgs_ << "\" num_word_tstamp=\"" << reader_->get_n_timestamps();
     msgs_ << "\" num_word_fifo_warn=\"" << reader_->get_n_warns();
     msgs_ << "\" num_bytes=\"" << reader_->get_sent_bytes();
