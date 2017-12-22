@@ -39,7 +39,7 @@ else
    DEF      := 
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 -m32 
-   CFLAGS   := $(DEF_CFLAGS) -fpermissive 
+   CFLAGS   := $(DEF_CFLAGS) -fpermissive -m32
    LFLAGS   := $(DEF_LFLAGS) 
    EXT_TARS := 
    CLN      := server_clean
