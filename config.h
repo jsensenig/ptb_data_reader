@@ -37,6 +37,7 @@
 // -- use boost features
 #define BOOST 1
 //#define MUTEX
+//#define LOG_MUTEX
 /// -- Data transfer method for PL-PS.
 /// -- Three options exist:
 /// ARM_XDMA : The original implementation using the xdma polling kernel driver.

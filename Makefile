@@ -5,6 +5,7 @@ BIN        := $(PWD)/bin
 DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket -I$(PWD)/contrib/linux_dma/zynq-xdma
 DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/pothos-zynq/driver -I$(PWD)/contrib/linux_dma/pothos-zynq/kernel
 DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src -I./
+#DEF_CFLAGS += -I/usr/local/boost/1.66.00/include
 
 #ifeq (($MACHINE),armv7l)
 #   $(info Adding extra flags for uZed compilation...)

@@ -679,7 +679,7 @@ class board_reader {
   uint32_t get_n_sent_frags() {return num_eth_fragments_;};
   uint32_t get_n_status() {return num_word_counter_;};
   uint32_t get_n_triggers() {return num_word_trigger_;};
-  uint32_t get_n_warns() {return num_word_warning_;};
+  uint32_t get_n_warns() {return num_word_feedback_;};
   uint32_t get_n_timestamps() {return num_word_tstamp_;};
   uint32_t get_sent_bytes() {return bytes_sent_;};
 
@@ -705,8 +705,6 @@ protected:
   void init_dma();
 #endif /*ARM_SG_DMA*/
 private:
-//  static void * ClientCollectorFunc(void * this) {((board_reader *)This)->data_collector(); return NULL;}
-//  static void * ClientTransmitterFunc(void * this) {((board_reader *)This)->data_transmitter(); return NULL;}
 
   // -- Structures for data socket connection
 
@@ -760,7 +758,6 @@ private:
 #endif
 
 #if defined(BOOST)
-//  boost::lockfree::spsc_queue<ptb::content::buffer_t> buffer_queue_{num_buffs_};
   boost::lockfree::spsc_queue<ptb::content::buffer_t, boost::lockfree::capacity<num_buffs_> >buffer_queue_;
 #elif defined(LOCKFREE)
   moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
@@ -768,21 +765,19 @@ private:
   std::queue<uint32_t*> buffer_queue_;
 #endif
 
-//  // Warning pre_computed words
-//  static const uint32_t WARN_TIMEOUT = 0x04000000;
-//  static const uint32_t WARN_UNKNOWN_DATA = 0x02000000;
 
+
+  //FIXME: Revise the need for these words
+  // It may make more sense to have them hardcoded in content.h
+  //  // Warning pre_computed words
+  //  static const uint32_t WARN_TIMEOUT = 0x04000000;
+  //  static const uint32_t WARN_UNKNOWN_DATA = 0x02000000;
 
   // A few auxiliary constants
   static const uint32_t eth_buffer_size_u32 = 0xFFFF; // Max possible ethernet packet
   static const uint32_t frame_size_bits   = 0x80;   // the buffer is 128 bits
   static const uint32_t frame_size_bytes  = 0x10;   // 16 bytes
   static const uint32_t frame_size_u32    = 0x4;    // 4xuint32_t
-  // This is the buffer size in number of frames
-  // Could easily do something else, or even set this as a configuration
-  // parameter
-  // FIXME: Change to a fhicl param
-
 
   // A few more constants that are important
   static const uint32_t fw_version_ = FIRMWARE_REVISION;
@@ -798,6 +793,7 @@ private:
   bool dma_initialized_;
   // -- Debugging and control variables
   // timeouts don't make sense with MMAP
+  // neither does in SG_DMA, as it depends on the frequency of the data
 #if defined(ARM_XDMA)
 uint32_t timeout_cnt_;
 const uint32_t timeout_cnt_threshold_ = 10000;
@@ -810,8 +806,9 @@ std::string error_messages_;
   // -- Internal run statistics
   uint32_t num_eth_fragments_;
   uint32_t num_word_counter_;
-  uint32_t num_word_trigger_;
-  uint32_t num_word_warning_;
+  uint32_t num_word_gtrigger_;
+  uint32_t num_word_ltrigger_;
+  uint32_t num_word_feedback_;
   uint32_t num_word_tstamp_;
   uint32_t bytes_sent_;
   std::map<int,int> counter_stats_;

@@ -73,7 +73,10 @@ private:
   ///Private member to aux the conversion of the severity level into a string
   static const char* tostr(severity);
 
+#if LOG_MUTEX
   static std::mutex print_mutex_;
+#endif
+
 
 
 };

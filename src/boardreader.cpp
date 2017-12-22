@@ -90,7 +90,7 @@ board_reader::board_reader() : tcp_port_(0), tcp_host_(""),
     // below this point all these are debugging variables
     dry_run_(false), error_state_(false),error_messages_(""),
     num_eth_fragments_(0),
-    num_word_counter_(0),num_word_trigger_(0),num_word_warning_(0),
+    num_word_counter_(0),num_word_trigger_(0),num_word_feedback_(0),
     num_word_tstamp_(0),bytes_sent_(0)
 {
 
@@ -793,7 +793,7 @@ void board_reader::data_transmitter() {
   num_word_counter_ = 0;
   num_word_trigger_ = 0;
   num_word_tstamp_ = 0;
-  num_word_warning_ = 0;
+  num_word_feedback_ = 0;
   bytes_sent_ = 0;
   for (int i = 0; i < 98; ++i) counter_stats_[i]=0;
   trigger_stats_[board_reader::Payload_Trigger::TA] = 0;
@@ -1054,7 +1054,7 @@ void board_reader::data_transmitter() {
             "+++ Received a FIFO warning of type %08X .+++",
             (reinterpret_cast_checked<uint32_t*>(frame))[0]);
 #ifdef DATA_STATISTICS
-        num_word_warning_++;
+        num_word_feedback_++;
 #endif
         break;
       default:
@@ -1236,82 +1236,56 @@ void board_reader::data_transmitter() {
   num_word_counter_ = 0;
   num_word_trigger_ = 0;
   num_word_tstamp_ = 0;
-  num_word_warning_ = 0;
+  num_word_feedback_ = 0;
   bytes_sent_ = 0;
-  //  for (int i = 0; i < 98; ++i) counter_stats_[i]=0;
-  //  trigger_stats_[ptb::board_reader::Payload_Trigger::TA] = 0;
-  //  trigger_stats_[board_reader::Payload_Trigger::TB] = 0;
-  //  trigger_stats_[board_reader::Payload_Trigger::TC] = 0;
-  //  trigger_stats_[board_reader::Payload_Trigger::TD] = 0;
-  //  Payload_Trigger *tp= nullptr;
-  //  Payload_Counter *cp= nullptr;
 
   // This will keep track on the number of u32 words
   // In the end the size of the buffer will be ipck*sizeof(uint32_t);
   static uint32_t n_u32_words = 0;
   static uint32_t n_bytes_sent = 0;
-  //  static uint32_t tmp_idx = 0;
-  //  static bool carry_on = true;
-  //  static bool ts_arrived = false;
 
   // Temporary variables that will end up making part of the eth packet
   static uint32_t packet_size = 0;
-  //  uint32_t eth_checksum = 0;
 
   // pointer to a new word
   ptb::content::buffer_t dma_buffer;
-  //uint32_t* buffer = nullptr;
-  //  uint32_t* raw_frame  = nullptr;
-  // A couple of temp pointers that make sense to avoid copying stuff around and help parsing
-  //  ptb::content::word::word * full_word;
-  //  ptb::content::word::header                  * fr_header;
-  //  ptb::content::word::payload::global_trigger * ht_word;
-  //  ptb::content::word::payload::low_trigger    * lt_word;
-  //  ptb::content::word::payload::timestamp      * ts_word;
-  //  ptb::content::word::payload::warning        * wn_word;
-  //  ts_arrived = false;
-  //  static uint32_t tmpcount = 0;
   seq_num_ = 1;
 
   // Assign the skelleton packet header
   // This would be nice to go out of the loop but it
-  //eth_header = (fw_version_ << 28 ) | (((~fw_version_) & 0xF) << 24) | ((seq_num_  << 16) & 0xFF0000);
   ptb::content::tcp_header eth_header;
   eth_header.word.format_version = (fw_version_ << 4) | ((~fw_version_) & 0xF);
 
-
-
-
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
-  // Wonder if sometimes there could be a conflict when both a write and a read are issued over the variable.
+  ptb::content::word::word_t *frame;
+  ptb::content::word::header_t *wh;
+  ptb::content::word::body_t *wp;
   while(keep_transmitting_) {
 
     // Set the local pointer to the place pointer by the global pointer
     eth_buffer = &global_eth_buffer[global_eth_pos];
 
-    // !!!! Start by not doing any size modifications into the memory
-    // simply wrap the whole thing with a header and ship.
+    /**
+    !!!! Start by not doing any size modifications into the memory
+    simply wrap the whole thing with a header and ship.
+    This will allow to do zero-copy transfer
 
-    // This will allow to do zero-copy transfer
+    !!! Caveat: we cannot allow the full buffer to fill. Add a provision for that...
 
-    // !!! Caveat: we cannot allow the full buffer to fill. Add a provision for that...
+    FW decides when the packet is ready to be sent.
+    The TS word marks that a packet has to be sent.
 
-    // FW decides when the packet is ready to be sent.
-    // The TS word marks that a packet has to be sent.
+    2 conditions to be careful of:
 
-    // 2 conditions to be careful of:
-    //
-    // 1. If time time based rollover is reached.
-    // 2. If the size based rollover is reached. (not implemented)
-
+    1. If time time based rollover is reached.
+    2. If the size based rollover is reached. (not implemented)
+     **/
 
     /// -- Start by generating a header
 
-    // ipck   : Counter of u32
     n_u32_words = 0;
     n_bytes_sent = 0;
-    //    carry_on = true;
 
     eth_header.word.sequence_id = seq_num_;
 
@@ -1326,51 +1300,81 @@ void board_reader::data_transmitter() {
     // -- at this point there is a buffer available
     // Assign the size to the header
     eth_header.word.packet_size = dma_buffer.len & 0xFFFF;
-    Log(debug,"Header : [%X]",eth_header.value);
+    //Log(debug,"Header : [%X]",eth_header.value);
     std::memcpy(&(eth_buffer[0]),&eth_header,sizeof(eth_header));
-    Log(debug,"Header (xcheck) : [%X]",*(&eth_buffer[0]));
+    //Log(debug,"Header (xcheck) : [%X]",*(&eth_buffer[0]));
     // -- copy the whole buffer
     std::memcpy(&(eth_buffer[1]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
 
-    Log(debug,"Reinterpreting...");
-    // -- cast the buffer into a payload
-    ptb::content::word::word_t *frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]);
-    uint8_t *tad = reinterpret_cast<uint8_t*>(buff_addr_[dma_buffer.handle]);
-    for (size_t i = 0; i < dma_buffer.len; i++) {
-      printf("%02X ",tad[i]);
+
+    // -- loop over the buffer to collect word statistics
+    size_t tpos = 0;
+    while (tpos < dma_buffer.len) {
+       frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]+tpos);
+       wh = frame->wheader;
+       switch(wh->word_type) {
+         case ptb::content::word::t_fback:
+           num_word_feedback_++;
+           break;
+         case ptb::content::word::t_gt:
+           num_word_gtrigger_++;
+           break;
+         case ptb::content::word::t_lt:
+           num_word_ltrigger_++;
+           break;
+         case ptb::content::word::t_ts:
+//           ptb::content::word::payload::timestamp_t *ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(&(word->wbody));
+//           cout << "Received timestamp           " << ts->timestamp() << endl;
+//           // -- Alternative way is going through the body_t structure
+//           pld = &(word->wbody);
+//           ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(pld);
+//           cout << "Received timestamp (xcheck)  " << ts->timestamp() << endl;
+           num_word_tstamp_++;
+           break;
+       }
+       // Advance the pointer
+       tpos += ptb::content::word::body_t::size_bytes;
     }
-    printf("\n");
-    Log(debug,"Size word %u",sizeof(ptb::content::word::word_t));
-    Log(debug,"Size header %u",sizeof(ptb::content::word::header_t));
-    Log(debug,"Size body %u",sizeof(ptb::content::word::body_t));
-    Log(debug,"Size timestamp %u",sizeof(ptb::content::word::payload::timestamp_t));
-    ptb::content::word::body_t *wbd = &(frame->wbody);
-    ptb::content::word::payload::timestamp_t*wts2 = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(wbd->data);
-    ptb::content::word::payload::timestamp_t*wts = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(frame->wbody.data);
-    uint8_t * wdt = frame->wbody.data;
-    uint64_t fts = wts->timestamp();
-    Log(debug," PD %X TS %" PRIx64,wts->padding,wts->timestamp());
-    Log(debug," PD2 %X TS2 %" PRIx64,wts2->padding,wts2->timestamp());
-    Log(debug," TS parts %X %X %X",wts->padding,wts->time_low,wts->time_up);
-    Log(debug," TS ");
-    for (size_t i = 0; i < 12; i++) {
-      printf("%X ",wdt[i]);
-    }
-    printf("\n");
-    
-    uint32_t roll = static_cast<uint32_t>(frame->wheader.ts_rollover);
-    Log(debug,
-        "word type : %X ts %u (%X) %" PRIu64 " %" PRIx64,
-        static_cast<uint32_t>(frame->wheader.word_type),roll,roll,fts,fts);
+
+//    Log(debug,"Reinterpreting...");
+//     -- cast the buffer into a payload
+//    ptb::content::word::word_t *frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]);
+//    uint8_t *tad = reinterpret_cast<uint8_t*>(buff_addr_[dma_buffer.handle]);
+//    for (size_t i = 0; i < dma_buffer.len; i++) {
+//      printf("%02X ",tad[i]);
+//    }
+//    printf("\n");
+//    Log(debug,"Size word %u",sizeof(ptb::content::word::word_t));
+//    Log(debug,"Size header %u",sizeof(ptb::content::word::header_t));
+//    Log(debug,"Size body %u",sizeof(ptb::content::word::body_t));
+//    Log(debug,"Size timestamp %u",sizeof(ptb::content::word::payload::timestamp_t));
+//    ptb::content::word::body_t *wbd = &(frame->wbody);
+//    ptb::content::word::payload::timestamp_t*wts2 = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(wbd->data);
+//    ptb::content::word::payload::timestamp_t*wts = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(frame->wbody.data);
+//    uint8_t * wdt = frame->wbody.data;
+//    uint64_t fts = wts->timestamp();
+//    Log(debug," PD %X TS %" PRIx64,wts->padding,wts->timestamp());
+//    Log(debug," PD2 %X TS2 %" PRIx64,wts2->padding,wts2->timestamp());
+//    Log(debug," TS parts %X %X %X",wts->padding,wts->time_low,wts->time_up);
+//    Log(debug," TS ");
+//    for (size_t i = 0; i < 12; i++) {
+//      printf("%X ",wdt[i]);
+//    }
+//    printf("\n");
+//
+//    uint32_t roll = static_cast<uint32_t>(frame->wheader.ts_rollover);
+//    Log(debug,
+//        "word type : %X ts %u (%X) %" PRIu64 " %" PRIx64,
+//        static_cast<uint32_t>(frame->wheader.word_type),roll,roll,fts,fts);
     // -- Send the data
     try {
-      Log(debug,"%X",eth_buffer[0]);
+      //Log(debug,"%X",eth_buffer[0]);
       n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
       // -- release the memory buffer
 
       n_u32_words = n_bytes_sent/sizeof(uint32_t);
       data_socket_->send(eth_buffer,n_bytes_sent);
-      Log(debug,"Releasing buffer %u",dma_buffer.handle);
+      //Log(debug,"Releasing buffer %u",dma_buffer.handle);
       pzdud_release(s2mm, dma_buffer.handle, 0);
 
       global_eth_pos += (n_u32_words+4);
@@ -1382,7 +1386,7 @@ void board_reader::data_transmitter() {
       }
 
       bytes_sent_ += n_bytes_sent;
-
+      num_eth_fragments_++;
     }
     catch(SocketException &e) {
       Log(error,"Socket exception : %s",e.what() );
@@ -1399,10 +1403,8 @@ void board_reader::data_transmitter() {
       error_messages_ += "] : ";
       error_messages_ += e.what();
       error_messages_ += "</error>";
-      //stop_data_taking();
       keep_collecting_ = false;
       keep_transmitting_ = false;
-      //
     }
 
     // increment the sequence number
@@ -1417,7 +1419,7 @@ void board_reader::data_transmitter() {
   } // -- while(keep_transmitting_)
   // Exited the  run loop. Return.
 
-  Log(info,"Exited transmission loop.");
+  Log(debug,"Left transmission loop.");
   if (error_state_) {
     Log(warning,"Transmission loop exited with error state.");
   }
@@ -1428,7 +1430,7 @@ void board_reader::data_transmitter() {
   // Deallocate the memory
   delete [] global_eth_buffer;
   // Finish the connection
-  Log(warning,"Closing data socket.");
+  Log(info,"Closing data socket.");
   close_data_connection();
   Log(info,"Data socket closed.");
 }
@@ -1712,7 +1714,7 @@ while(carry_on and keep_transmitting_) {
         "+++ Received a FIFO warning of type %08X .+++",
         (reinterpret_cast_checked<uint32_t*>(frame))[0]);
 #ifdef DATA_STATISTICS
-    num_word_warning_++;
+    num_word_feedback_++;
 #endif
     break;
   default:

@@ -34,7 +34,10 @@ bool Logger::_print = true;
 // By default do not allow colored output
 bool Logger::_color = false;
 
-Logger::Logger() { }
+Logger::Logger() {
+  std::cout.setf(std::ios::unitbuf);
+  _ostream->setf(std::ios::unitbuf);
+}
 
 Logger::~Logger() { }
 
@@ -69,12 +72,14 @@ const char* Logger::tostr(Logger::severity sev) {
   return "INFO";
 }
 
-//std::ostream* Logger::_estream (&std::cerr);
+#if LOG_MUTEX
 std::mutex Logger::print_mutex_;
-
+#endif
 
 void Logger::message(Logger::severity sev, const char* where, const char* fmt,...){
+#if LOG_MUTEX
   print_mutex_.lock();
+#endif
 
   if (sev >= _sev) {
 
@@ -89,11 +94,12 @@ void Logger::message(Logger::severity sev, const char* where, const char* fmt,..
     vsprintf(msg,tmp_fmt.c_str(),args);
     va_end(args);
 
-    //printf("%s\n",msg);
     *_ostream << msg << std::endl;
   }
 
+#if LOG_MUTEX
   print_mutex_.unlock();
+#endif
   // This part seems to be failing before the message is actually printed.
   if (sev == fatal) {
     throw;
