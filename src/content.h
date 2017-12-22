@@ -63,10 +63,10 @@ namespace ptb {
       typedef uint16_t trigger_code_t;
 
       typedef struct body_t {
-          uint32_t data[3];
+          uint8_t data[12];
 
-          static size_t const size_bytes = 3*sizeof(uint32_t);
-          static size_t const size_u32 = 3*sizeof(uint32_t)/sizeof(uint32_t);
+          static size_t const size_bytes = 12*sizeof(uint8_t);
+          static size_t const size_u32 = 12*sizeof(uint8_t)/sizeof(uint32_t);
       } body_t;
 
       typedef union body {
@@ -213,7 +213,10 @@ namespace ptb {
 
         typedef struct timestamp_t {
           uint32_t padding;
-          uint64_t timestamp;
+	  uint32_t time_low;
+	  uint32_t time_up;
+
+	  uint64_t timestamp() {return static_cast<uint64_t>(time_up) << 32 | time_low;}
         } timestamp_t;
 
 //        typedef union timestamp {
