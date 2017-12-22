@@ -8,4 +8,17 @@
 # Eclipse code
 .settings
 
+# Applications
+test/standalone_run
+test/test_bitfield
+test/test_boost_queue
+test/test_large_bitfield
+test/test_pointer_addresses
+test/test_root_file.root
+test/test_thread_pointers
+test/test_tree
+
+# Other utilities
+.DS_Store
+*.d
 
