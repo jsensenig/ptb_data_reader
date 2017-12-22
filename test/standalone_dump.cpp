@@ -353,7 +353,7 @@ void receive_data() {
         case ptb::content::word::t_ts:
           // Received a timestamp. Print it...why the hell not?
           ptb::content::word::payload::timestamp_t *ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(&tcp_body[pos]);
-          cout << "Received timestamp " << ts->timestamp << endl;
+          //cout << "Received timestamp " << ts->timestamp << endl;
           pos += ptb::content::word::body_t::size_bytes;
           break;
         }
