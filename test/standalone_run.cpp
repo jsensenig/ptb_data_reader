@@ -13,12 +13,14 @@
 #include <iostream>
 #include <csignal>
 #include <cstdint>
+#include <sstream>
 
 //FIXME: Use a more robust socket library...for example boost seems sensible
 #include "PracticalSocket.h"
-#include "boardreader.h"
-#include "boardmanager.h"
-#include "boardserver.h"
+// #include "boardreader.h"
+// #include "boardmanager.h"
+// #include "boardserver.h"
+#include "content.h"
 
 // -- namespace declarations for common STL objects
 using std::cout;
@@ -26,9 +28,9 @@ using std::cerr;
 using std::endl;
 
 // -- same for PTB
-using ptb::board_reader;
-using ptb::board_manager;
-using ptb::board_server;
+// using ptb::board_reader;
+// using ptb::board_manager;
+// using ptb::board_server;
 
 // -- configuration that we are running with for now
 static const std::string g_config = "<config><DataBuffer><DaqHost>localhost</DaqHost><DaqPort>8992</DaqPort></DataBuffer><RolloverClocks>25000000</RolloverClocks></config>";
@@ -108,7 +110,7 @@ public:
     //std::signal(SIGINT, ctb_robot::static_sig_handler);
     int command = -1;
     // Now make the receiving thread
-    Log(info,"### Launching reader thread");
+    cout << "### Launching reader thread" << endl;
     //std::thread reader(this->receive_data);
     std::thread reader(&ctb_robot::receive_data, this);
     // Now loop for commands
