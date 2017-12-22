@@ -33,7 +33,7 @@ using std::endl;
 // using ptb::board_server;
 
 // -- configuration that we are running with for now
-static const std::string g_config = "<config><DataBuffer><DaqHost>localhost</DaqHost><DaqPort>8992</DaqPort></DataBuffer><RolloverClocks>25000000</RolloverClocks></config>";
+static const std::string g_config = "<config><DataBuffer><DaqHost>128.91.41.96</DaqHost><DaqPort>8992</DaqPort></DataBuffer><RolloverClocks>25000000</RolloverClocks></config>";
 
 class ctb_robot {
 public:
@@ -282,7 +282,7 @@ private:
 
 int main() {
 
-  ctb_robot robot("localhost",8991);
+  ctb_robot robot("128.91.41.238",8991);
   robot.run();
 
   return 0;
