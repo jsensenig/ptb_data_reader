@@ -17,9 +17,6 @@
 
 //FIXME: Use a more robust socket library...for example boost seems sensible
 #include "PracticalSocket.h"
-// #include "boardreader.h"
-// #include "boardmanager.h"
-// #include "boardserver.h"
 #include "content.h"
 
 // -- namespace declarations for common STL objects
@@ -27,12 +24,9 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-// -- same for PTB
-// using ptb::board_reader;
-// using ptb::board_manager;
-// using ptb::board_server;
 
 // -- configuration that we are running with for now
+// EDIT here where the IP where you are running, which is where the CTB will attempt to connect to send the data
 static const std::string g_config = "<config><DataBuffer><DaqHost>128.91.41.96</DaqHost><DaqPort>8992</DaqPort></DataBuffer><RolloverClocks>25000000</RolloverClocks></config>";
 
 class ctb_robot {
