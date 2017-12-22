@@ -31,7 +31,7 @@ using ptb::board_manager;
 using ptb::board_server;
 
 // -- configuration that we are running with for now
-static const std::string g_config = "<config><DataBuffer><DaqHost>localhost</DaqHost><DaqPort>8992</DaqPort></DataBuffer></config>";
+static const std::string g_config = "<config><DataBuffer><DaqHost>localhost</DaqHost><DaqPort>8992</DaqPort></DataBuffer><RolloverClocks>25000000</RolloverClocks></config>";
 
 class ctb_robot {
 public:
@@ -39,7 +39,6 @@ public:
   : stop_req_(false), is_running_(false),is_conf_(false)
   {
    client_sock.connect(host,port);
-   //std::signal(SIGIO, ctb_robot::static_sig_handler);
   }
   virtual ~ctb_robot() {};
 
@@ -49,6 +48,8 @@ public:
     client_sock.send(cmd,28);
     client_sock.recv(answer_,1024);
     cout << "Received answer [" << answer_ << "]" << endl;
+    answer_[0]='\0';
+    
     is_running_ = false;
     is_conf_ = false;
   }
@@ -62,6 +63,7 @@ public:
     client_sock.send(cmd,27);
     client_sock.recv(answer_,1024);
     cout << "Received answer [" << answer_ << "]" << endl;
+    answer_[0]='\0';
     is_running_ = true;
   }
 
@@ -71,6 +73,7 @@ public:
     client_sock.send(cmd,27);
     client_sock.recv(answer_,1024);
     cout << "Received answer [" << answer_ << "]" << endl;
+    answer_[0]='\0';
     is_running_ = false;
   }
 
@@ -83,6 +86,7 @@ public:
     client_sock.send(g_config.c_str(),g_config.size());
     client_sock.recv(answer_,1024);
     cout << "Received answer [" << answer_ << "]" << endl;
+    answer_[0]='\0';
     is_conf_ = true;
   }
 
@@ -102,8 +106,7 @@ public:
     enum commands {init=1,start=2,stop=3,quit=4};
     // Set the stop condition to false to wait for the data
     //std::signal(SIGINT, ctb_robot::static_sig_handler);
-  int command = -1;
-  int result = 0;
+    int command = -1;
     // Now make the receiving thread
     Log(info,"### Launching reader thread");
     //std::thread reader(this->receive_data);
@@ -115,8 +118,6 @@ public:
       cout << " 2 : Start Run" << endl;
       cout << " 3 : Stop Run" << endl;
       cout << " 4 : Quit" << endl;
-//      cout << " q : Quit"
-//      cout << "\n\n After starting a run, you can stop the run with Ctrl+C\n\n" << endl;
 
   //    cout << " 4 : Soft Reset" << endl;
   //    cout << " 5 : Hard Reset" << endl;
@@ -134,6 +135,10 @@ public:
           break;
         case quit:
           process_quit();
+	  std::this_thread::sleep_for(std::chrono::seconds(1));
+	  //reader.
+	  //reader.join();
+	  break;
         default:
           cout << "Wrong option (" << command << ")." << endl;
           break;
@@ -141,16 +146,15 @@ public:
     }
     cout << "### Stop requested." << endl;
     // Wait for the reading function to return
-    reader.join();
 
   }
 
   void receive_data() {
+    
     // Important to avoid mangling of the output due to race conditions to the
     // IO buffers. The trick is to use unbuffered (ie. direct) output
     std::cout.setf(std::ios::unitbuf);
-
-    cout << "Working in reader_thread!!!" << endl;
+    cout << "Working in receiving thread!!!" << endl;
 
     receiver_id_ = std::this_thread::get_id();
     std::ostringstream stream;
@@ -167,42 +171,57 @@ public:
       TCPSocket *sock = servSock.accept();
       cout << "--> Received a client request." << endl;
 
-      //ptb::content::word::word_type wt;
-
-
-
-      uint16_t pckt_size = 0;
       uint16_t bytes_collected= 0;
-      ptb::content::tcp_header header;
-      ptb::content::word::header *hdr;
+      ptb::content::tcp_header *header;
+      ptb::content::word::header_t *hdr;
+      ptb::content::word::body_t *pld;
+      ptb::content::word::word_t*word;
+      
       //uint32_t header;
-      uint8_t tcp_body[4096];
+      uint8_t tcp_data[4096];
       size_t count = 0;
       bool timeout_reached = false;
+      size_t tcp_body_size = 0;
+      
       // FIXME: Receive the ethernet packets
       while ((!stop_req_) || (stop_req_ && !timeout_reached)) {
+	
         // grab a header
-        sock->recv(&header,header.word.size_bytes);
+	//cout << "Going to receive " << header->word.size_bytes << " bytes" << endl;
+	bytes_collected = 0;
+	while (bytes_collected != header->word.size_bytes) {
+	  bytes_collected += sock->recv(&tcp_data[bytes_collected],header->word.size_bytes-bytes_collected);
+	}
+	//printf("Received %u bytes : %X\n",bytes_collected,*(reinterpret_cast<uint32_t*>(&tcp_data[0])));
+	header = reinterpret_cast<ptb::content::tcp_header *>(tcp_data);
         count++;
         if (!(count%1000)) cout << "Counting " << count << "packets received..." << endl;
         // check the number of bytes in this packet
-        bytes_collected = 0;
-        // Cast the result into the header
-  //      ptb::content::tcp_header_t *pkg_hdr = reinterpret_cast<ptb::content::tcp_header_t*>(&header);
-  //      pckt_size = pkg_hdr->packet_size;
-        while (bytes_collected != header.word.packet_size) {
-          sock->recv(&tcp_body[bytes_collected],(int)(pckt_size-bytes_collected));
+	//cout << "Expecting to receive " << header->word.packet_size << " bytes " << endl;
+	tcp_body_size = header->word.packet_size;
+	bytes_collected = 0;
+        while (bytes_collected != tcp_body_size) {
+          bytes_collected += sock->recv(&tcp_data[bytes_collected],(int)(tcp_body_size-bytes_collected));
         }
+	// cout << "Collected expected bytes. " << endl;
+	// for(size_t i = 0; i < bytes_collected; i++) {
+	//   printf("%02X ",tcp_data[i]);
+	// }
+	// printf("\n");
         // -- We now should have the whole sent packet
         // parse it
         uint32_t pos = 0;
-        while (pos <= header.word.packet_size) {
-          // 1. Grab the header (we know what it its size)
-          hdr = reinterpret_cast<ptb::content::word::header *>(&tcp_body[pos]);
-          pos += hdr->word.size_bytes;
+        while (pos < tcp_body_size) {
+	  // 1. grab the frame:
+	  word = reinterpret_cast<ptb::content::word::word_t*>(&tcp_data[pos]);
+          // 2. Grab the header (we know what is its size)
+          hdr = &(word->wheader); //reinterpret_cast<ptb::content::word::header_t *>(tcp_data[pos]);
+          pos += hdr->size_bytes;
 
           // -- For now we are assuming that all payloads are of the same size
-          switch(hdr->word.word_type) {
+	  cout << "Word: type " << static_cast<uint32_t>(hdr->word_type)
+	       << " ts roll " << hdr->ts_rollover << endl;
+          switch(hdr->word_type) {
           case ptb::content::word::t_fback:
             cout << "Received a warning!!! This is rare! Do something smart to fix the problem" << endl;
             // advance the pointer by the size of this payload
@@ -219,28 +238,33 @@ public:
             pos += ptb::content::word::body_t::size_bytes;
             break;
           case ptb::content::word::t_ts:
-            // Received a timestamp. Print it...why the hell not?
-            ptb::content::word::payload::timestamp_t *ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(&tcp_body[pos]);
-            cout << "Received timestamp " << ts->timestamp << endl;
+            ptb::content::word::payload::timestamp_t *ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(&(word->wbody));
+            cout << "Received timestamp " << ts->timestamp() << endl;
+	    // -- Alternative way is going through the body_t structure
+	    pld = &(word->wbody);
+	    ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(pld);
+            cout << "Received timestamp (xcheck)" << ts->timestamp() << endl;
             pos += ptb::content::word::body_t::size_bytes;
             break;
           }
         }
-
+	
       }
+      // -- Don't hang in here. Disconnect the thing
+      return;
+    }
+    catch(SocketException &e) {
+      cout << "Socket exception caught : " << e.what() << endl;
+    }
+    catch(std::exception &e) {
+      cout << "STD exception caught : " << e.what() << endl;
     }
     catch(...) {
       cerr << "Something went wrong. " << endl;
     }
-
+    // Delete the connection
   }
 
-
-
-//  static void static_sig_handler(int signum)
-//  {
-//      instance.sig_handler(signum);
-//  }
 
 private:
   TCPSocket client_sock;
@@ -252,9 +276,6 @@ private:
   std::thread::id receiver_id_;
   // Aux vars
   char answer_[1024];
-
-  // Static instance so we can play with the signal handler
-//  static ctb_robot instance;
 };
 
 int main() {
