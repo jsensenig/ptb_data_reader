@@ -41,20 +41,343 @@ static const std::string g_config = "<config><DataBuffer><DaqHost>128.91.191.222
 class ctb_robot {
   public:
     ctb_robot(const std::string &host = "localhost",const uint16_t &port = 8991, const uint16_t&listen_port = 8992)
-  : stop_req_(false), is_running_(false),is_conf_(false),quit_req_(false),listen_port_(listen_port),srv_thread_(nullptr),io_service_(boost::make_shared<boost::asio::io_service>())
+  : stop_req_(false), is_running_(false),is_conf_(false),quit_req_(false),listen_port_(listen_port),
+    srv_thread_(nullptr),
+    acceptor_(io_service_,tcp::v4(),(unsigned short)listen_port),
+    accept_socket_(io_service_),
+    data_socket_(io_service_),
+    deadline_(io_service_),
+    deadline_io_object_(None),
+    run_receiver_(true),
+    suspend_readout_(false),
+    readout_suspended_(false),
+    recv_socket_(0),
+    state_nbytes_recvd_(0),
+    current_receive_state_(TcpHeader),
+    next_receive_size_(0),
+    pld(nullptr), tcp_header(nullptr),word(nullptr),hdr(nullptr)
+
+
   {
       std::cout.setf(std::ios::unitbuf);
 
-      tcp::resolver resolver(*io_service_);
+      //      tcp::resolver resolver(*io_service_);
+      //
+      //      tcp::resolver::query query(tcp::v4(), host,std::to_string(port));
+      //      tcp::resolver::iterator iterator = resolver.resolve(query);
+      //      client_socket_ = boost::make_shared<boost::asio::ip::tcp::socket>(*io_service_);
+      //      boost::asio::connect(*client_socket_, iterator);
+      //      ec_ = boost::make_shared<boost::system::error_code>();
+      // Initialize and start the persistent deadline actor that handles socket operation
+      // timeouts. For now set the timeout to zero (no timeout)
+      this->set_deadline(None, 0);
+      this->check_deadline();
 
-      tcp::resolver::query query(tcp::v4(), host,std::to_string(port));
-      tcp::resolver::iterator iterator = resolver.resolve(query);
-      client_socket_ = boost::make_shared<boost::asio::ip::tcp::socket>(*io_service_);
-      boost::asio::connect(*client_socket_, iterator);
-      ec_ = boost::make_shared<boost::system::error_code>();
+      // Start asynchronous accept handler
+      this->do_accept();
+
+      receiver_thread_ = std::unique_ptr<std::thread>(new std::thread(&ctb_robot::run_service, this));
+
+
   }
-    virtual ~ctb_robot() {};
+    virtual ~ctb_robot() {
+      // Flag receiver as no longer running
+      run_receiver_.store(false);
+      // Cancel any currently pending IO object deadlines and terminate timer
+      deadline_.expires_at(boost::asio::deadline_timer::traits_type::now());
 
+      // Wait for thread running receiver IO service to terminate
+      receiver_thread_->join();
+
+
+    }
+
+    void suspend_readout(bool await_restart)
+    {
+      readout_suspended_.store(true);
+
+      if (await_restart)
+      {
+        cout << "::suspend_readout: awaiting restart or shutdown" << endl;
+        while (suspend_readout_.load() && run_receiver_.load())
+        {
+          usleep(tick_period_usecs_);
+        }
+        cout << "::suspend_readout: restart or shutdown detected, exiting wait loop" << endl;
+      }
+
+    }
+
+    void start() {
+      //start_time_ = std::chrono::high_resolution_clock::now();
+
+      // If the data receive socket is open, flush any stale data off it
+      if (deadline_io_object_ == DataSocket)
+      {
+
+        std::size_t flush_length = 0;
+
+        while (data_socket_.available() > 0)
+        {
+          boost::array<char, 65536> buf;
+          boost::system::error_code ec;
+
+          size_t len = data_socket_.read_some(boost::asio::buffer(buf), ec);
+          flush_length += len;
+          if (ec == boost::asio::error::eof)
+          {
+            cout<< ":start: client closed data socket connection during flush operation" << endl;
+            break;
+          }
+          else if (ec)
+          {
+            cout << "::start: got unexpected socket error flushing data socket: " << ec << endl;
+            break;
+          }
+        }
+        if (flush_length > 0)
+        {
+          // JCF, Feb-4-2016
+
+          // I've observed that when the RceDataReceiver has
+          // to flush bytes of stale data it pretty much
+          // guarantees an error later in the run; given that
+          // this code is largely based on the
+          // RceDataReceiver, then, I've promoted this message
+          // from "Info" level to "Warning" level
+
+          cout  << "lbne::PennDataReceiver::start: flushed " << flush_length << " bytes stale data off open socket" << endl;
+        }
+        else
+        {
+          cout << "lbne::PennDataReceiver::start: no stale data to flush off socket" << endl;
+        }
+      }
+
+      state_nbytes_recvd_ = 0;
+
+      // Clear suspend readout handshake flags
+      suspend_readout_.store(false);
+      readout_suspended_.store(false);
+
+    }
+
+    void stop() {
+      // Suspend readout and wait for receiver thread to respond accordingly
+      suspend_readout_.store(true);
+
+      uint32_t timeout_count = 0;
+      while (!readout_suspended_.load())
+      {
+        usleep(100);
+        timeout_count++;
+      }
+    }
+
+
+    void run_service(void) {
+      io_service_.run();
+      if (suspend_readout_.load())  // Normal situation, it should stop after a bit when we stop the run
+      {
+        cout << "::run_service stopping" << endl;
+      } else {
+        cout << "boost::asio::io_service has stopped running mysteriously inside the run.  Continuing the run from here is probably not useful." << endl;
+      }
+
+    }
+
+    //do_accept simply keeps track of accepting the ethernet connection from the PTB
+    // Then redirects the handling of the received data to do_read
+    void do_accept() {
+
+      const size_t print_nth_timeout = 200;
+      static size_t nth_timeout = 0;
+
+      // Suspend readout and cleanup any incomplete millislices if stop has been called
+      if (suspend_readout_.load())
+      {
+        cout << "Suspending readout at do_accept entry" << endl;
+        this->suspend_readout(false);
+      }
+
+      // Exit if shutting receiver down
+      if (!run_receiver_.load()) {
+        cout << "Stopping do_accept() at entry" << endl;
+        return;
+      }
+
+      this->set_deadline(Acceptor, 100);
+
+      acceptor_.async_accept(accept_socket_,
+          [this](boost::system::error_code ec)
+          {
+        if (!ec)
+        {
+          cout << "Accepted new data connection from source " << accept_socket_.remote_endpoint() << endl;
+          data_socket_ = std::move(accept_socket_);
+          this->do_read();
+        }
+        else
+        {
+          if (ec == boost::asio::error::operation_aborted)
+          {
+            if (nth_timeout % print_nth_timeout == 0) {
+              cout << "Timeout on async_accept" << endl;
+            }
+
+            nth_timeout++;
+          }
+          else
+          {
+            try {
+              cout << "Got error on asynchronous accept: " << ec << " " << ec.message() << endl;
+            } catch (...) {
+              cout << "Something went wrong " << endl;
+            }
+          }
+          this->do_accept();
+        }
+          }
+      );
+
+    }
+
+
+    // do_read handles the data received from the PTB, casts them into RawBuffer,
+    // converts them into MicroSlices and
+    // and pushes them into millislices
+    void do_read(void)
+    {
+
+      // Suspend readout and cleanup any incomplete millislices if stop has been called
+      if (suspend_readout_.load())
+      {
+        cout << "Suspending readout at do_read entry" << endl;
+        this->suspend_readout(true);
+      }
+
+      // Terminate receiver read loop if required
+      if (!run_receiver_.load())
+      {
+        cout << "Stopping do_read at entry" << endl;
+        return;
+      }
+
+      // Set timeout on read from data socket
+      this->set_deadline(DataSocket, 100);
+
+
+      // The data should not go
+      // Start the asynchronous receive operation into the (existing) current raw buffer.
+      uint16_t bytes_collected= 0;
+
+      //      do {
+      // NFB -- Jan, 14 2016
+      // According to boost documentation:
+      /**
+       * The receive operation may not receive all of the requested number of bytes.
+       * Consider using the async_read function if you need to ensure that the requested
+       * amount of data is received before the asynchronous operation completes.
+       */
+      //data_socket_.async_receive(
+      next_receive_size_ = sizeof(header->size_bytes);
+      boost::asio::async_read(data_socket_,
+          boost::asio::buffer(tcp_data_, next_receive_size_),
+          [this](boost::system::error_code ec, std::size_t length)
+          {
+        if (!ec)
+        {
+          cout << "Received " << length << " bytes on socket" << endl;
+
+          // -- handle received data here
+          this->handle_received_data(length);
+
+          this->do_read();
+        }
+        else
+        {
+          if (ec == boost::asio::error::eof)
+          {
+            cout << "Client socket closed the connection" << endl;
+            this->do_accept();
+          }
+          else if (ec == boost::asio::error::operation_aborted)
+          {
+            // NFB : Shoudln't this be a warning?  GDB: I think this is OK, this is the
+            // usual thing to do if no data arrives in a certain time, which should
+            // happen when we are waiting for the run to start, and if we are
+            // checking often enough during the run.
+            cout << "Timeout on read from data socket" << endl;
+            this->do_read();
+          }
+          else
+          {
+            try {
+              cout << "Got error on aysnchronous read from the socket: " << ec << " " << ec.message() << endl;
+            } catch (...) {
+              ;
+            }
+          }
+
+        }
+          }
+      );
+    }
+
+
+    void handle_received_data(std::size_t length) {
+      // -- check state to know how to handle
+      if (current_receive_state_ == TcpHeader) {
+        tcp_header = reinterpret_cast<ptb::content::tcp_header_t *>(tcp_data_);
+        count_++;
+        tcp_body_size_ = tcp_header->packet_size;
+        next_receive_size_ = tcp_body_size_;
+      } else {
+        if (length != tcp_body_size_) {
+          cout << "Was expecting " << tcp_body_size_ << " but received " << length << endl;
+        }
+        uint32_t pos = 0;
+        while (pos < tcp_body_size_) {
+          // 1. grab the frame:
+          word = reinterpret_cast<ptb::content::word::word_t*>(&tcp_data_[pos]);
+          // 2. Grab the header (we know what's its size)
+          hdr = &(word->wheader);
+          pos += hdr->size_bytes;
+
+          // -- For now we are assuming that all payloads are of the same size
+          cout << "Word: type " << static_cast<uint32_t>(hdr->word_type)
+               << " ts roll " << hdr->ts_rollover << endl;
+          switch(hdr->word_type) {
+            case ptb::content::word::t_fback:
+              cout << "Received a warning!!! This is rare! Do something smart to fix the problem" << endl;
+              // advance the pointer by the size of this payload
+              pos += ptb::content::word::body_t::size_bytes;
+              break;
+            case ptb::content::word::t_gt:
+              cout << "Received a global trigger. Do something here on how to parse it" << endl;
+              // advance the pointer by the size of this payload
+              pos += ptb::content::word::body_t::size_bytes;
+              break;
+            case ptb::content::word::t_lt:
+              cout << "Received a low level trigger. Do something here on how to parse it" << endl;
+              // advance the pointer by the size of this payload
+              pos += ptb::content::word::body_t::size_bytes;
+              break;
+            case ptb::content::word::t_ts:
+              ptb::content::word::payload::timestamp_t *ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(&(word->wbody));
+              cout << "Received timestamp           " << ts->timestamp() << endl;
+              // -- Alternative way is going through the body_t structure
+              pld = &(word->wbody);
+              ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(pld);
+              cout << "Received timestamp (xcheck)  " << ts->timestamp() << endl;
+              pos += ptb::content::word::body_t::size_bytes;
+              break;
+          }
+        }
+
+      }
+
+    }
 
     void execute_command(const std::string &cmd) {
       boost::asio::write(*client_socket_, boost::asio::buffer(cmd, cmd.size()));
@@ -286,7 +609,7 @@ class ctb_robot {
 
             // -- For now we are assuming that all payloads are of the same size
             cout << "Word: type " << static_cast<uint32_t>(hdr->word_type)
-	           << " ts roll " << hdr->ts_rollover << endl;
+	               << " ts roll " << hdr->ts_rollover << endl;
             switch(hdr->word_type) {
               case ptb::content::word::t_fback:
                 cout << "Received a warning!!! This is rare! Do something smart to fix the problem" << endl;
@@ -330,11 +653,83 @@ class ctb_robot {
 
   private:
 
+    enum DeadlineIoObject { None, Acceptor, DataSocket };
 
-    boost::shared_ptr<boost::asio::io_service> io_service_;
-    boost::shared_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
-    boost::shared_ptr<tcp::socket> client_socket_;
-    boost::shared_ptr<boost::system::error_code> ec_;
+    enum ReceiveState {TcpHeader,TcpBody};
+
+
+    void set_deadline(DeadlineIoObject io_object, unsigned int timeout_usecs)
+    {
+
+      // Set the current IO object that the deadline is being used for
+      deadline_io_object_ = io_object;
+
+      // Set the deadline for the asynchronous write operation if the timeout is set, otherwise
+      // revert back to +ve infinity to stall the deadline timer actor
+      if (timeout_usecs > 0)
+      {
+        deadline_.expires_from_now(boost::posix_time::microseconds(timeout_usecs));
+      }
+      else
+      {
+        deadline_.expires_from_now(boost::posix_time::pos_infin);
+      }
+    }
+
+    void check_deadline(void) {
+      if (deadline_.expires_at() <= boost::asio::deadline_timer::traits_type::now()) {
+
+      }
+      // Put the deadline actor back to sleep if receiver is still running
+      if (run_receiver_.load())
+      {
+        deadline_.async_wait(boost::bind(&ptb_robot::check_deadline, this));
+      }
+
+    }
+
+    /// -- Ethernet connection management variables
+    boost::asio::io_service io_service_;
+    tcp::acceptor           acceptor_;
+    tcp::socket         accept_socket_;
+    tcp::socket   data_socket_;
+
+    // -- my own variable
+    boost::system::error_code ec_;
+
+    // -- timer to find lost connections
+    boost::asio::deadline_timer deadline_;
+    DeadlineIoObject deadline_io_object_;
+
+
+    // -- a couple of atomics
+    std::atomic<bool> run_receiver_;
+    std::atomic<bool> suspend_readout_;
+    std::atomic<bool> readout_suspended_;
+
+    int recv_socket_;
+
+    std::unique_ptr<std::thread> receiver_thread_;
+    std::size_t      state_nbytes_recvd_;
+
+    // Content structures from the C/PTB
+    ptb::content::tcp_header_t *tcp_header;
+    ptb::content::word::header_t *hdr;
+    ptb::content::word::body_t *pld;
+    ptb::content::word::word_t*word;
+
+    const uint32_t max_length_ = 4096;
+    uint8_t tcp_data_[4096];
+    size_t count_ = 0;
+    size_t tcp_body_size_ = 0;
+//    size_t next_receive_size = sizeof(header->size_bytes);
+    size_t next_receive_size_;// = sizeof(ctb::content::tcp_header_t::size_bytes);
+
+    ReceiveState current_receive_state_;
+    //    boost::shared_ptr<boost::asio::io_service> io_service_;
+    //    boost::shared_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
+    //    boost::shared_ptr<tcp::socket> client_socket_;
+    //    boost::shared_ptr<boost::system::error_code> ec_;
 
     // Server thread
     boost::thread* srv_thread_;

@@ -26,7 +26,8 @@ endif
 
 .PHONY: all clean
 
-all: standalone_run_boost standalone_run
+#all: standalone_run_boost standalone_run
+all: standalone_run
 
 
 clean:
@@ -35,6 +36,6 @@ clean:
 standalone_run: standalone_run.cpp PracticalSocket.cpp
 	$(CC) -I./ $(CFLAGS) -o $@ $? $(LFLAGS)
 
-standalone_run_boost: standalone_run_boost.cpp
-	$(CC) -I./ $(CFLAGS) $(BOOST_CFLAGS) -o $@ $? $(BOOST_LFLAGS)
+#standalone_run_boost: standalone_run_boost.cpp
+#	$(CC) -I./ $(CFLAGS) $(BOOST_CFLAGS) -o $@ $? $(BOOST_LFLAGS)
 
