@@ -90,7 +90,7 @@ board_reader::board_reader() : tcp_port_(0), tcp_host_(""),
     // below this point all these are debugging variables
     dry_run_(false), error_state_(false),error_messages_(""),
     num_eth_fragments_(0),
-    num_word_counter_(0),num_word_trigger_(0),num_word_feedback_(0),
+    num_word_counter_(0),num_word_gtrigger_(0),num_word_ltrigger_(0),num_word_feedback_(0),
     num_word_tstamp_(0),bytes_sent_(0)
 {
 
