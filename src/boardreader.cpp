@@ -88,7 +88,7 @@ board_reader::board_reader() : tcp_port_(0), tcp_host_(""),
     keep_transmitting_(true),
     keep_collecting_(true),time_rollover_(0),dma_initialized_(false),
     // below this point all these are debugging variables
-    dry_run_(false), error_state_(false),error_messages_(""),
+    dry_run_(false), error_state_(false),
     num_eth_fragments_(0),
     num_word_counter_(0),num_word_gtrigger_(0),num_word_ltrigger_(0),num_word_feedback_(0),
     num_word_tstamp_(0),bytes_sent_(0)
@@ -690,7 +690,7 @@ void board_reader::data_collector() {
       err_msg  << "<error>Failed to acquire data. Returned " << dma_buffer.handle << "</error>";
 
       // Stop just the collection thread
-      error_messages_ += err_msg.str();
+      error_messages_.push_back(err_msg.str());
       error_state_ = true;
       keep_collecting_ = false;
       break;
@@ -787,7 +787,7 @@ void board_reader::data_transmitter() {
 
 
   error_state_ = false;
-  error_messages_ = "";
+  error_messages_.clear();
   // Debugging information that is passed down in the end of the run
   num_eth_fragments_ = 0;
   num_word_counter_ = 0;
@@ -1142,11 +1142,12 @@ void board_reader::data_transmitter() {
       // Stop collecting and transmitting
       //
       error_state_ = true;
-      error_messages_ += "<error>Data socket exception [";
-      error_messages_ += currentDateTime();
-      error_messages_ += "] : ";
-      error_messages_ += e.what();
-      error_messages_ += "</error>";
+      std::string err_msg;
+      err_msg += "ERROR: Data socket exception [";
+      err_msg += currentDateTime();
+      err_msg += "] : ";
+      err_msg += e.what();
+      error_messages_.push_back(err_msg);
       keep_collecting_ = false;
       keep_transmitting_ = false;
       //
@@ -1230,7 +1231,7 @@ void board_reader::data_transmitter() {
   /** Statistics collection variables
    */
   error_state_ = false;
-  error_messages_ = "";
+  error_messages_.clear();
   // Debugging information that is passed down in the end of the run
   num_eth_fragments_ = 0;
   num_word_counter_ = 0;
@@ -1394,16 +1395,17 @@ void board_reader::data_transmitter() {
       // Stop collecting and transmitting
       //
       error_state_ = true;
-      error_messages_ += "<error>Data socket exception [";
+      std::string err_msg;
+      err_msg = "ERROR: Data socket exception [";
       std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
       std::time_t now_c = std::chrono::system_clock::to_time_t(now);
       std::tm now_tm = *std::localtime(&now_c);
       char date[128];
       strftime(date, sizeof(date), "%A %c", &now_tm);
-      error_messages_ += date;
-      error_messages_ += "] : ";
-      error_messages_ += e.what();
-      error_messages_ += "</error>";
+      err_msg += date;
+      err_msg += "] : ";
+      err_msg += e.what();
+      error_messages_.push_back(err_msg);
       keep_collecting_ = false;
       keep_transmitting_ = false;
     }
@@ -1802,12 +1804,13 @@ catch(SocketException &e) {
   Log(error,"Socket exception : %s",e.what() );
   // Stop collecting and transmitting
   //
+  std::string err_msg;
   error_state_ = true;
-  error_messages_ += "<error>Data socket exception [";
-  error_messages_ += currentDateTime();
-  error_messages_ += "] : ";
-  error_messages_ += e.what();
-  error_messages_ += "</error>";
+  err_msg += "ERROR : Data socket exception [";
+  err_msg += currentDateTime();
+  err_msg += "] : ";
+  err_msg += e.what();
+  error_messages_.push_back(err_msg);
   keep_collecting_ = false;
   keep_transmitting_ = false;
   //

@@ -101,5 +101,38 @@ catch(std::exception &e) {
 }
 i.close();
   // -- Now attempt to parse the expected setup
+
+std::string teststr = "{ \"something\":[1,2,3],\"a1\":3.14,\"b1\":\"ssddsd\",\"c1\":{ \"something\": \"else\" },\"d1\":\"1233\"}";
+json obj = json::parse(teststr);
+for (json::iterator it = obj.begin(); it != obj.end(); ++it) {
+    std::cout << it.key() << " : " << it.value() << "\n";
+}
+
+
+try{
+  // -- find if there is a "command" key
+  std::cout << "Command : " << obj.count("command") << std::endl;
+  // -- find if there is a "something" key
+  std::cout << "Something : " << obj.count("something") << std::endl;
+  obj.erase("something");
+  for (json::iterator it = obj.begin(); it != obj.end(); ++it) {
+      std::cout << it.key() << " : " << it.value() << "\n";
+  }
+
+}
+catch(json::out_of_range &e) {
+  std::cerr << "JSON oor exception : " << e.what() << std::endl;
+}
+
+catch(json::exception &e) {
+  std::cerr << "JSON exception : " << e.what() << std::endl;
+}
+catch(std::out_of_range &e ) {
+  std::cerr << "Out of range : " << e.what() << std::endl;
+}
+catch(std::exception &e) {
+  std::cerr << "Some other STL exception : " << e.what() << std::endl;
+}
+
   return 0;
 }

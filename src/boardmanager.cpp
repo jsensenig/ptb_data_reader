@@ -14,27 +14,31 @@
 #include "PracticalSocket.h"
 #include "util.h"
 
-
 #if !defined(SIMULATION)
 //defined(ARM_XDMA) || defined(ARM_MMAP)
 #include "ptb_registers.h"
 #endif /*ARM*/
 
 // -- PugiXML includes
-#include "pugixml.hpp"
+//#include "pugixml.hpp"
 #include <iomanip>
 #include <thread>
 #include <chrono>
 #include <bitset>
 #include <cmath>
+#include <cinttypes>
 
 
 #define __STDC_FORMAT_MACROS
 
 extern "C" {
 #include <unistd.h>
-#include <inttypes.h>
 }
+
+
+#include "json.hpp"
+using json = nlohmann::json;
+
 
 /**
  * This seems to suggest that the control register is always set to 1.
@@ -52,14 +56,14 @@ namespace ptb {
 
   // Init with a new reader attached
   board_manager::board_manager( ) :
-		    reader_(0),
-		    //cfg_srv_(0),
-		    board_state_(IDLE),
-		    mapped_conf_base_addr_(nullptr),
-		    msgs_str_(""),
-		    error_state_(false),
-		    data_socket_host_("192.168.100.100"),
-		    data_socket_port_(8992) {
+		        reader_(0),
+		        //cfg_srv_(0),
+		        board_state_(IDLE),
+		        mapped_conf_base_addr_(nullptr),
+		        msgs_str_(""),
+		        error_state_(false),
+		        data_socket_host_("192.168.100.100"),
+		        data_socket_port_(8992) {
     reader_ =	new board_reader();
     Log(debug,"Setting up pointers." );
 
@@ -93,10 +97,12 @@ namespace ptb {
   }
 
 
-  void board_manager::exec_command(const std::string &cmd,std::string &answers) {
+  void board_manager::exec_command(const std::string &cmd,std::vector<std::string> &answers) {
+    feedback_.clear();
+    std::ostringstream msgs_;
     //  try{
-    msgs_.clear();
-    msgs_.str("");
+    //    msgs_.clear();
+    //    msgs_.str("");
     error_state_ = false;
     Log(debug,"Received command [%s]", cmd.c_str());
     std::map<std::string, command>::iterator it;
@@ -106,69 +112,85 @@ namespace ptb {
     }
 #endif
     switch (commands_.at(cmd)) {
-    // -- Send the signal to start the run. Should be a register.
-    case STARTRUN:
-      // Only starts a run if the manager is in IDLE state
-      //Issue a warning and restart a run
-      // Otherwise issue a warning
-      if (get_board_state() != board_manager::IDLE) {
-        Log(warning,"A run is already running. Starting new run." );
-        msgs_ << "<warning>Board already taking data. Restarting new run.Might miss the sync pulse.</warning>";
-        stop_run();
-      } else {
-        // Start the run
-        Log(verbose,"Starting a new Run." );
-        //start_run();
-      }
-      start_run();
-      break;
-    case SOFTRESET:
-      Log(info,"Applying a soft reset");
-      set_reset_bit(true);
-      // Sleep for 100 microseconds to make sure that reset has taken place
-      std::this_thread::sleep_for (std::chrono::microseconds(100));
-      set_reset_bit(false);
-      // -- Re-commit the configuration
-      // Not sure if this is going to work as intended
-      // TODO: Only restore if the registers actually have something in them.
-      restore_config_registers();
-      set_config_bit(true);
-      msgs_ << "<success>true</success>";
-      break;
-    case HARDRESET:
-      // A hard reset should sent the whole thing to zeros
-      // Including clearing up the configuration. A new configuration will have to be reissued
-      set_enable_bit(false);
-      set_config_bit(false);
-      // the hard reset also includes a complete reset of the local buffers
-      set_reset_bit(true);
-      // Sleep for 100 microseconds to make sure that reset has taken place
-      std::this_thread::sleep_for (std::chrono::microseconds(100));
-      set_reset_bit(false);
-      if (reader_) {
-        reader_->reset_buffers();
-      }
-      zero_config_registers();
-      msgs_ << "<success>true</success>";
-      break;
-    case STOPRUN:
-      if (get_board_state() != board_manager::RUNNING) {
-        msgs_ << "<warning>Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.</warning>";
-        Log(warning,"Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.." );
-        // The GLB_EN is located in bin 31 of register 30
+      // -- Send the signal to start the run. Should be a register.
+      case STARTRUN:
+        // Only starts a run if the manager is in IDLE state
+        //Issue a warning and restart a run
+        // Otherwise issue a warning
+        if (get_board_state() != board_manager::IDLE) {
+          Log(warning,"A run is already running. Starting new run." );
+          msgs_ << "Warning::Board already taking data. Restarting new run.Might miss the sync pulse.";
+          feedback_.push_back(msgs_.str());
+          msgs_.clear();
+          msgs_.str("");
+          stop_run();
+        } else {
+          // Start the run
+          Log(verbose,"Starting a new Run." );
+          //start_run();
+        }
+        start_run();
+        break;
+      case SOFTRESET:
+        Log(info,"Applying a soft reset");
+        set_reset_bit(true);
+        // Sleep for 100 microseconds to make sure that reset has taken place
+        std::this_thread::sleep_for (std::chrono::microseconds(100));
+        set_reset_bit(false);
+        // -- Re-commit the configuration
+        // Not sure if this is going to work as intended
+        // TODO: Only restore if the registers actually have something in them.
+        restore_config_registers();
+        set_config_bit(true);
+        msgs_ << "Result: SUCCESS";
+        feedback_.push_back(msgs_.str());
+        msgs_.clear();
+        msgs_.str("");
+        break;
+      case HARDRESET:
+        // A hard reset should sent the whole thing to zeros
+        // Including clearing up the configuration. A new configuration will have to be reissued
         set_enable_bit(false);
-        Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
-      } else {
-        Log(verbose,"The Run should STOP now" );
-        stop_run();
-      }
-      break;
-    default:
-      msgs_ << "<error>Unknown PTB command [" << cmd << "] </error>";
-      break;
+        set_config_bit(false);
+        // the hard reset also includes a complete reset of the local buffers
+        set_reset_bit(true);
+        // Sleep for 100 microseconds to make sure that reset has taken place
+        std::this_thread::sleep_for (std::chrono::microseconds(100));
+        set_reset_bit(false);
+        if (reader_) {
+          reader_->reset_buffers();
+        }
+        zero_config_registers();
+        msgs_ << "Result: SUCCESS";
+        feedback_.push_back(msgs_.str());
+        msgs_.clear();
+        msgs_.str("");
+        break;
+      case STOPRUN:
+        if (get_board_state() != board_manager::RUNNING) {
+          msgs_ << "Warning: Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.";
+          feedback_.push_back(msgs_.str());
+          msgs_.clear();
+          msgs_.str("");
+          Log(warning,"Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.." );
+          // The GLB_EN is located in bin 31 of register 30
+          set_enable_bit(false);
+          Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
+        } else {
+          Log(verbose,"The Run should STOP now" );
+          stop_run();
+        }
+        break;
+      default:
+        msgs_ << "ERROR:Unknown PTB command [" << cmd << "].";
+        feedback_.push_back(msgs_.str());
+        msgs_.clear();
+        msgs_.str("");
+        break;
     }
+    answers = feedback_;
     //  msgs_str_ = msgs_.str();
-    answers = msgs_.str();
+    //answers = msgs_.str();
     //  answers = new char[msgs_str_.size()+1];
     //  sprintf(answers,"%s",msgs_str_.c_str());
   }
@@ -182,7 +204,7 @@ namespace ptb {
     // Set status flag to RUNNING
     if (!reader_) {
       Log(warning,"No valid reader availble. Relaunching a new one.");
-      msgs_ << "<warning>No valid PTB reader availble. Relaunching a new one.</warning>";
+      feedback_.push_back("WARNING: No valid PTB reader availble. Relaunching a new one.");
       reader_ = new board_reader();
       reader_->set_tcp_host(data_socket_host_);
       reader_->set_tcp_port(data_socket_port_);
@@ -198,30 +220,30 @@ namespace ptb {
 
       if (!reader_->get_ready()) {
         Log(warning,"Received call to start transmitting but reader is not ready. Refusing to run." );
-        msgs_ << "<error>PTB data reader is not ready yet.Refusing to run.</error>";
+        feedback_.push_back("ERROR: PTB data reader is not ready yet.Refusing to run.");
         error_state_ = true;
         return;
       }
       reader_->start_data_taking();
     }
     catch(SocketException &e) {
-      msgs_ << "<error> PTB data socket exception (socket):" << e.what() << "</error>";
+      feedback_.push_back("ERROR: PTB data socket exception (socket):" + e.what());
       error_state_ = true;
       return;
     }
     catch(op_exception &e) {
-      msgs_ << "<error>PTB data socket exception (user):" << e.what() << "</error>";
+      feedback_.push_back("ERROR: PTB data socket exception (user):" + e.what());
       error_state_ = true;
       return;
     }
     catch(std::exception &e) {
-      msgs_ << "<error>PTB data socket exception (std):" << e.what() << "</error>";
+      feedback_.push_back("ERROR: PTB data socket exception (std):" + e.what());
       error_state_ = true;
       return;
     }
     catch (...) {
       Log(error,"Unknown error starting reader thread");
-      msgs_ << "<error> PTB data socket exception (unknown): error starting reader.</error>";
+      feedback_.push_back("ERROR: PTB data socket exception (unknown): error starting reader.");
       error_state_ = true;
       return;
     }
@@ -235,7 +257,7 @@ namespace ptb {
 
     Log(info,"Run Start requested...");
 
-    msgs_ << "<success>true</success>";
+    feedback_.push_back("INFO: Success");
   }
 
   void board_manager::stop_run() {
@@ -255,20 +277,22 @@ namespace ptb {
     reader_->stop_data_taking();
 
     if (reader_->get_error_state()) {
-      msgs_ << reader_->get_error_msgs();
+      std::vector<std::string> tmp = reader_->get_error_msgs();
+      feedback_.insert(std::end(feedback_), std::begin(tmp), std::end(tmp));
       //msgs_ << "<error> Data socket was lost while taking data. </error>";
     }
-
-    msgs_ << "<run_statistics num_eth_packets=\"";
+    std::ostringstream msgs_;
+    msgs_ << "\"statistics\" : {\"num_eth_packets=\"";
     msgs_ << reader_->get_n_sent_frags();
-    msgs_ << "\" num_word_counter=\"" << reader_->get_n_status();
-    msgs_ << "\" num_global_trigger=\"" << reader_->get_n_gtriggers();
-    msgs_ << "\" num_low_trigger=\"" << reader_->get_n_ltriggers();
-    msgs_ << "\" num_word_tstamp=\"" << reader_->get_n_timestamps();
-    msgs_ << "\" num_word_fifo_warn=\"" << reader_->get_n_warns();
-    msgs_ << "\" num_bytes=\"" << reader_->get_sent_bytes();
-    msgs_ << "\" />";
+    msgs_ << ", \"num_word_counter\"=" << reader_->get_n_status();
+    msgs_ << ", \"num_hlt\"=" << reader_->get_n_gtriggers();
+    msgs_ << ", \"num_llt\"=" << reader_->get_n_ltriggers();
+    msgs_ << ", \"num_word_tstamp\"=" << reader_->get_n_timestamps();
+    msgs_ << ", \"num_word_fifo_warn\"=" << reader_->get_n_warns();
+    msgs_ << ", \"num_bytes\"=" << reader_->get_sent_bytes();
+    msgs_ << "}";
 
+    feedback_.push_back(msgs_.str());
     Log(info,"End of run message: %s",msgs_.str().c_str());
 
     //-- Soft Reset
@@ -285,10 +309,10 @@ namespace ptb {
 
     if (get_enable_bit_ACK() != false ) {
       Log(warning,"Stop Run failed. ACK bit still high.");
-      msgs_ << "<warning>Failed to stop run on hardware. No ACK received.</warning>";
+      feedback_.push_back("WARNING : Failed to stop run on hardware. No ACK received.");
     } else {
       Log(info,"Run stopped");
-      msgs_ << "<success>true</success>";
+      feedback_.push_back("INFO: Success");
     }
     board_state_ = IDLE;
   }
@@ -403,6 +427,162 @@ namespace ptb {
 
   }
 
+
+#ifndef OLD_CODE
+  void board_manager::process_config(json &doc,std::vector<std::string> &answers) {
+    std::ostringstream msgs_;
+    msgs_.str("");
+
+
+    if (board_state_ == RUNNING) {
+      answers.push_back("WARNING : Attempted to pass a new configuration during a run. Ignoring the new configuration.");
+      Log(warning,"Attempted to pass a new configuration during a run. Ignoring the new configuration." );
+      //feedback = msgs_.str();
+      return;
+    }
+    bool has_error = false;
+    try{
+      Log(info,"Applying a reset prior to the configuration.");
+      set_reset_bit(true);
+      std::this_thread::sleep_for (std::chrono::microseconds(10));
+      set_reset_bit(false);
+
+      Log(warning,"Still in development. Only a few configuration registers are being set");
+    }
+    // -- Only catch something deriving from std::exception and unspecified
+    catch(std::exception &e) {
+      answers.push_back("ERROR: Error processing configuration: " + e.what() + ". Not committing configuration to PTB.");
+      has_error = true;
+    }
+    catch(...) {
+      answers.push_back("ERROR :Unknown error processing configuration. Not committing configuration to PTB.");
+      has_error = true;
+    }
+    // Check if we got an error. If so, do not commit.
+    if (has_error) {
+      // Don't commit. Just go back and throw the error.
+      return;
+    }
+
+    if (!reader_) {
+      Log(warning,"Don't have a valid PTBReader instance. Attempting to create a new one." );
+      answers.push_back("WARNING:Don't have a valid PTBReader instance. Attempting to create a new one.");
+      reader_ = new board_reader();
+    }
+
+    // -- First grab the server information
+    json receiver = doc.at("ctb").at("sockets").at("receiver");
+    data_socket_host_ = receiver.at("host").get<std::string>();
+    reader_->set_tcp_host(data_socket_host_);
+    data_socket_port_ = receiver.at("port").get<unsigned short>();
+    uint32_t duration;
+    std::stringstream strVal;
+    strVal << receiver.at("rollover").get<std::string>();
+    strVal >> std::dec >> duration;
+    // Microslice duration is now a full number...check if it fits into 27 bits
+    Log(debug,"MicroSlice Duration [%s] (%u) [0x%X][%s]",strVal.str().c_str(),duration,duration, std::bitset<27>(duration).to_string().c_str());
+    if (duration >= (1<<27)) {
+      //    answers.push_back("WARNING:Input value of [" << duration << "] above the allowed limit of 27 bits. Setting to maximum allowed.";
+      Log(warning,"Input value of [%u] above maximum rollover [27]. Truncating to maximum.",duration);
+      duration = (1<<27)-1;
+    }
+
+    // 1 ms in a 50MHz clock
+    //  if (duration <= 50000) {
+    //    msgs_ << "<warning>Input value of ["<< duration << "] below recommended limit of 1 ms (50000). ";
+    //    msgs_ << "Will allow but this setting is likely to cause overload of the ethernet connection. </warning>";
+
+    //  }
+
+    set_bit_range_register(6,0,27,duration);
+    Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
+    strVal.clear();
+    strVal.str("");
+
+    // -- Once the configuration is set, dump locally the status of the config registers
+    dump_config_registers();
+
+    // Set the bit to commit the configuration
+    // into the hardware (bit 29 in register 30)
+    Log(debug,"Committing configuration to the hardware.");
+    Log(verbose,"Control register before config commit 0x%X", register_map_[0].value() );
+    set_config_bit(true);
+    Log(debug,"Control register after config commit 0x%08X", register_map_[0].value() );
+    if (!get_config_bit_ACK()) {
+      // If the commit is not ACK then effectively the board is not configured.
+      // The best is to reset everything and fail the configuration.
+      msgs_ << "ERROR: Failed set to set the configuration bit. ACK not received. Control register : "
+          << std::hex << register_map_.at(0).value() << std::dec
+          << ". Control register after reset : ";
+      Log(warning,"Failed to set configuration bit. ACK not received. Control register %X",register_map_.at(0).value());
+
+      set_enable_bit(false);
+      Log(debug,"Control after disable: %X", register_map_.at(0).value());
+      set_config_bit(false);
+      Log(debug,"Control after disable config : %X", register_map_.at(0).value());
+      // the hard reset also includes a complete reset of the local buffers
+      set_reset_bit(true);
+      Log(debug,"Control after reset enable: %X", register_map_.at(0).value());
+
+      // Sleep for 10 microseconds to make sure that reset has taken place
+      std::this_thread::sleep_for (std::chrono::microseconds(10));
+      set_reset_bit(false);
+      Log(debug,"Control after reset disable: %X", register_map_.at(0).value());
+
+      zero_config_registers();
+      Log(debug,"Control zero config registers: %X", register_map_.at(0).value());
+
+      set_config_bit(false);
+      Log(debug,"Control after disable config again: %X", register_map_.at(0).value());
+
+      msgs_ << std::hex << register_map_.at(0).value() << std::dec;
+      answers.push_back(msgs_.str());
+      msgs_.clear();
+      msgs_.str("");
+      Log(error,"Failed set to set the configuration bit. ACK not received. Resetting back.");
+      has_error = true;
+    }
+
+    if (!has_error) {
+      Log(debug,"Registering the committed configuration to the local cache.");
+      // Store the cache in the mirror map
+      register_cache_.at(0).value() = CTL_BASE_REG_VAL;
+      for (uint32_t i = 1; i < num_registers_; ++i) {
+        register_cache_.at(i).value() = register_map_.at(i).value();
+      }
+
+      // Check for the ACK of the configuration
+      //  if ((register_map_[30].value() >> 28 & 0x1) != 0x1) {
+      //    Log(error,"Configuration failed to commit. ACK not received.");
+      //    throw("Configuration failed to commit. ACK not received.");
+      //  }
+
+
+      // After parsing everything (and making sure that all the configuration is set)
+      // Store the configuration locally
+      config_ = config;
+      // Log(debug,"Sleeping for 1s prior to init the connection to DAQ upstream.");
+      // // Tell the reader to start the connection
+      // std::this_thread::sleep_for (std::chrono::seconds(1));
+
+      // Log(verbose,"Initializing connection to DAQ upstream." );
+      // //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
+      // try {
+      //   reader_->InitConnection(true);
+      // }
+      // catch(SocketException &e) {
+      //   msgs_ << "<warning>Failed to open connection to board reader.</warning>";
+      //   Log(warning,"Connection failed to establish. This might cause troubles later.");
+      // }
+      answers.push_back("INFO: Success");
+
+    }
+    // Most likely the connection will fail at this point. Not a big problem.
+//    Log(verbose,"Returning from SetConfig with answer [%s]",feedback.c_str());
+
+  }
+
+#else
   // TODO: Implement this for the specific application.
   void board_manager::process_config(pugi::xml_node config,std::string &feedback) {
     msgs_.clear();
@@ -479,12 +659,12 @@ namespace ptb {
 
           }
 
-	  set_bit_range_register(6,0,27,duration);
-	  Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
-	  strVal.clear();
-	  strVal.str("");
+          set_bit_range_register(6,0,27,duration);
+          Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
+          strVal.clear();
+          strVal.str("");
         }
-	
+
       }
     }
     // -- Only catch something deriving from std::exception and unspecified
@@ -593,5 +773,5 @@ namespace ptb {
     Log(verbose,"Returning from SetConfig with answer [%s]",feedback.c_str());
   }
 
-
+#endif
 }

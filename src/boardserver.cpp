@@ -32,7 +32,8 @@
 #include "boardmanager.h"
 #include "boardreader.h"
 #include "boardserver.h"
-
+#include "json.hpp"
+using json = nlohmann::json;
 
 using std::string;
 namespace ptb {
@@ -44,7 +45,7 @@ board_manager *board_server::board_manager_ = NULL;
   std::queue<std::string> board_server::queue_;
 bool board_server::shutdown_requested_= false;
 TCPSocket* board_server::client_socket_ = nullptr;
-std::string board_server::msg_answer_ = "";
+//std::string board_server::msg_answer_ = "";
 
 board_server::board_server() {
   // Use the practical socket to establish a connection
@@ -63,10 +64,10 @@ void board_server::clean_and_relaunch() {
 
 	if (board_manager_ != nullptr) {
 		Log(warning,"Passing down a shutdown signal to the PTB.");
-	  board_manager_->exec_command("StopRun",msg_answer_);
+	  board_manager_->exec_command("StopRun",msg_answers_);
       // -- Force a hard reset in the PTB to account for the case the
       // DAQ crashed.
-	  board_manager_->exec_command("HardReset",msg_answer_);
+	  board_manager_->exec_command("HardReset",msg_answers_);
 	}
 	Log(warning,"Relaunching the socket for connection acceptance in 5s.");
 	std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -179,6 +180,11 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
   std::string localBuffer;
   localBuffer.resize(RCVBUFSIZE);
   localBuffer = "";
+
+  int brckt_count  = 0;
+  bool first_brckt = true;
+  size_t pos_start, pos_end;
+  size_t pos_aux;
   // What if the string sent is bigger than the one being read?
   // zero means transmission is finished.
   while ((recvMsgSize = client_socket_->recv(instBuffer, RCVBUFSIZE-2)) > 0) {
@@ -195,9 +201,54 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
     // tokens are passed (</config></command>)
 
     Log(verbose,"Duplicating the input");
+    pos_aux = localBuffer.size();
     localBuffer += instBuffer;
     Log(verbose,"Duplicated [%s] \n Length [%u]",localBuffer.c_str(),localBuffer.length());
     std::size_t pos = 0;
+
+    /** Logic for parsing a full JSON packet
+     * We have more than one issue to deal with:
+     *
+     * 1. We want to have a net result of parenthesis of 0 (as many { as }
+     * 2. We may receive piled up messages, so we have to scan all chars
+     */
+
+
+    for (std::size_t pos = pos_aux; pos < localBuffer.size(); pos++) {
+      if (localBuffer.at(pos) == '{') {
+        if (first_brckt) {
+          first_brckt = false;
+          pos_start = pos;
+        }
+        brckt_count++;
+      }
+      if (localBuffer.at(pos) == '}') {
+        brckt_count--;
+        if (brckt_count == 0) {
+          pos_end = pos;
+          // We have a full message
+          tcp_buffer_ =localBuffer.substr(pos_start,pos_end-pos_start+1);
+          localBuffer.substr(pos_end+1);
+          pos = 0;
+          pos_start = 0;
+          first_brckt = true;
+          process_request(tcp_buffer_.c_str(),msg_answers_);
+          //Log(verbose,"Returning answer : %s",msg_answers_.c_str());
+          // -- create a json object with all the messages
+          json answer;
+          answer["feedback"] = msg_answers_;
+          Log(debug,"Answers : ");
+          for (const string s : msg_answers_) {
+            Log(debug,"::[%s]",s.c_str());
+          }
+          client_socket_->send(answer.dump().c_str(),answer.dump().size());
+          Log(debug,"Answer sent");
+
+        }
+      }
+    }
+
+/**
     // Check if it is a compelte configuration set
     // Loop until all configurations and commands are processed
     while (localBuffer.find("</config>")!= std::string::npos  || localBuffer.find("</command>")!= std::string::npos) {
@@ -347,6 +398,7 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
     	  client_socket_->send(msg_answer_.c_str(),msg_answer_.size());
       }
     } // -- while
+**/
   } // recv_size > =
 
   //
@@ -372,14 +424,14 @@ void board_server::get_num_instances() const {
  * and on another we want to be able to pass commands to start and end the run.
  * Implement a register handle, that can be used to trigger the manager
  */
-void board_server::process_request(const std::string &buffer,std::string &answer) {
+void board_server::process_request(const std::string &buffer,std::vector<std::string> &answer) {
   // Before doing any processing check that a DataManager has already
   // been registered. If not simply queue the command into a list and wait
   // Careful if the client connection in the meantime is lost, the memory will disappear.
   // Have to copy the string into the queue
 
   if (board_manager_ == NULL) {
-    answer += "<warning>Request received without valid board manager</warning>";
+    answer.push_back("WARNING: Request received without valid board manager. Queueing the msg.");
     Log(warning,"Attempting to process a transmission without a valid data Manager. Queueing.");
     Log(verbose,"[%s]",buffer.c_str());
 
@@ -391,6 +443,21 @@ void board_server::process_request(const std::string &buffer,std::string &answer
   Log(verbose,"Processing a transmission");
   Log(verbose,"[%s]",buffer.c_str());
 
+  // -- We just need to figure out if this is a configuration or command message
+  json doc = json::parse(buffer);
+  if (doc.count("ctb") > 1) {
+    // we have a configuration document
+    Log(debug,"Processing config");
+    board_manager_->process_config(doc,msg_answers_);
+  } else if (doc.count("command") > 1) {
+    Log(debug,"Processing command : %s",doc.at("command").get<std::string>().c_str());
+    board_manager_->exec_command(doc.at("command").get<std::string>(),msg_answers_);
+  } else {
+    Log(error,"Unknown document type.");
+    msg_answers_.push_back("ERROR: Unknown document type");
+  }
+
+  /**
   // Instanciate the XML plugin
   pugi::xml_document doc;
 
@@ -443,6 +510,7 @@ void board_server::process_request(const std::string &buffer,std::string &answer
   } else {
     Log(warning,"Reached an impossible situation. Pretending nothing happened and carrying on.");
   }
+  **/
 }
 
 void board_server::register_board_manager(board_manager* newmgr) {
@@ -476,8 +544,8 @@ void board_server::shutdown(bool force) {
     // Process the queue
     while (queue_.size() > 0) {
       Log(verbose,"Processing an entry");
-      process_request(queue_.front(), msg_answer_);
-      Log(verbose,"Transmission processed. Answer: %s",msg_answer_.c_str());
+      process_request(queue_.front(), msg_answers_);
+//      Log(verbose,"Transmission processed. Answer: %s",msg_answers_.c_str());
       queue_.pop();
     }
   } else {

@@ -691,7 +691,7 @@ class board_reader {
 
   bool get_error_state() {return error_state_;};
 
-  std::string get_error_msgs() {return error_messages_;};
+  std::vector<std::string> get_error_msgs() {return error_messages_;};
 
 protected:
   /** Data collector function into the queue. Runs on it's own thread**/
@@ -802,7 +802,7 @@ const uint32_t timeout_cnt_threshold_ = 10000;
 
 bool dry_run_; // Run the reader without collecting data
 bool error_state_;
-std::string error_messages_;
+  std::vector<std::string> error_messages_;
 
   // -- Internal run statistics
   uint32_t num_eth_fragments_;

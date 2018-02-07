@@ -22,6 +22,10 @@
 
 #include "ptb_registers.h"
 
+#include "json.hpp"
+
+using json = nlohmann::json;
+
 namespace ptb {
 /**
  * \class PTBManager
@@ -70,10 +74,10 @@ public:
     this->board_state_ = status;
   }
 
-  void exec_command(const std::string &cmd,std::string &answers);
+  void exec_command(const std::string &cmd,std::vector<std::string> &answers);
   // Receive the configuration as
   // Passed by copy to keep locally
-  void process_config(pugi::xml_node config,std::string &answers);
+  void process_config(json & config,std::vector<std::string> &answers);
 
   /**
    * Loops over the registers and dum their contents, both in decimal and Hex.
@@ -188,7 +192,9 @@ private:
   static const uint8_t num_registers_ = 40;
   //static const char *default_config_;
   void *mapped_conf_base_addr_;
-  std::ostringstream msgs_;
+
+  std::vector<std::string> feedback_;
+  //std::ostringstream msgs_;
   std::string msgs_str_;
   bool error_state_;
 
