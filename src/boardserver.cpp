@@ -46,6 +46,7 @@ board_manager *board_server::board_manager_ = NULL;
   std::queue<std::string> board_server::queue_;
 bool board_server::shutdown_requested_= false;
 TCPSocket* board_server::client_socket_ = nullptr;
+std::vector<std::string> board_server::msg_answers_;
 //std::string board_server::msg_answer_ = "";
 
 board_server::board_server() {

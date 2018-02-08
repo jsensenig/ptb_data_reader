@@ -64,7 +64,7 @@ private:
 	// Self thread of the server.
 	static TCPSocket *client_socket_;
 	//static std::string msg_answer_;
-	std::vector<std::string> msg_answers_;
+	static std::vector<std::string> msg_answers_;
 	//static pthread_t thread_id_;
 	//	static std::thread::id thread_id_;
 	// parameters
