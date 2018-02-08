@@ -222,17 +222,23 @@ namespace ptb {
       reader_->start_data_taking();
     }
     catch(SocketException &e) {
-      feedback_.push_back("ERROR: PTB data socket exception (socket):" + e.what());
+      std::string msg = "ERROR: PTB data socket exception (socket): ";
+      msg += e.what();
+      feedback_.push_back( msg.c_str());
       error_state_ = true;
       return;
     }
     catch(op_exception &e) {
-      feedback_.push_back("ERROR: PTB data socket exception (user):" + e.what());
+      std::string msg = "ERROR: PTB data socket exception (user): ";
+      msg += e.what();
+      feedback_.push_back( msg.c_str());
       error_state_ = true;
       return;
     }
     catch(std::exception &e) {
-      feedback_.push_back("ERROR: PTB data socket exception (std):" + e.what());
+      std::string msg = "ERROR: PTB data socket exception (std): ";
+      msg += e.what();
+      feedback_.push_back( msg.c_str());
       error_state_ = true;
       return;
     }
@@ -446,7 +452,10 @@ namespace ptb {
     }
     // -- Only catch something deriving from std::exception and unspecified
     catch(std::exception &e) {
-      answers.push_back("ERROR: Error processing configuration: " + e.what() + ". Not committing configuration to PTB.");
+      std::string msg = "ERROR: Error processing configuration: ";
+      msg += e.what();
+      msg += ". Not committing configuration to PTB.";
+      answers.push_back(msg);
       has_error = true;
     }
     catch(...) {
@@ -555,7 +564,7 @@ namespace ptb {
 
       // After parsing everything (and making sure that all the configuration is set)
       // Store the configuration locally
-      config_ = config;
+      config_ = doc;
       // Log(debug,"Sleeping for 1s prior to init the connection to DAQ upstream.");
       // // Tell the reader to start the connection
       // std::this_thread::sleep_for (std::chrono::seconds(1));

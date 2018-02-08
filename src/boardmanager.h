@@ -188,6 +188,7 @@ private:
 
   static const uint8_t num_registers_ = 40;
   //static const char *default_config_;
+  json config_;
   void *mapped_conf_base_addr_;
 
   std::vector<std::string> feedback_;
