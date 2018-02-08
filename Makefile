@@ -4,7 +4,8 @@ CC         := g++
 BIN        := $(PWD)/bin
 DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket -I$(PWD)/contrib/linux_dma/zynq-xdma
 DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/pothos-zynq/driver -I$(PWD)/contrib/linux_dma/pothos-zynq/kernel
-DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src -I$(PWD)/src -I./
+DEF_CFLAGS += -I$(PWD)/src -I./
+#DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src
 #DEF_CFLAGS += -I/usr/local/boost/1.66.00/include
 
 #ifeq (($MACHINE),armv7l)
@@ -54,10 +55,10 @@ endif
 #
 ############
 # pugiXML library.
-XML_DIR := $(PWD)/contrib/pugixml/pugixml-1.6/src
-XML_SRC := $(wildcard $(XML_DIR)/*.cpp)
-XML_HDR := $(wildcard $(XML_DIR)/*.hpp)
-XML_OBJ := $(patsubst $(XML_DIR)/%.cpp,$(OBJ)/%.o,$(XML_SRC))
+#XML_DIR := $(PWD)/contrib/pugixml/pugixml-1.6/src
+#XML_SRC := $(wildcard $(XML_DIR)/*.cpp)
+#XML_HDR := $(wildcard $(XML_DIR)/*.hpp)
+#XML_OBJ := $(patsubst $(XML_DIR)/%.cpp,$(OBJ)/%.o,$(XML_SRC))
 
 # Practical Socket
 TCP_DIR := $(PWD)/contrib/PracticalSocket
@@ -89,7 +90,7 @@ TEST_BIN := $(patsubst $(TEST_DIR)/%.cpp,$(TEST_DIR)/%,$(TEST_SRC))
 UTL_SRC := $(wildcard $(UTL_DIR)/*.cpp)
 UTL_BIN := $(patsubst $(UTL_DIR)/%.cpp,$(BIN)/%,$(UTL_SRC))
 
-all: dir $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ) $(TEST_BIN) $(APP_BIN)
+all: dir $(TCP_OBJ) $(PTB_OBJ) $(TEST_BIN) $(APP_BIN)
 
 dir:
 	test -d $(OBJ) || mkdir $(OBJ)
@@ -105,8 +106,8 @@ server_clean:
 
 ## No library is created. Everything is compiled into a single object
 # Compile XML parser Sources
-$(OBJ)/%.o: $(XML_DIR)/%.cpp $(XML_DIR)/%.hpp
-	$(CC) -c $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) -o $@ $<
+#$(OBJ)/%.o: $(XML_DIR)/%.cpp $(XML_DIR)/%.hpp
+#	$(CC) -c $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) -o $@ $<
 
 # Compile TCP socket Sources
 $(OBJ)/%.o: $(TCP_DIR)/%.cpp $(TCP_DIR)/%.h

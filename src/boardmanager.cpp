@@ -19,8 +19,6 @@
 #include "ptb_registers.h"
 #endif /*ARM*/
 
-// -- PugiXML includes
-//#include "pugixml.hpp"
 #include <iomanip>
 #include <thread>
 #include <chrono>
@@ -35,9 +33,6 @@ extern "C" {
 #include <unistd.h>
 }
 
-
-#include "json.hpp"
-using json = nlohmann::json;
 
 
 /**

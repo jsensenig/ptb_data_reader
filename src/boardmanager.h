@@ -17,7 +17,6 @@
 #include <sstream>
 #include <thread>
 
-#include "pugixml.hpp"
 #include "config.h"
 
 #include "ptb_registers.h"
@@ -175,8 +174,6 @@ private:
 
   // The class responsible for the data reading.
   board_reader *reader_;
-  //board_server *cfg_srv_;
-  pugi::xml_node config_;
 
   // This is a cache of what is in each register now
   std::map<uint32_t,ptb::util::mem_reg> register_map_;

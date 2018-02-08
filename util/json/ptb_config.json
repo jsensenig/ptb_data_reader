@@ -3,7 +3,7 @@
     "receiver" : {
       "host" : "localhost",
       "port" : 8992,
-      "rollover":25000000
+      "rollover":250000
     },
     "monitor": {
       "enable":true,

@@ -11,7 +11,6 @@
 #ifndef CONFIGSERVER_H_
 #define CONFIGSERVER_H_
 
-#include "pugixml.hpp"
 #include <queue>
 
 class TCPSocket;
