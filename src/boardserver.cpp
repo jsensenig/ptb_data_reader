@@ -233,7 +233,34 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
           pos = 0;
           pos_start = 0;
           first_brckt = true;
-          process_request(tcp_buffer_.c_str(),msg_answers_);
+
+          try {
+            process_request(tcp_buffer_.c_str(),msg_answers_);
+          }
+          catch(json::exception &e) {
+            std::string msg = "ERROR : JSON exception : ";
+            msg += e.what();
+            Log(error,"%s",msg.c_str());
+            msg_answers_.push_back(msg);
+          }
+          catch(std::exception &e) {
+            std::string msg = "ERROR : STD exception : ";
+            msg += e.what();
+            Log(error,"%s",msg.c_str());
+            msg_answers_.push_back(msg);
+          }
+          catch(ptb::op_exception &e) {
+            std::string msg = "ERROR : PTB exception : ";
+            msg += e.what();
+            Log(error,"%s",msg.c_str());
+            msg_answers_.push_back(msg);
+          }
+          catch (...) {
+            std::string msg = "ERROR : Unidentified exception caught";
+            Log(error,"%s",msg.c_str());
+            msg_answers_.push_back(msg);
+          }
+
           //Log(verbose,"Returning answer : %s",msg_answers_.c_str());
           // -- create a json object with all the messages
           json answer;
@@ -458,60 +485,6 @@ void board_server::process_request(const std::string &buffer,std::vector<std::st
     msg_answers_.push_back("ERROR: Unknown document type");
   }
 
-  /**
-  // Instanciate the XML plugin
-  pugi::xml_document doc;
-
-  //[code_load_memory_buffer
-  // You can use load_buffer to load document from immutable memory block:
-  pugi::xml_parse_result result = doc.load(buffer.c_str());
-  //]
-
-  Log(verbose,"Load result : %s",result.description());
-  // Search if there is a command in here
-  pugi::xml_node command = doc.child("command");
-  pugi::xml_node config = doc.child("config");
-  // First look for 2 ridiculous situations:
-  // 1.) There is neither config nor command nodes
-  // 2.) There are both config and command nodes
-  if (command == NULL &&  config == NULL) {
-    Log(error,"Neither config nor command blocks were found. Ignoring the data.");
-    throw std::runtime_error("No valid command blocks found.");
-    //answer += "<error>Unknown command block</error>";
-    //    std::ostringstream docstr;
-    //    doc.print(docstr);
-    //    throw PTBexception(docstr.str().c_str());
-
-  } else if (command != NULL and config != NULL){
-    Log(error,"Found both a config and a command node. This is not supported yet.");
-    throw std::runtime_error("Found both config and command blocks.");
-
-  } else if (config != NULL) {
-    Log(verbose,"Processing config %s : %s ",config.name(),config.child_value());
-    Log(verbose,"Name: [%s]",config.name());
-    Log(verbose,"Value: [%s]",config.child_value());
-#ifdef DEBUG
-    // Store the buffer in a local variable.
-    if (Logger::GetSeverity() <= Logger::verbose) {
-      config.print(std::cout,"",pugi::format_raw);
-    }
-#endif
-    // NOTE: No exception should be caught at this point. All were caught at a lower level.
-    // Let's treat the writing of the answers directly in the low level code.
-    // easier to evaluate on a run by run basis.
-    board_manager_->process_config(config,answer);
-
-    Log(verbose,"Config processed with answer [%s]",answer.c_str());
-  } else if (command != NULL){
-    Log(verbose,"Processing command [%s] : [%s]",command.name(),command.child_value());
-
-    board_manager_->exec_command(command.child_value(),answer);
-    Log(debug,"Returning from ProcessCommand with answer [%s].",answer.c_str());
-
-  } else {
-    Log(warning,"Reached an impossible situation. Pretending nothing happened and carrying on.");
-  }
-  **/
 }
 
 void board_server::register_board_manager(board_manager* newmgr) {
