@@ -217,21 +217,11 @@ inline void board_manager::set_bit_range_register(const uint32_t reg, const uint
 inline void board_manager::set_bit(const uint32_t reg, const uint32_t bit, bool status) {
 	  // Things are more complicated than this. We want to set a single bit, regardless of what is around
 	  Log(debug,"Reading the bit %u from reg %u",bit,reg);
-#if defined(SIMULATION)
-	  // -- force making a copy
-	  uint32_t value = register_map_[reg].value();
-	  uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
-	  Log(debug,"Got %08X -> %08X",value,new_value);
-	  register_map_[reg].value() = new_value;
-#elif defined(ARM_XDMA) || defined(ARM_MMAP) || defined(ARM_SG_DMA)
 	  uint32_t value = util::Xil_In32((uint32_t)register_map_[reg].addr);
 	  uint32_t new_value = value^((-(status?1:0) ^ value) & ( 1 << bit));
 
 	  Log(debug,"Got %08X -> %08X",value,new_value);
 	  util::Xil_Out32((uint32_t)register_map_[reg].addr,new_value);
-#else
-#error "Can't find any hardware option"
-#endif
 	  // sleep for a short while to allow hardware to act on it
       std::this_thread::sleep_for (std::chrono::microseconds(10));
 	  Log(debug,"Final register value %08X",register_map_[reg].value());

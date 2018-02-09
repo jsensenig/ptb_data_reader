@@ -34,6 +34,7 @@ ifeq ($(MACHINE), armv7l)
    UTL_DIR  := $(PWD)/util/ptb
    OBJ      := $(PWD)/.ptb_obj
 # Server Build
+
 else
    $(info +++ Compiling for Server)
 #   CC         := arm-xilinx-linux-gnueabi-g++ 

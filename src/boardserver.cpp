@@ -206,7 +206,6 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
     pos_aux = localBuffer.size();
     localBuffer += instBuffer;
     Log(verbose,"Duplicated [%s] \n Length [%u]",localBuffer.c_str(),localBuffer.length());
-    std::size_t pos = 0;
 
     /** Logic for parsing a full JSON packet
      * We have more than one issue to deal with:

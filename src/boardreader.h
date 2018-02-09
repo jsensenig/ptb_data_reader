@@ -26,17 +26,8 @@
 #include <queue>
 #endif
 
-#if defined(SIMULATION)
-#else
 #include "util.h"
- #if defined(ARM_XDMA)
- #include "xdma.h"
- #elif defined(ARM_SG_DMA) // needed to use the LocalRegister structure
-//  struct pzdud_t;
 #include "pothos_zynq_dma_driver.h"
-
-#endif
-#endif
 
 #include "content.h"
 
@@ -701,10 +692,8 @@ protected:
   void data_transmitter();
 
   void dump_packet(uint32_t* buffer, uint32_t tot_size);
-#ifdef ARM_SG_DMA
   void clean_and_shutdown_dma();
   void init_dma();
-#endif /*ARM_SG_DMA*/
 private:
 
   // -- Structures for data socket connection
@@ -724,39 +713,10 @@ private:
 
 
 
-#if defined(SIMULATION)
-  uint32_t * memory_pool_;
-  void * mapped_data_base_addr_;
-
-#elif defined(ARM_XDMA)
-// declare a bunch of variables that are common to the program
-  struct xdma_dev xdma_device;
-  struct xdma_chan_cfg xdma_dst_cfg;
-  struct xdma_buf_info xdma_buf;
-  struct xdma_transfer xdma_trans;
-  uint32_t *dma_buffer_;
-
-#elif defined(ARM_MMAP)
-
-  ///! Number of frames possible to buffer in the RAM memory
-  /// Increased from 2M to 8M => 32MB
-  static const uint32_t buffer_size_frames = 8*1024*1024;
-
-
-
-  // Keeps frames stored
-  ptb::util::mem_reg control_register_;
-  ptb::util::mem_reg data_register_;
-  uint32_t * memory_pool_;
-  void * mapped_data_base_addr_;
-#elif defined(ARM_SG_DMA)
   pzdud_t *s2mm;
   static const size_t num_buffs_ = 4096; // number of allocated buffers for the DMA
   static const size_t buff_size_ = 4096; // size of each individual buffer (1 memory page) in bytes
   uint32_t buff_addr_[num_buffs_];
-#else
-#error DMA mode not specified
-#endif
 
 #if defined(BOOST)
   boost::lockfree::spsc_queue<ptb::content::buffer_t, boost::lockfree::capacity<num_buffs_> >buffer_queue_;
@@ -795,10 +755,6 @@ private:
   // -- Debugging and control variables
   // timeouts don't make sense with MMAP
   // neither does in SG_DMA, as it depends on the frequency of the data
-#if defined(ARM_XDMA)
-uint32_t timeout_cnt_;
-const uint32_t timeout_cnt_threshold_ = 10000;
-#endif
 
 bool dry_run_; // Run the reader without collecting data
 bool error_state_;

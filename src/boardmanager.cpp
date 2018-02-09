@@ -14,10 +14,7 @@
 #include "PracticalSocket.h"
 #include "util.h"
 
-#if !defined(SIMULATION)
-//defined(ARM_XDMA) || defined(ARM_MMAP)
 #include "ptb_registers.h"
-#endif /*ARM*/
 
 #include <iomanip>
 #include <thread>

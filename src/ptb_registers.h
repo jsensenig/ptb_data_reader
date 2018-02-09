@@ -42,11 +42,6 @@ extern int g_mem_fd;
 
 extern mapped_register conf_reg;
 
-#ifdef ARM_MMAP
-extern mapped_register data_reg;
-void SetupDataRegisters();
-
-#endif
 void setup_ptb_registers();
 
 }
