@@ -27,7 +27,8 @@ using std::endl;
 
 // -- configuration that we are running with for now
 // EDIT here where the IP where you are running, which is where the CTB will attempt to connect to send the data
-static const std::string g_config = "<config><DataBuffer><DaqHost>128.91.41.96</DaqHost><DaqPort>8992</DaqPort></DataBuffer><RolloverClocks>25000000</RolloverClocks></config>";
+//static const std::string g_config = "<config><DataBuffer><DaqHost>128.91.41.96</DaqHost><DaqPort>8992</DaqPort></DataBuffer><RolloverClocks>25000000</RolloverClocks></config>";
+static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\" : {\"host\" : \"localhost\",\"port\" : 8992, \"rollover\":250000 }}}}";
 
 class ctb_robot {
   public:
