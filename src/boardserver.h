@@ -11,6 +11,8 @@
 #ifndef CONFIGSERVER_H_
 #define CONFIGSERVER_H_
 
+#include <queue>
+
 class TCPSocket;
 
 namespace ptb {
