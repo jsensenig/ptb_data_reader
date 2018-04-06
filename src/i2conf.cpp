@@ -9,7 +9,11 @@
 
 namespace ptb {
 
+  const uint16_t i2conf::dac_addr_[ndacs_] = {0x48,0x4A,0x4C};
+
   i2conf::i2conf() : dev_("/dev/i2c-0"),init_done_(false) {
+
+
     // Don't initialize here
     // -- set up the internal structures
     for (size_t i = 0; i < ndacs_; i++) {

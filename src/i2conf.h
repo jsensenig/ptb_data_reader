@@ -9,6 +9,7 @@
 #define I2CONF_H_
 
 #include <vector>
+#include <string>
 
 extern "C" {
 #include <fcntl.h>
@@ -18,6 +19,8 @@ extern "C" {
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
+
+using std::string;
 
 extern int com_serial;
 extern int failcount;
@@ -84,8 +87,8 @@ namespace ptb {
     protected:
 
       static const uint32_t dac_nbytes_ = 3;
-      const uint16_t ndacs_ = 3;
-      static const uint16_t dac_addr_[ndacs_] = {0x48,0x4A,0x4C};
+      static const uint16_t ndacs_ = 3;
+      static const uint16_t dac_addr_[ndacs_];// = {0x48,0x4A,0x4C};
 
       // -- Variables that have really to be kept here
       std::vector<size_t> dac_threshold_;
