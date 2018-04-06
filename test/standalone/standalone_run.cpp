@@ -28,7 +28,6 @@ using std::endl;
 // -- configuration that we are running with for now
 // EDIT here where the IP where you are running, which is where the CTB will attempt to connect to send the data
 static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"128.91.185.63\",\"port\":8992,\"rollover\":25000}}}}";
-
 class ctb_robot {
 public:
   ctb_robot(const std::string &host = "localhost",const uint16_t &port = 8991)

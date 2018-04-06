@@ -476,12 +476,16 @@ namespace ptb {
     data_socket_host_ = receiver.at("host").get<std::string>();
     reader_->set_tcp_host(data_socket_host_);
     data_socket_port_ = receiver.at("port").get<unsigned short>();
-    uint32_t duration;
+    reader_->set_tcp_port(data_socket_port_);
+    Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
+    
+    // uint32_t duration;
     std::stringstream strVal;
-    strVal << receiver.at("rollover").get<std::string>();
-    strVal >> std::dec >> duration;
+    // strVal << receiver.at("rollover").get<std::string>();
+    // strVal >> std::dec >> duration;
+    uint32_t duration = receiver.at("rollover").get<unsigned int>();
     // Microslice duration is now a full number...check if it fits into 27 bits
-    Log(debug,"MicroSlice Duration [%s] (%u) [0x%X][%s]",strVal.str().c_str(),duration,duration, std::bitset<27>(duration).to_string().c_str());
+    Log(debug,"MicroSlice Duration [%d] (%u) [0x%X][%s]",duration,duration,duration, std::bitset<27>(duration).to_string().c_str());
     if (duration >= (1<<27)) {
       //    answers.push_back("WARNING:Input value of [" << duration << "] above the allowed limit of 27 bits. Setting to maximum allowed.";
       Log(warning,"Input value of [%u] above maximum rollover [27]. Truncating to maximum.",duration);

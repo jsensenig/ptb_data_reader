@@ -2,17 +2,11 @@
 MACHINE    := $(shell uname -m)
 CC         := g++
 BIN        := $(PWD)/bin
-DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket -I$(PWD)/contrib/linux_dma/zynq-xdma
+DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket 
 DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/pothos-zynq/driver -I$(PWD)/contrib/linux_dma/pothos-zynq/kernel
 DEF_CFLAGS += -I$(PWD)/src -I./
 #DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src
 #DEF_CFLAGS += -I/usr/local/boost/1.66.00/include
-
-#ifeq (($MACHINE),armv7l)
-#   $(info Adding extra flags for uZed compilation...)
-#   DEF_CFLAGS += -DDATA_READER
-#   DEF_CFLAGS += -I$(PWD)/src -I./
-#endif
 
 DEF_LFLAGS := -lpthread
 #-lrt
@@ -21,12 +15,12 @@ DEF_LFLAGS := -lpthread
 
 # TPB Build
 ifeq ($(MACHINE), armv7l)
-   $(info ======================)
-   $(info ++++Compiling for uZed)
-   $(info ======================)
+   $(info ==========================)
+   $(info +++ Compiling for uZed +++)
+   $(info ==========================)
     LFLAGS   := -g $(DEF_LFLAGS)
 #   CFLAGS   := -g -O0 $(DEF_CFLAGS)
-   CFLAGS   := -O3 -march=armv7-a $(DEF_CFLAGS) $(DMA_TYPE)
+   CFLAGS   := -O3 -march=armv7-a $(DEF_CFLAGS)
 #   CFLAGS   := -O1 -march=armv7-a -mcpu=cortex-a9 $(DEF_CFLAGS)
 #   CFLAGS   := -g -march=armv7-a -O0 $(DEF_CFLAGS) $(DMA_TYPE)
    EXT_TARS := 
@@ -34,11 +28,18 @@ ifeq ($(MACHINE), armv7l)
    UTL_DIR  := $(PWD)/util/ptb
    OBJ      := $(PWD)/.ptb_obj
 # Server Build
-
-else
-   $(info +++ Compiling for Server)
+else 
+   $(info ============================)
+   $(info +++ Compiling for Server +++)
+   $(info ============================)
 #   CC         := arm-xilinx-linux-gnueabi-g++ 
-   CC         := g++ 
+   ifdef CROSS_COMPILE
+      CC       := $(CROSS_COMPILE)g++
+      CFLAGS   := $(DEF_CFLAGS) -fpermissive
+   else
+      CC       := g++
+      CFLAGS   := $(DEF_CFLAGS) -fpermissive -m32
+   endif
    DEF      := 
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 -m32 

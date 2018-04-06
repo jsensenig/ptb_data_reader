@@ -39,130 +39,130 @@ using json = nlohmann::json;
 using std::string;
 namespace ptb {
 //-- Assignment of the static variables
-std::string board_server::tcp_buffer_ = "";
-unsigned int board_server::num_instances_ = 0;
-unsigned int board_server::port_ = 8991;
-board_manager *board_server::board_manager_ = NULL;
+  std::string board_server::tcp_buffer_ = "";
+  unsigned int board_server::num_instances_ = 0;
+  unsigned int board_server::port_ = 8991;
+  board_manager *board_server::board_manager_ = NULL;
   std::queue<std::string> board_server::queue_;
-bool board_server::shutdown_requested_= false;
-TCPSocket* board_server::client_socket_ = nullptr;
-std::vector<std::string> board_server::msg_answers_;
+  bool board_server::shutdown_requested_= false;
+  TCPSocket* board_server::client_socket_ = nullptr;
+  std::vector<std::string> board_server::msg_answers_;
 //std::string board_server::msg_answer_ = "";
 
-board_server::board_server() {
+  board_server::board_server() {
   // Use the practical socket to establish a connection
-  Log(verbose,"Building socket server");
-  Log(verbose,"Attaching default board manager");
+    Log(verbose,"Building socket server");
+    Log(verbose,"Attaching default board manager");
   // -- Construct a board manager along with it
-  board_manager_ = new board_manager();
+    board_manager_ = new board_manager();
 
-}
+  }
 
-void board_server::clean_and_relaunch() {
+  void board_server::clean_and_relaunch() {
 	// if there is a data manager, tell it to stop taking data
 	// If there is no data taking going on, no problems, it is ignored
     if (client_socket_ != nullptr) delete client_socket_;
     client_socket_ = nullptr;
 
-	if (board_manager_ != nullptr) {
-		Log(warning,"Passing down a shutdown signal to the PTB.");
-	  board_manager_->exec_command("StopRun",msg_answers_);
+    if (board_manager_ != nullptr) {
+      Log(warning,"Passing down a shutdown signal to the PTB.");
+      board_manager_->exec_command("StopRun",msg_answers_);
       // -- Force a hard reset in the PTB to account for the case the
       // DAQ crashed.
-	  board_manager_->exec_command("HardReset",msg_answers_);
-	}
-	Log(warning,"Relaunching the socket for connection acceptance in 5s.");
-	std::this_thread::sleep_for(std::chrono::seconds(5));
-}
+      board_manager_->exec_command("HardReset",msg_answers_);
+    }
+    Log(warning,"Relaunching the socket for connection acceptance in 5s.");
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
 
-void board_server::run() {
-  Log(verbose,"Starting to listen for a new socket...");
-  TCPServerSocket * servSock = nullptr;
+  void board_server::run() {
+    Log(verbose,"Starting to listen for a new socket...");
+    TCPServerSocket * servSock = nullptr;
   // The purpose of this first loop is to bypass a common problem if ghost binding
   // If for some reason one loses the connection and it takes some time
   // for the port bind to be released...this loop just says to keep trying
   // to bind every 5s
-  do {
-	  try{
-	      Log(info,"Creating server listening socket...");
+    do {
+     try{
+       Log(info,"Creating server listening socket...");
 	      // This simply binds the port. Should not need to destroy and relaunch
 	      //TCPServerSocket servSock(port_);   // Socket descriptor for server
-	      servSock = new TCPServerSocket(port_);
-	      Log(info,"Entering wait mode for client connection at port %u",port_);
-	  }
-	  catch(SocketException &e) {
-	      Log(error,"Socket exception caught : %s",e.what());
-	      if (servSock != nullptr) delete servSock;
-	      servSock = nullptr;
-	      Log(warning,"Relaunching the socket for connection acceptance in 5s.");
-	      std::this_thread::sleep_for(std::chrono::seconds(5));
-	    }
-	  catch(...) {
-		  Log(error,"Unknown exception caught");
-	      if (servSock != nullptr) delete servSock;
-	      servSock = nullptr;
-	      Log(warning,"Relaunching the socket for connection acceptance in 5s.");
-	      std::this_thread::sleep_for(std::chrono::seconds(5));
-	  }
+       servSock = new TCPServerSocket(port_);
+       Log(info,"Entering wait mode for client connection at port %u",port_);
+     }
+     catch(SocketException &e) {
+       Log(error,"Socket exception caught : %s",e.what());
+       if (servSock != nullptr) delete servSock;
+       servSock = nullptr;
+       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
+       std::this_thread::sleep_for(std::chrono::seconds(5));
+     }
+     catch(...) {
+      Log(error,"Unknown exception caught");
+      if (servSock != nullptr) delete servSock;
+      servSock = nullptr;
+      Log(warning,"Relaunching the socket for connection acceptance in 5s.");
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
   } while (servSock == nullptr);
 
   // If we reach this stage, we now have a socket (client connection)
   Log(verbose,"Socket bound at port %u.",port_);
   while (true) {
-	  client_socket_ = nullptr;
-	  if (shutdown_requested_) {
-		  Log(info,"Received a shutdown request...");
-		  delete servSock;
-		  servSock = nullptr;
-		  return;
-	  }
+   client_socket_ = nullptr;
+   if (shutdown_requested_) {
+    Log(info,"Received a shutdown request...");
+    delete servSock;
+    servSock = nullptr;
+    return;
+  }
 
-	  try{
-		  Log(debug,"Starting to listen for the connection...");
-	      client_socket_ = servSock->accept();
-	      Log(info,"Received client connection request.");
-	      handle_tcp_client();
+  try{
+    Log(debug,"Starting to listen for the connection...");
+    client_socket_ = servSock->accept();
+    Log(info,"Received client connection request.");
+    handle_tcp_client();
 	      // -- At this point we know that the client closed the connection
-	      Log(info,"Client connection closed. Clearing socket...");
-	      clean_and_relaunch();
-	  }
+    Log(info,"Client connection closed. Clearing socket...");
+    clean_and_relaunch();
+  }
 	  // -- Catch all possible exceptions here
 	  // All will result in the connection being closed and the socket being reopened
-	    catch(SocketException &e) {
-	      Log(error,"Socket exception caught : %s",e.what());
-	      clean_and_relaunch();
-	    }
-	    catch(...) {
-	      Log(error,"An unspecified exception was caught. Cleaning up and relaunching.");
-	      clean_and_relaunch();
-	    }
-	    Log(warning,"Relaunching the socket for connection acceptance in 5s.");
-	    std::this_thread::sleep_for(std::chrono::seconds(5));
-	 }
-  Log(warning,"Reaching the end of execution, but not sure why...should *never* happen!");
+  catch(SocketException &e) {
+   Log(error,"Socket exception caught : %s",e.what());
+   clean_and_relaunch();
+ }
+ catch(...) {
+   Log(error,"An unspecified exception was caught. Cleaning up and relaunching.");
+   clean_and_relaunch();
+ }
+ Log(warning,"Relaunching the socket for connection acceptance in 5s.");
+ std::this_thread::sleep_for(std::chrono::seconds(5));
+}
+Log(warning,"Reaching the end of execution, but not sure why...should *never* happen!");
 }
 
 // TCP client handling function
 void board_server::handle_tcp_client(/*TCPSocket *sock */) {
-  if (client_socket_ == nullptr) {
-    Log(error,"Refusing to handle a NULL socket.");
-    return;
-  }
+if (client_socket_ == nullptr) {
+  Log(error,"Refusing to handle a NULL socket.");
+  return;
+}
   // Test the quality of the socket
-  Log(debug,"Handling client...");
-  try {
+Log(debug,"Handling client...");
+try {
 
-    Log(debug,"Address : %s",client_socket_->getForeignAddress().c_str());;
-  } catch (SocketException &e) {
-    Log(error,"Unable to get foreign address");
-  }
-  try {
-    uint32_t localPort = client_socket_->getForeignPort();
-    Log(debug,"Port : %u",localPort);
-  } catch (SocketException &e) {
-    Log(error,"Unable to get foreign port");
-  }
-  Log(info,"Working  with thread 0x%x",std::this_thread::get_id());
+  Log(debug,"Address : %s",client_socket_->getForeignAddress().c_str());;
+} catch (SocketException &e) {
+  Log(error,"Unable to get foreign address");
+}
+try {
+  uint32_t localPort = client_socket_->getForeignPort();
+  Log(debug,"Port : %u",localPort);
+} catch (SocketException &e) {
+  Log(error,"Unable to get foreign port");
+}
+Log(info,"Working  with thread 0x%x",std::this_thread::get_id());
 
   // Send received string and receive again until the end of transmission
 
@@ -226,207 +226,62 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
       if (localBuffer.at(pos) == '}') {
         brckt_count--;
         if (brckt_count == 0) {
-          pos_end = pos;
+          pos_end = pos+1;
           // We have a full message
-          tcp_buffer_ =localBuffer.substr(pos_start,pos_end-pos_start+1);
-          localBuffer.substr(pos_end+1);
-          pos = 0;
-          pos_start = 0;
-          first_brckt = true;
+          tcp_buffer_ =localBuffer.substr(pos_start,pos_end-pos_start);
+          Log(verbose,"new tcp buffer %d-%d [%s]",pos_start,pos_end,tcp_buffer_.c_str());
+          if (pos_end == localBuffer.length()) {
+           localBuffer.clear();
+         } else { 
+           localBuffer = localBuffer.substr(pos_end);
+         }
+         Log(verbose,"Cropped local buffer [%s]",localBuffer.c_str());
+         pos = 0;
+         pos_start = 0;
+         first_brckt = true;
 
-          try {
-            process_request(tcp_buffer_.c_str(),msg_answers_);
-          }
-          catch(json::exception &e) {
-            std::string msg = "ERROR : JSON exception : ";
-            msg += e.what();
-            Log(error,"%s",msg.c_str());
-            msg_answers_.push_back(msg);
-          }
-          catch(std::exception &e) {
-            std::string msg = "ERROR : STD exception : ";
-            msg += e.what();
-            Log(error,"%s",msg.c_str());
-            msg_answers_.push_back(msg);
-          }
-          catch(ptb::op_exception &e) {
-            std::string msg = "ERROR : PTB exception : ";
-            msg += e.what();
-            Log(error,"%s",msg.c_str());
-            msg_answers_.push_back(msg);
-          }
-          catch (...) {
-            std::string msg = "ERROR : Unidentified exception caught";
-            Log(error,"%s",msg.c_str());
-            msg_answers_.push_back(msg);
-          }
+         try {
+          process_request(tcp_buffer_.c_str(),msg_answers_);
+        }
+        catch(json::exception &e) {
+          std::string msg = "ERROR : JSON exception : ";
+          msg += e.what();
+          Log(error,"%s",msg.c_str());
+          msg_answers_.push_back(msg);
+        }
+        catch(std::exception &e) {
+          std::string msg = "ERROR : STD exception : ";
+          msg += e.what();
+          Log(error,"%s",msg.c_str());
+          msg_answers_.push_back(msg);
+        }
+        catch(ptb::op_exception &e) {
+          std::string msg = "ERROR : PTB exception : ";
+          msg += e.what();
+          Log(error,"%s",msg.c_str());
+          msg_answers_.push_back(msg);
+        }
+        catch (...) {
+          std::string msg = "ERROR : Unidentified exception caught";
+          Log(error,"%s",msg.c_str());
+          msg_answers_.push_back(msg);
+        }
 
           //Log(verbose,"Returning answer : %s",msg_answers_.c_str());
           // -- create a json object with all the messages
-          json answer;
-          answer["feedback"] = msg_answers_;
-          Log(debug,"Answers : ");
-          for (const string s : msg_answers_) {
-            Log(debug,"::[%s]",s.c_str());
-          }
-          client_socket_->send(answer.dump().c_str(),answer.dump().size());
-          Log(debug,"Answer sent");
-
+        json answer;
+        answer["feedback"] = msg_answers_;
+        Log(debug,"Answers : ");
+        for (const string s : msg_answers_) {
+          Log(debug,"::[%s]",s.c_str());
         }
+        client_socket_->send(answer.dump().c_str(),answer.dump().size());
+        Log(debug,"Answer sent");
+
       }
     }
+  }
 
-/**
-    // Check if it is a compelte configuration set
-    // Loop until all configurations and commands are processed
-    while (localBuffer.find("</config>")!= std::string::npos  || localBuffer.find("</command>")!= std::string::npos) {
-      Log(verbose,"There is something to be processed");
-      if ((pos = localBuffer.find("</config>")) != std::string::npos && (localBuffer.find("<config>")!= std::string::npos)) {
-        // Found the end of a config block.
-        // Pass that buffer to process and erase it from the string
-        // 9 = strlen("</config>")
-        Log(verbose,"Found a config block.");
-        try{
-          tcp_buffer_ = localBuffer.substr(0,pos+strlen("</config>"));
-          // Remove the entry from localBuffer
-          Log(verbose,"Shifting buffer");
-          localBuffer = localBuffer.substr(pos+strlen("</config>"));
-          Log(verbose,"new buffer [%s]",localBuffer.c_str());
-        }
-        catch(std::length_error &e) {
-          Log(error,"Length error : %s ",e.what());
-        }
-        catch(std::out_of_range &e) {
-          Log(error,"Out of range : %s",e.what());
-        }
-        catch(std::bad_alloc &e) {
-          Log(error,"Bad alloc %s",e.what());
-        }
-        catch(std::invalid_argument &e) {
-          Log(error,"Invalid argument error : %s",e.what());
-        }
-        catch(std::domain_error &e) {
-          Log(error,"Domain error : %s",e.what());
-        }
-        catch(std::overflow_error &e) {
-          Log(error,"Overflow error : %s",e.what());
-        }
-        catch(std::range_error &e) {
-          Log(error,"Range error : %s",e.what());
-        }
-        catch(ptb::op_exception &e) {
-        	Log(error,"PTB internal exception: %e",e.what());
-        }
-        // Generic
-        catch(std::exception &e) {
-          Log(error,"Caught std exception : %s",e.what());
-        }
-
-        // Process the transmission.
-        // These exceptions should never be caught. They should be caught underneath
-        try {
-          Log(verbose,"Processing buffer [%s]",tcp_buffer_.c_str());
-          // Don't understand what this sleep is doing here
-          //std::this_thread::sleep_for (std::chrono::seconds(2));
-          process_request(tcp_buffer_.c_str(),msg_answer_);
-          sprintf(instBuffer,"<feedback>%s</feedback>",msg_answer_.c_str());
-        }
-        catch (std::string &e) {
-          Log(error,"Config exception caught : %s",e.c_str());
-          // Return a failure signal.
-          std::ostringstream msg;
-          msg << "<error>" << e.c_str() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch(ptb::op_exception &e) {
-        	Log(error,"PTB internal exception: %e",e.what());
-            std::ostringstream msg;
-            msg << "<error>" << e.what() << "</error>";
-            msg_answer_ += msg.str();
-        }
-        catch (std::exception &e) {
-          Log(error,"STD exception caught : %s",e.what());
-          std::ostringstream msg;
-          msg << "<error>" << e.what() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch (...) {
-        	Log(error,"Unknown exception caught");
-            msg_answer_ += "<error>Unknown failure</error>";
-        }
-        Log(verbose,"Returning answer : %s",msg_answer_.c_str());
-        client_socket_->send(msg_answer_.c_str(),msg_answer_.size());
-      } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
-        Log(verbose,"Found a command block.");
-        Log(verbose,"|%s|",localBuffer.c_str());
-        // Found the end of a command block.
-        // Pass that buffer to process and erase it from the string
-        // 9 = strlen("</config>")
-
-        tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
-        // Remove the entry from localBuffer
-        try{
-          Log(verbose,"Shifting buffer");
-          localBuffer = localBuffer.substr(pos+strlen("</command>"));
-          Log(verbose,"new buffer [%s]",localBuffer.c_str());
-
-          Log(verbose,"Processing command buffer [%s]",tcp_buffer_.c_str() );
-          process_request(tcp_buffer_,msg_answer_);
-        }
-        catch (std::string &e) {
-          Log(error,"Config exception caught : %s",e.c_str());
-          // Return a failure signal.
-          std::ostringstream msg;
-          msg << "<error>" << e.c_str() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch (ptb::op_exception &e) {
-          Log(error,"Operational exception caught : %s",e.what());
-          std::ostringstream msg;
-          msg << "<error>" << e.what() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch (std::runtime_error &e) {
-          Log(error,"STD runtime_error exception caught : %s", e.what());
-          std::ostringstream msg;
-          msg << "<error>" << e.what() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch (std::exception &e) {
-          Log(error,"STD exception caught : %s", e.what());
-          // Return a failure signal.
-          std::ostringstream msg;
-          msg << "<error>" << e.what() << "</error>";
-          msg_answer_ += msg.str();
-
-        }
-        catch (...) {
-        	Log(error,"Unknown error caught");
-            msg_answer_ += "<error>Unidentified error</error>";
-        }
-        Log(info,"Sending answer : ");
-        Log(info,"%s",msg_answer_.c_str());
-        client_socket_->send(msg_answer_.c_str(),msg_answer_.size());
-        Log(debug,"Answer sent");
-      } else {
-    	  // -- This should be an error
-    	  Log(error,"Mangled request");
-    	  Log(error,"Found the end of a block but not its beginning...");
-    	  size_t pos_cmd_end = localBuffer.find("</command>");
-    	  size_t pos_cmd_start = localBuffer.find("<command>");
-    	  size_t pos_conf_end = localBuffer.find("</config>");
-    	  size_t pos_conf_start = localBuffer.find("<config>");
-    	  if (pos_cmd_end != std::string::npos) {
-    		  Log(warning,"Positions of command block : start %u end %u",pos_cmd_start,pos_cmd_end);
-    	  }
-    	  if (pos_conf_end != std::string::npos) {
-    		  Log(warning,"Positions of config block : start %u end %u",pos_conf_start,pos_conf_end);
-    	  }
-    	  msg_answer_ += "<error>Mangled socket request. Check board logs.</error>";
-    	  client_socket_->send(msg_answer_.c_str(),msg_answer_.size());
-      }
-    } // -- while
-**/
   } // recv_size > =
 
   //
@@ -471,18 +326,24 @@ void board_server::process_request(const std::string &buffer,std::vector<std::st
   Log(verbose,"Processing a transmission");
   Log(verbose,"[%s]",buffer.c_str());
 
+  try {
   // -- We just need to figure out if this is a configuration or command message
-  json doc = json::parse(buffer);
-  if (doc.count("ctb") > 1) {
+    json doc = json::parse(buffer);
+    std::string jd = doc.dump(4);
+    Log(verbose,"Buffer [%s]",jd.c_str());
+    if (doc.count("ctb") >= 1) {
     // we have a configuration document
-    Log(debug,"Processing config");
-    board_manager_->process_config(doc,msg_answers_);
-  } else if (doc.count("command") > 1) {
-    Log(debug,"Processing command : %s",doc.at("command").get<std::string>().c_str());
-    board_manager_->exec_command(doc.at("command").get<std::string>(),msg_answers_);
-  } else {
-    Log(error,"Unknown document type.");
-    msg_answers_.push_back("ERROR: Unknown document type");
+      Log(debug,"Processing config");
+      board_manager_->process_config(doc,msg_answers_);
+    } else if (doc.count("command") >= 1) {
+      Log(debug,"Processing command : %s",doc.at("command").get<std::string>().c_str());
+      board_manager_->exec_command(doc.at("command").get<std::string>(),msg_answers_);
+    } else {
+      Log(error,"Unknown document type.");
+      msg_answers_.push_back("ERROR: Unknown document type");
+    }
+  } catch(std::exception &e) {
+    Log(error,"Caught an exception: %s",e.what());
   }
 
 }
@@ -503,27 +364,27 @@ void board_server::shutdown(bool force) {
   Log(warning,"Shutdown requested.");
   // Check if force is passed
   if (force) {
-	  Log(warning,"Forcing my way out...");
-	  clean_and_relaunch();
-	  delete board_manager_;
+   Log(warning,"Forcing my way out...");
+   clean_and_relaunch();
+   delete board_manager_;
 
-  } else if (queue_.size() != 0){
+ } else if (queue_.size() != 0){
     // Soft shutdown requested. Do nothing and wait for the client to disconnect
-    Log(warning,"Soft shutdown requested with non-empty queue. Shutdown will occur when queue empties.");
+  Log(warning,"Soft shutdown requested with non-empty queue. Shutdown will occur when queue empties.");
     // Kill the server.
     // Detach to deallocate resources
     //    pthread_detach(thread_id_);
     //    // Send a cancel call.
     //    pthread_cancel(thread_id_);
     // Process the queue
-    while (queue_.size() > 0) {
-      Log(verbose,"Processing an entry");
-      process_request(queue_.front(), msg_answers_);
+  while (queue_.size() > 0) {
+    Log(verbose,"Processing an entry");
+    process_request(queue_.front(), msg_answers_);
 //      Log(verbose,"Transmission processed. Answer: %s",msg_answers_.c_str());
-      queue_.pop();
-    }
-  } else {
-    Log(info,"Performing a soft shutdown");
+    queue_.pop();
+  }
+} else {
+  Log(info,"Performing a soft shutdown");
     // First kill the thread that is waiting for a connection
     //pthread_detach(thread_id_);
     // Send a cancel call.
@@ -536,10 +397,10 @@ void board_server::shutdown(bool force) {
 
     // Try to do a soft exit
     // If there is a manager tell it to stop
-    if (board_manager_) {
-    	clean_and_relaunch();
-      board_manager_->free_registers();
-      delete board_manager_;
+  if (board_manager_) {
+   clean_and_relaunch();
+   board_manager_->free_registers();
+   delete board_manager_;
 //    	// Get the reader
 //      PTBReader *reader = const_cast<PTBReader*>(board_manager_->getReader());
 //      reader->ClearThreads();
@@ -548,9 +409,9 @@ void board_server::shutdown(bool force) {
 //      board_manager_->ClearCommands();
 //      Log(verbose,"Destroying the manager");
       //delete data_manager_;
-      Log(verbose,"Manager destroyed");
-    }
-  }
+   Log(verbose,"Manager destroyed");
+ }
+}
 }
 }
 
