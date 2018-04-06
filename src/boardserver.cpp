@@ -227,10 +227,16 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
       if (localBuffer.at(pos) == '}') {
         brckt_count--;
         if (brckt_count == 0) {
-          pos_end = pos;
+          pos_end = pos+1;
           // We have a full message
-          tcp_buffer_ =localBuffer.substr(pos_start,pos_end-pos_start+1);
-          localBuffer.substr(pos_end+1);
+          tcp_buffer_ =localBuffer.substr(pos_start,pos_end-pos_start);
+	  Log(verbose,"new tcp buffer %d-%d [%s]",pos_start,pos_end,tcp_buffer_.c_str());
+	  if (pos_end == localBuffer.length()) {
+	    localBuffer.clear();
+	  } else { 
+	    localBuffer = localBuffer.substr(pos_end);
+	  }
+	  Log(verbose,"Cropped local buffer [%s]",localBuffer.c_str());
           pos = 0;
           pos_start = 0;
           first_brckt = true;
@@ -250,157 +256,6 @@ void board_server::handle_tcp_client(/*TCPSocket *sock */) {
       }
     }
 
-/**
-    // Check if it is a compelte configuration set
-    // Loop until all configurations and commands are processed
-    while (localBuffer.find("</config>")!= std::string::npos  || localBuffer.find("</command>")!= std::string::npos) {
-      Log(verbose,"There is something to be processed");
-      if ((pos = localBuffer.find("</config>")) != std::string::npos && (localBuffer.find("<config>")!= std::string::npos)) {
-        // Found the end of a config block.
-        // Pass that buffer to process and erase it from the string
-        // 9 = strlen("</config>")
-        Log(verbose,"Found a config block.");
-        try{
-          tcp_buffer_ = localBuffer.substr(0,pos+strlen("</config>"));
-          // Remove the entry from localBuffer
-          Log(verbose,"Shifting buffer");
-          localBuffer = localBuffer.substr(pos+strlen("</config>"));
-          Log(verbose,"new buffer [%s]",localBuffer.c_str());
-        }
-        catch(std::length_error &e) {
-          Log(error,"Length error : %s ",e.what());
-        }
-        catch(std::out_of_range &e) {
-          Log(error,"Out of range : %s",e.what());
-        }
-        catch(std::bad_alloc &e) {
-          Log(error,"Bad alloc %s",e.what());
-        }
-        catch(std::invalid_argument &e) {
-          Log(error,"Invalid argument error : %s",e.what());
-        }
-        catch(std::domain_error &e) {
-          Log(error,"Domain error : %s",e.what());
-        }
-        catch(std::overflow_error &e) {
-          Log(error,"Overflow error : %s",e.what());
-        }
-        catch(std::range_error &e) {
-          Log(error,"Range error : %s",e.what());
-        }
-        catch(ptb::op_exception &e) {
-        	Log(error,"PTB internal exception: %e",e.what());
-        }
-        // Generic
-        catch(std::exception &e) {
-          Log(error,"Caught std exception : %s",e.what());
-        }
-
-        // Process the transmission.
-        // These exceptions should never be caught. They should be caught underneath
-        try {
-          Log(verbose,"Processing buffer [%s]",tcp_buffer_.c_str());
-          // Don't understand what this sleep is doing here
-          //std::this_thread::sleep_for (std::chrono::seconds(2));
-          process_request(tcp_buffer_.c_str(),msg_answer_);
-          sprintf(instBuffer,"<feedback>%s</feedback>",msg_answer_.c_str());
-        }
-        catch (std::string &e) {
-          Log(error,"Config exception caught : %s",e.c_str());
-          // Return a failure signal.
-          std::ostringstream msg;
-          msg << "<error>" << e.c_str() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch(ptb::op_exception &e) {
-        	Log(error,"PTB internal exception: %e",e.what());
-            std::ostringstream msg;
-            msg << "<error>" << e.what() << "</error>";
-            msg_answer_ += msg.str();
-        }
-        catch (std::exception &e) {
-          Log(error,"STD exception caught : %s",e.what());
-          std::ostringstream msg;
-          msg << "<error>" << e.what() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch (...) {
-        	Log(error,"Unknown exception caught");
-            msg_answer_ += "<error>Unknown failure</error>";
-        }
-        Log(verbose,"Returning answer : %s",msg_answer_.c_str());
-        client_socket_->send(msg_answer_.c_str(),msg_answer_.size());
-      } else if ((pos = localBuffer.find("</command>")) != std::string::npos) {
-        Log(verbose,"Found a command block.");
-        Log(verbose,"|%s|",localBuffer.c_str());
-        // Found the end of a command block.
-        // Pass that buffer to process and erase it from the string
-        // 9 = strlen("</config>")
-
-        tcp_buffer_ = localBuffer.substr(0,pos+strlen("</command>"));
-        // Remove the entry from localBuffer
-        try{
-          Log(verbose,"Shifting buffer");
-          localBuffer = localBuffer.substr(pos+strlen("</command>"));
-          Log(verbose,"new buffer [%s]",localBuffer.c_str());
-
-          Log(verbose,"Processing command buffer [%s]",tcp_buffer_.c_str() );
-          process_request(tcp_buffer_,msg_answer_);
-        }
-        catch (std::string &e) {
-          Log(error,"Config exception caught : %s",e.c_str());
-          // Return a failure signal.
-          std::ostringstream msg;
-          msg << "<error>" << e.c_str() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch (ptb::op_exception &e) {
-          Log(error,"Operational exception caught : %s",e.what());
-          std::ostringstream msg;
-          msg << "<error>" << e.what() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch (std::runtime_error &e) {
-          Log(error,"STD runtime_error exception caught : %s", e.what());
-          std::ostringstream msg;
-          msg << "<error>" << e.what() << "</error>";
-          msg_answer_ += msg.str();
-        }
-        catch (std::exception &e) {
-          Log(error,"STD exception caught : %s", e.what());
-          // Return a failure signal.
-          std::ostringstream msg;
-          msg << "<error>" << e.what() << "</error>";
-          msg_answer_ += msg.str();
-
-        }
-        catch (...) {
-        	Log(error,"Unknown error caught");
-            msg_answer_ += "<error>Unidentified error</error>";
-        }
-        Log(info,"Sending answer : ");
-        Log(info,"%s",msg_answer_.c_str());
-        client_socket_->send(msg_answer_.c_str(),msg_answer_.size());
-        Log(debug,"Answer sent");
-      } else {
-    	  // -- This should be an error
-    	  Log(error,"Mangled request");
-    	  Log(error,"Found the end of a block but not its beginning...");
-    	  size_t pos_cmd_end = localBuffer.find("</command>");
-    	  size_t pos_cmd_start = localBuffer.find("<command>");
-    	  size_t pos_conf_end = localBuffer.find("</config>");
-    	  size_t pos_conf_start = localBuffer.find("<config>");
-    	  if (pos_cmd_end != std::string::npos) {
-    		  Log(warning,"Positions of command block : start %u end %u",pos_cmd_start,pos_cmd_end);
-    	  }
-    	  if (pos_conf_end != std::string::npos) {
-    		  Log(warning,"Positions of config block : start %u end %u",pos_conf_start,pos_conf_end);
-    	  }
-    	  msg_answer_ += "<error>Mangled socket request. Check board logs.</error>";
-    	  client_socket_->send(msg_answer_.c_str(),msg_answer_.size());
-      }
-    } // -- while
-**/
   } // recv_size > =
 
   //
@@ -445,74 +300,26 @@ void board_server::process_request(const std::string &buffer,std::vector<std::st
   Log(verbose,"Processing a transmission");
   Log(verbose,"[%s]",buffer.c_str());
 
+  try {
   // -- We just need to figure out if this is a configuration or command message
   json doc = json::parse(buffer);
-  if (doc.count("ctb") > 1) {
+  std::string jd = doc.dump(4);
+  Log(verbose,"Buffer [%s]",jd.c_str());
+  if (doc.count("ctb") >= 1) {
     // we have a configuration document
     Log(debug,"Processing config");
     board_manager_->process_config(doc,msg_answers_);
-  } else if (doc.count("command") > 1) {
+  } else if (doc.count("command") >= 1) {
     Log(debug,"Processing command : %s",doc.at("command").get<std::string>().c_str());
     board_manager_->exec_command(doc.at("command").get<std::string>(),msg_answers_);
   } else {
     Log(error,"Unknown document type.");
     msg_answers_.push_back("ERROR: Unknown document type");
   }
-
-  /**
-  // Instanciate the XML plugin
-  pugi::xml_document doc;
-
-  //[code_load_memory_buffer
-  // You can use load_buffer to load document from immutable memory block:
-  pugi::xml_parse_result result = doc.load(buffer.c_str());
-  //]
-
-  Log(verbose,"Load result : %s",result.description());
-  // Search if there is a command in here
-  pugi::xml_node command = doc.child("command");
-  pugi::xml_node config = doc.child("config");
-  // First look for 2 ridiculous situations:
-  // 1.) There is neither config nor command nodes
-  // 2.) There are both config and command nodes
-  if (command == NULL &&  config == NULL) {
-    Log(error,"Neither config nor command blocks were found. Ignoring the data.");
-    throw std::runtime_error("No valid command blocks found.");
-    //answer += "<error>Unknown command block</error>";
-    //    std::ostringstream docstr;
-    //    doc.print(docstr);
-    //    throw PTBexception(docstr.str().c_str());
-
-  } else if (command != NULL and config != NULL){
-    Log(error,"Found both a config and a command node. This is not supported yet.");
-    throw std::runtime_error("Found both config and command blocks.");
-
-  } else if (config != NULL) {
-    Log(verbose,"Processing config %s : %s ",config.name(),config.child_value());
-    Log(verbose,"Name: [%s]",config.name());
-    Log(verbose,"Value: [%s]",config.child_value());
-#ifdef DEBUG
-    // Store the buffer in a local variable.
-    if (Logger::GetSeverity() <= Logger::verbose) {
-      config.print(std::cout,"",pugi::format_raw);
-    }
-#endif
-    // NOTE: No exception should be caught at this point. All were caught at a lower level.
-    // Let's treat the writing of the answers directly in the low level code.
-    // easier to evaluate on a run by run basis.
-    board_manager_->process_config(config,answer);
-
-    Log(verbose,"Config processed with answer [%s]",answer.c_str());
-  } else if (command != NULL){
-    Log(verbose,"Processing command [%s] : [%s]",command.name(),command.child_value());
-
-    board_manager_->exec_command(command.child_value(),answer);
-    Log(debug,"Returning from ProcessCommand with answer [%s].",answer.c_str());
-
-  } else {
-    Log(warning,"Reached an impossible situation. Pretending nothing happened and carrying on.");
+  } catch(std::exception &e) {
+    Log(error,"Caught an exception: %s",e.what());
   }
-  **/
+
 }
 
 void board_server::register_board_manager(board_manager* newmgr) {
