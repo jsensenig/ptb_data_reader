@@ -15,6 +15,7 @@
 #include "util.h"
 
 #include "ptb_registers.h"
+#include "i2conf.h"
 
 #include <iomanip>
 #include <thread>
@@ -478,6 +479,8 @@ namespace ptb {
     data_socket_port_ = receiver.at("port").get<unsigned short>();
     reader_->set_tcp_port(data_socket_port_);
     Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
+    // -- Grab the SSP configuration
+    json sspconf = doc.at("ctb").at("subsystems").at("ssp");
     
     // uint32_t duration;
     std::stringstream strVal;
@@ -491,6 +494,9 @@ namespace ptb {
       Log(warning,"Input value of [%u] above maximum rollover [27]. Truncating to maximum.",duration);
       duration = (1<<27)-1;
     }
+
+    //Program the DACs with config values
+    board_manager::dac_config(sspconf);
 
     // 1 ms in a 50MHz clock
     //  if (duration <= 50000) {
@@ -586,6 +592,33 @@ namespace ptb {
 //    Log(verbose,"Returning from SetConfig with answer [%s]",feedback.c_str());
 
   }
+
+void board_manager::dac_config(json &sspconfig){
+
+    i2conf* dacsetup;
+
+    std::vector<uint32_t> dac_values = sspconfig.at("dac_thresholds"); //.get<uint32_t>() ...do this???
+    // std::vector<uint32_t> dac_values (24, 0);
+
+    if (dac_values.size() != (i2conf::nchannels_)*(i2conf::ndacs_)) {
+        Log(warning, "Number of configuration values (%i) doesn't match number of DAC channels (%i)!", dac_values.size(), (i2conf::nchannels_)*(i2conf::ndacs_));
+    }
+    Log(info,"Size of channel values vector %i", dac_values.size());
+    for (int i=0; i<dac_values.size(); i++) {
+        Log(info,"Channel %i value %u", i, dac_values[i]);
+        if (dac_values[i] > 4095) { //Range 0 - 4095
+            Log(warning, "Warning DAC value out of range, will be set to max value.");
+              dac_values[i] = 4095; 
+        }
+    }
+    //Now pass DAC configs to setup
+    if (dacsetup->ConfigureDacs(dac_values,false)) {
+        Log(error,"Failed to write configuration values to DACs.");
+    }
+    Log(info,"Programmed %i DAC channels", dac_values.size());
+
+}
+
 
 #else
   // TODO: Implement this for the specific application.

@@ -18,16 +18,23 @@
 //FIXME: Use a more robust socket library...for example boost seems sensible
 #include "PracticalSocket.h"
 #include "content.h"
+#include "json.hpp"
 
 // -- namespace declarations for common STL objects
 using std::cout;
 using std::cerr;
 using std::endl;
+using json = nlohmann::json;
 
-
-// -- configuration that we are running with for now
+//////////////////////////////
+// -- configuration that we are running with for now, either set the DAC values to all 0 or the operation level 1879
 // EDIT here where the IP where you are running, which is where the CTB will attempt to connect to send the data
-static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"128.91.185.63\",\"port\":8992,\"rollover\":25000}}}}";
+
+static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[0,0,0,0,0,0,0,0,1879,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]}}}}";
+
+//static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879]}}}}";
+////////////////////////////////
+
 class ctb_robot {
 public:
   ctb_robot(const std::string &host = "localhost",const uint16_t &port = 8991)
@@ -73,6 +80,7 @@ public:
   }
 
   void send_config() {
+
     cout << "Sending config" << endl;
     if (!is_conf_) {
       cout << "Resetting before configuring" << endl;
@@ -96,7 +104,6 @@ public:
 
     }
   }
-
 
   void run() {
     enum commands {init=1,start=2,stop=3,quit=4};
@@ -293,9 +300,11 @@ private:
 };
 
 int main() {
+
   std::cout.setf(std::ios::unitbuf);
   cout << "Starting robot..." << endl;
-  ctb_robot robot("128.91.41.238",8991);
+  //ctb_robot robot("128.91.41.238",8991);
+  ctb_robot robot("localhost",8991);
   cout << "Starting the loop..." << endl;
   robot.run();
   cout << "All done" << endl;

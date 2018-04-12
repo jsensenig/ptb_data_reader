@@ -78,6 +78,9 @@ public:
   // Passed by copy to keep locally
   void process_config(json & config,std::vector<std::string> &answers);
 
+  //Resets and configures the dacs
+  void dac_config(json & ssp_config);
+
   /**
    * Loops over the registers and dum their contents, both in decimal and Hex.
    */
