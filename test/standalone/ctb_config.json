@@ -1,0 +1,15 @@
+{"ctb":{
+    "sockets": {
+        "receiver":{
+            "host":"localhost",
+            "port":8992,
+            "rollover" : 25000
+        }
+    },
+    "subsystems":{
+        "ssp":{
+            "dac_thresholds":[0,0,0,0,0,0,0,0,1879,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]
+        }
+    }
+  }
+}

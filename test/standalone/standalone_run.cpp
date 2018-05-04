@@ -19,6 +19,7 @@
 #include "PracticalSocket.h"
 #include "content.h"
 #include "json.hpp"
+#include "cxxopts.hpp"
 
 // -- namespace declarations for common STL objects
 using std::cout;
@@ -30,7 +31,7 @@ using json = nlohmann::json;
 // -- configuration that we are running with for now, either set the DAC values to all 0 or the operation level 1879
 // EDIT here where the IP where you are running, which is where the CTB will attempt to connect to send the data
 
-static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[0,0,0,0,0,0,0,0,1879,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]}}}}";
+static std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[0,0,0,0,0,0,0,0,1879,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]}}}}";
 
 //static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879]}}}}";
 ////////////////////////////////
@@ -299,9 +300,68 @@ private:
   char answer_[1024];
 };
 
-int main() {
+int main(int argc, char**argv) {
 
   std::cout.setf(std::ios::unitbuf);
+  size_t vlvl = 0;
+  std::string cfile = "ctb_config.json";
+
+  try {
+    cxxopts::Options options(argv[0], " - command line options");
+    options.add_options()
+    ("c,config","Configuration file (JSON format)",cxxopts::value<std::string>())
+    ("h,help", "Print help")
+    ("v,verbosity","Verbosity level",cxxopts::value<size_t>(vlvl))
+    ;
+
+    auto result = options.parse(argc, argv);
+
+    if (result.count("help")) {
+      cout << options.help() << endl;
+      exit(0);
+    }
+
+    if (result.count("input")) {
+      cout << "--> Using " << result["config"].as<std::string>() << " config file." << endl;
+      cfile = result["config"].as<std::string>();    
+    } else {
+      cout << "===> Using default configuration file [" << cfile << "] " << endl;
+    }
+
+    cout << "-->Using verbosity level [" << vlvl << "]" << endl;
+
+  }
+  catch( const cxxopts::OptionException& e) 
+  {
+    cout << "** Error parsing options: " << e.what() << endl;
+    exit(1);
+  }
+
+  // Now open the file
+  std::ifstream cfin;
+  cfin.exceptions ( ifstream::failbit | ifstream::badbit );
+  try 
+  {
+    cfin.open(cfile);
+    json conf;
+    cfin >> conf;
+    if (vlvl > 0) {
+      cout << "Dumping input configuration:"<< endl;
+      cout << "===============================" << endl;
+      cout << conf.dump(2) << endl;
+      cout << "===============================" << endl;
+    }
+    g_config = conf.dump();
+  }
+catch (const ifstream::failure& e)
+{
+  cout << "** Failure opening/reading the configuration file: " << e.what() << endl;
+  exit(1);
+}
+catch( const json::exception& e) {
+  cout << "Caught a JSON exception: " << e.what() << endl;
+  exit(1);
+}
   cout << "Starting robot..." << endl;
   //ctb_robot robot("128.91.41.238",8991);
   ctb_robot robot("localhost",8991);
