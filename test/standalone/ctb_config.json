@@ -1,20 +1,32 @@
-{"ctb":{
-    "sockets": {
-        "receiver":{
-            "host":"localhost",
-            "port":8992,
-            "rollover" : 25000
-        }
+{
+  "ctb":{
+    "sockets":{
+      "rollover":50000,
+      "receiver":{
+        "host":"localhost",
+        "port":8992
+      },
+      "monitor":{
+        "enable" : false,
+        "host": "localhost",
+        "port": 8993
+        },
+      "statistics": {
+        "enable":false,
+        "port":8994,
+        "updt_period": 1
+      }
     },
     "subsystems":{
-        "ssp":{
-            "ch_mask" : "0xFFFFFF",
-            "dac_thresholds":[0,0,0,0,0,0,0,0,1879,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]
-        },
-        "crt": {
-          "ch_mask" : "0xFFFFFFFF",
-          "delay" : 135
-        }
+      "pds":{
+        "channel_mask":"0xFFFFF",
+        "reshape_length" : 10,
+        "dac_thresholds":[2000,2000,2000,2000,2000,2200,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,0,2000,2000]
+      },
+      "crt":{
+        "ch_mask": "0xFFFFFFFF",
+        "reshape_length" : 10
+      }
     }
   }
 }

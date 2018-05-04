@@ -31,7 +31,7 @@ all: standalone_run
 
 
 clean:
-	rm standalone_run standalone_run_boost
+	rm standalone_run  #standalone_run_boost
 
 standalone_run: standalone_run.cpp PracticalSocket.cpp
 	$(CC) -I./ $(CFLAGS) -o $@ $? $(LFLAGS)
