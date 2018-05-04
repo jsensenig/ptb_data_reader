@@ -31,7 +31,9 @@ using json = nlohmann::json;
 // -- configuration that we are running with for now, either set the DAC values to all 0 or the operation level 1879
 // EDIT here where the IP where you are running, which is where the CTB will attempt to connect to send the data
 
-static std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[0,0,0,0,0,0,0,0,1879,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]}}}}";
+//static std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[0,0,0,0,0,0,0,0,1879,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]}}}}";
+
+static std::string g_config; 
 
 //static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":25000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879,1879]}}}}";
 ////////////////////////////////
@@ -321,14 +323,14 @@ int main(int argc, char**argv) {
       exit(0);
     }
 
-    if (result.count("input")) {
+    if (result.count("config")) {
       cout << "--> Using " << result["config"].as<std::string>() << " config file." << endl;
       cfile = result["config"].as<std::string>();    
     } else {
       cout << "===> Using default configuration file [" << cfile << "] " << endl;
     }
 
-    cout << "-->Using verbosity level [" << vlvl << "]" << endl;
+    cout << "--> Verbosity level [" << vlvl << "]" << endl;
 
   }
   catch( const cxxopts::OptionException& e) 

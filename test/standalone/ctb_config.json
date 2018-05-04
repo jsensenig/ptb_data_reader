@@ -8,7 +8,12 @@
     },
     "subsystems":{
         "ssp":{
+            "ch_mask" : "0xFFFFFF",
             "dac_thresholds":[0,0,0,0,0,0,0,0,1879,0,0,0,0,0,0,0,0,0,0,0,123,0,0,0]
+        },
+        "crt": {
+          "ch_mask" : "0xFFFFFFFF",
+          "delay" : 135
         }
     }
   }
