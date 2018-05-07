@@ -47,7 +47,7 @@ clean:
 standalone_run: standalone_run.cpp PracticalSocket.cpp
 	$(CC) -I./ $(CFLAGS) -o $@ $? $(LFLAGS)
 
-standalone_run_boost: ctbdatareceiver.cpp ctbclient.cpp standalone_run_boost_v2.cpp 
-	$(CC) -I./ $(CFLAGS) $(BOOST_CFLAGS) -o $@ $? $(BOOST_LFLAGS)
+standalone_run_boost: ctbdatareceiver.cpp ctbclient.cpp standalone_run_boost.cpp 
+	$(CC) -I./ $(CFLAGS) $(BOOST_CFLAGS) -o $@ $^ $(BOOST_LFLAGS)
 
 
