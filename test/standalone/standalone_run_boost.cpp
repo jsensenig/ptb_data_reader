@@ -15,8 +15,6 @@
 #include <cstdint>
 #include <sstream>
 
-//FIXME: Use a more robust socket library...for example boost seems sensible
-#include "PracticalSocket.h"
 #include "content.h"
 #include "json.hpp"
 #include "cxxopts.hpp"
@@ -48,7 +46,7 @@ using json = nlohmann::json;
 // EDIT here where the IP where you are running, which is where the CTB will attempt to connect to send the data
 
 
-static std::string g_config; 
+//static std::string g_config;
 std::string cfile = "ctb_config.json";
 
 
@@ -137,7 +135,7 @@ class ctb_robot {
 
       std::ifstream cfin;
       json conf;
-      cfin.exceptions ( ifstream::failbit | ifstream::badbit );
+      cfin.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
       try
         {
           cfin.open(cfile);
@@ -151,7 +149,7 @@ class ctb_robot {
           client_->send_json(conf.dump());
           cfin.close();
         }
-      catch (const ifstream::failure& e)
+      catch (const std::ifstream::failure& e)
         {
           cout << "** Failure opening/reading the configuration file: " << e.what() << endl;
           exit(1);
@@ -196,7 +194,7 @@ class ctb_robot {
         //    cout << " 4 : Soft Reset" << endl;
         //    cout << " 5 : Hard Reset" << endl;
 
-        cin >> command;
+        std::cin >> command;
         switch(command) {
           case init:
             send_config();
@@ -432,7 +430,7 @@ int main(int argc, char**argv) {
   try {
   cout << "Starting robot..." << endl;
   //ctb_robot robot("128.91.41.238",8991);
-  ctb_robot robot("localhost","8991",8992,1,5);
+  ctb_robot robot("128.91.41.238","8991",8992,1,5);
   cout << "Starting the loop..." << endl;
   robot.run();
   cout << "All done" << endl;
