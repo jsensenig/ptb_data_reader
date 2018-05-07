@@ -277,6 +277,7 @@ Log(info,"Working  with thread 0x%x",std::this_thread::get_id());
         }
         client_socket_->send(answer.dump().c_str(),answer.dump().size());
         Log(debug,"Answer sent");
+        msg_answers_.clear();
 
       }
     }
