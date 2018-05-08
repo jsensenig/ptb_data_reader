@@ -117,7 +117,7 @@ namespace ptb {
           json obj;
           obj["type"] = "warning";
           obj["message"] = "Board already taking data. Restarting new run.Might miss the sync pulse.";
-          feedback_["feedback"].push_back(obj);
+          feedback_.push_back(obj);
 //          msgs_ << "Warning::Board already taking data. Restarting new run.Might miss the sync pulse.";
 //          feedback_.push_back(msgs_.str());
 //          msgs_.clear();
@@ -159,11 +159,11 @@ namespace ptb {
         break;
       case STOPRUN:
         if (get_board_state() != board_manager::RUNNING) {
+          Log(warning,"Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.." );
           json obj;
           obj["type"] = "warning";
           obj["message"] = "Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop";
-          feedback_["feedback"].push_back(obj);
-          Log(warning,"Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.." );
+          feedback_.push_back(obj);
           // The GLB_EN is located in bin 31 of register 30
           set_enable_bit(false);
           Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
@@ -176,7 +176,7 @@ namespace ptb {
         json obj;
         obj["type"] = "error";
         obj["message"] = "Unknown PTB command [" + cmd + "]";
-        feedback_["feedback"].push_back(obj);
+        feedback_.push_back(obj);
         break;
     }
 
