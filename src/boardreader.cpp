@@ -220,8 +220,6 @@ bool board_reader::test_socket() {
 /// NOTE: Any state reset should the done here
 void board_reader::init_data_connection(bool force) {
   // -- reset the state machine
-  error_state_.store(false);
-  feedback_messages_.clear();
 
   //-- If a connection exists, assume it is correct and continue to use it
   // FIXME: A ghost connection can exist

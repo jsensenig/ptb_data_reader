@@ -153,10 +153,13 @@ namespace ptb {
       case STOPRUN:
         if (get_board_state() != board_manager::RUNNING) {
           Log(warning,"Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.." );
+          // -- we could still try to stop, no???
+          //FIXME: Check this
+          stop_run();
           // -- This warning does not need to be reported out
           // The GLB_EN is located in bin 31 of register 30
-          set_enable_bit(false);
-          Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
+//          set_enable_bit(false);
+//          Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
 
         } else {
           Log(verbose,"The Run should STOP now" );

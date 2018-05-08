@@ -14,6 +14,7 @@
 #include <csignal>
 #include <cstdint>
 #include <sstream>
+#include <algorithm>
 
 //FIXME: Use a more robust socket library...for example boost seems sensible
 #include "PracticalSocket.h"
@@ -54,7 +55,8 @@ class ctb_robot {
       client_sock.send(cmd,28);
       client_sock.recv(answer_,1024);
       cout << "Received answer [" << answer_ << "]" << endl;
-      answer_[0]='\0';
+      std::fill(answer_, answer_+1024, 0);
+      //answer_[0]='\0';
 
       is_running_ = false;
       is_conf_ = false;
@@ -69,7 +71,8 @@ class ctb_robot {
       client_sock.send(cmd,27);
       client_sock.recv(answer_,1024);
       cout << "Received answer [" << answer_ << "]" << endl;
-      answer_[0]='\0';
+      std::fill(answer_, answer_+1024, 0);
+            //answer_[0]='\0';
       is_running_ = true;
     }
 
@@ -79,7 +82,8 @@ class ctb_robot {
       client_sock.send(cmd,27);
       client_sock.recv(answer_,1024);
       cout << "Received answer [" << answer_ << "]" << endl;
-      answer_[0]='\0';
+      std::fill(answer_, answer_+1024, 0);
+            //answer_[0]='\0';
       is_running_ = false;
     }
 
@@ -94,7 +98,8 @@ class ctb_robot {
       client_sock.send(g_config.c_str(),g_config.size());
       client_sock.recv(answer_,1024);
       cout << "Received answer [" << answer_ << "]" << endl;
-      answer_[0]='\0';
+      std::fill(answer_, answer_+1024, 0);
+            //answer_[0]='\0';
       is_conf_ = true;
     }
 
