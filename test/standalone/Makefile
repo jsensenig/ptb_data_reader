@@ -35,14 +35,15 @@ else
    BOOST_CFLAGS := $(BOOST_CFLAGS_LINUX)
 endif
 
-.PHONY: all clean
+.PHONY: all clean boost
 
 #all: standalone_run_boost standalone_run
 all: standalone_run
 
+boost: standalone_run_boost
 
 clean:
-	rm standalone_run  #standalone_run_boost
+	rm -f standalone_run standalone_run_boost
 
 standalone_run: standalone_run.cpp PracticalSocket.cpp
 	$(CC) -I./ $(CFLAGS) -o $@ $? $(LFLAGS)
