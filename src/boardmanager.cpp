@@ -216,7 +216,13 @@ namespace ptb {
         bool has_error = false;
         json reader_msgs;
         reader_->get_feedback(has_error,reader_msgs,true);
-        feedback_.insert(feedback_.end(),reader_msgs.begin(),reader_msgs.end());
+        if (!reader_msgs.empty()) {
+          feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
+        }
+        if (has_error) {
+          Log(error,"Got an error while initializing data socket.");
+          error_state_ = true;
+        }
       }
 
       if (!reader_->get_ready()) {
@@ -276,7 +282,9 @@ namespace ptb {
     bool has_error = false;
     json reader_msgs;
     reader_->get_feedback(has_error,reader_msgs,true);
-    feedback_.insert(feedback_.end(),reader_msgs.begin(),reader_msgs.end());
+    if (!reader_msgs.empty()) {
+      feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
+    }
     if (has_error) {
       Log(error,"Received error state from the board reader");
       error_state_ = true;
@@ -320,7 +328,9 @@ namespace ptb {
     bool has_error = false;
     json reader_msgs;
     reader_->get_feedback(has_error,reader_msgs,true);
-    feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
+    if (!reader_msgs.empty()) {
+      feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
+    }
     if (has_error) {
       Log(error,"Received an error state from the board reader");
     }
