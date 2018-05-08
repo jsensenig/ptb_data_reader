@@ -135,6 +135,9 @@ void board_reader::stop_data_taking() {
   Log(warning,"Shutting down the DMA engine.");
   clean_and_shutdown_dma();
 
+  Log(info,"Resetting existing buffers");
+  reset_buffers();
+
   Log(info,"Data taking stopped.");
 }
 
