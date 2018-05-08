@@ -48,7 +48,7 @@ ctb_data_receiver::ctb_data_receiver(int debug_level, uint32_t tick_period_usecs
         n_ts_words_(0),
         n_words_(0)
 {
-  cout << "In constructor" << endl;
+  printf("ctb_data_receiver: In constructor\n");
 
   this->set_deadline(None,0);
   this->check_deadline();
@@ -62,7 +62,7 @@ ctb_data_receiver::ctb_data_receiver(int debug_level, uint32_t tick_period_usecs
 }
 
 ctb_data_receiver::~ctb_data_receiver() {
-  cout << "In destructor" << endl;
+  printf("ctb_data_receiver:: In destructor\n");
   // Flag receiver as no longer running
   run_receiver_.store(false);
 
@@ -72,13 +72,13 @@ ctb_data_receiver::~ctb_data_receiver() {
   // Wait for thread running receiver IO service to terminate
   receiver_thread_->join();
 
-  cout <<  "destructor: receiver thread joined OK" << endl;
+  printf("destructor: receiver thread joined OK\n");
 }
 
 
 void ctb_data_receiver::start(void)
 {
-  cout << "Start called" << endl;
+  printf("ctb_data_receiver::start: Start called\n");
   start_time_ = std::chrono::high_resolution_clock::now();
 
   // If the data receive socket is open, flush any stale data off it
@@ -96,7 +96,7 @@ void ctb_data_receiver::start(void)
 
       size_t len = data_socket_.read_some(boost::asio::buffer(buf), ec);
       flush_length += len;
-      cout << "Flushed: " << len << " total: " << flush_length
+      cout << "ctb_data_receiver::start: Flushed: " << len << " total: " << flush_length
           << " available: " << data_socket_.available() << endl;
 
       if (ec == boost::asio::error::eof)
@@ -214,8 +214,11 @@ void ctb_data_receiver::run_service(void)
 // Then redirects the handling of the received data to do_read
 void ctb_data_receiver::do_accept(void)
 {
-  cout << "ctb_data_receiver::do_accept starting" << endl;
-
+  static bool first = true;
+  if (first)
+  {
+    printf("ctb_data_receiver::do_accept starting\n");
+  }
   // JCF, Jul-29-2015
 
   // The "Timeout on async_accept" message appears many, many times --
@@ -228,7 +231,8 @@ void ctb_data_receiver::do_accept(void)
   // Suspend readout and cleanup any incomplete millislices if stop has been called
   if (suspend_readout_.load())
   {
-    cout << "ctb_data_receiver::do_accept: Suspending readout at do_accept entry" << endl;
+
+    printf("ctb_data_receiver::do_accept: Suspending readout at do_accept entry\n");
     this->suspend_readout(false);
   }
 
@@ -238,6 +242,7 @@ void ctb_data_receiver::do_accept(void)
     return;
   }
 
+  printf("ctb_data_receiver::do_accept: Acceptor deadline set to %u us\n",tick_period_usecs_);
   this->set_deadline(Acceptor, tick_period_usecs_);
 
   acceptor_.async_accept(accept_socket_,

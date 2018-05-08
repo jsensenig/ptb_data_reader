@@ -361,18 +361,13 @@ void ctb_client::send_json(std::string const & json_frag)
             first_brckt = true;
           }
         catch(json::exception &e) {
-          std::string msg = "ERROR : JSON exception : ";
-          msg += e.what();
-          printf("ctb_client::send_json: JSON Exception : %s",msg.c_str());
+          printf("ctb_client::send_json: JSON Exception : %s",e.what());
         }
         catch(std::exception &e) {
-          std::string msg = "ERROR : STD exception : ";
-          msg += e.what();
-          printf("ctb_client::send_json: STL exception : %s",msg.c_str());
+          printf("ctb_client::send_json: STL exception : %s",e.what());
         }
         catch (...) {
-          std::string msg = "ERROR : Unidentified exception caught";
-          printf("ctb_client::send_json: %s",msg.c_str());
+          printf("ctb_client::send_json: Unidentified exception caught");
         }
       }
     }
@@ -393,33 +388,40 @@ void ctb_client::send_json(std::string const & json_frag)
       printf("ctb_client::send_json: Unknown document structure: [%s]\n",answer_doc.dump().c_str());
     }
     else {
-      // Parse the objects one by one
-      std::vector<json> content = answer_doc.at("feedback");
-      // -- grab the vector of feedback documents
-      // -- They will come in order of declaration
-      for (std::vector<json>::iterator it = content.begin(); it != content.end(); ++it)
-      {
-        if (it->at("type") == std::string("info"))
-        {
-          printf("ctb_client::send_json: INFO : %s\n",it->at("message").get<std::string>().c_str());
-          if (it->find("where")!= it->end()) {
-            printf("--> Extra info : %s\n",it->at("where").get<std::string>().c_str());
-          }
-        }
-        if (it->at("type") == std::string("ERROR"))
-        {
-          printf("ctb_client::send_json: ERROR : %s\n",it->at("message").get<std::string>().c_str());
-          if (it->find("where")!= it->end()) {
-            printf("--> Extra info : %s\n",it->at("where").get<std::string>().c_str());
-          }
-        }
-        if (it->at("type") == std::string("statistics"))
-        {
-          for (json::iterator iti = it->begin(); iti != it->end(); ++iti) {
-            std::cout << *iti << '\n';
-          }
-        }
+
+      for (json::iterator it = answer_doc.at("feedback").begin(); it != answer_doc.at("feedback").end(); ++it) {
+        std::cout << it->dump(2) << std::endl;
+        //std::cout << it.key() << " : " << it.value() << std::endl;
       }
+
+//      // Parse the objects one by one
+//      std::vector<json> content = answer_doc.at("feedback");
+//      // -- grab the vector of feedback documents
+//      // -- They will come in order of declaration
+//      for (std::vector<json>::iterator it = content.begin(); it != content.end(); ++it)
+//      {
+//        if (it->at("type") == std::string("info"))
+//        {
+//          printf("ctb_client::send_json: INFO : %s\n",it->at("message").get<std::string>().c_str());
+//          if (it->find("where")!= it->end()) {
+//            printf("--> Extra info : %s\n",it->at("where").get<std::string>().c_str());
+//          }
+//        }
+//        if (it->at("type") == std::string("error"))
+//        {
+//          printf("ctb_client::send_json: ERROR : %s\n",it->at("message").get<std::string>().c_str());
+//          if (it->find("where")!= it->end()) {
+//            printf("--> Extra info : %s\n",it->at("where").get<std::string>().c_str());
+//          }
+//        }
+//
+//        if (it->at("type") == std::string("statistics"))
+//        {
+//          for (json::iterator iti = it->begin(); iti != it->end(); ++iti) {
+//            std::cout << *iti << '\n';
+//          }
+//        }
+//      }
       answer_doc.clear();
     }
   }

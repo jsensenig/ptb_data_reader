@@ -134,14 +134,15 @@ namespace ptb {
       typedef struct ch_status_t {
            typedef uint64_t ts_size_t;
            typedef uint32_t pds_size_t;
-           typedef uint32_t crt_size_t;
+           typedef uint64_t crt_size_t;
            typedef uint16_t bi_size_t;
-           typedef uint8_t wtype_size_t;
+           typedef uint8_t  wtype_size_t;
 
            ts_size_t     timestamp  : 60;
-           bi_size_t     beam       : 9;
-           pds_size_t    pds        : 16;
-           crt_size_t    crt        : 29;
+           bi_size_t     beam_lo    : 4;
+           bi_size_t     beam_hi    : 5;
+           crt_size_t    crt        : 32;
+           pds_size_t    pds        : 24;
            wtype_size_t  word_type  : 3;
 
 
@@ -154,6 +155,10 @@ namespace ptb {
 
 
            // aux_functions
+           uint16_t get_beam() {return (beam_hi << 4 | beam_lo);}
+           uint32_t get_crt() {return (crt & 0xFFFFFFFF);}
+           uint32_t get_pds() {return (pds & 0xFFFFFFF);}
+
            bool get_state_crt(const uint16_t channel) {
              return ((crt & (0x1 << channel)) != 0x0);
            }
@@ -161,10 +166,11 @@ namespace ptb {
              return ((pds & (0x1 << channel)) != 0x0);
            }
            bool get_state_beam(const uint16_t channel) {
-             return ((beam & (0x1 << channel)) != 0x0);
+             return (((beam_hi << 4 | beam_lo) & (0x1 << channel)) != 0x0);
            }
 
        } ch_status_t;
+
 
 
        typedef struct timestamp_t {

@@ -302,7 +302,9 @@ class ctb_robot {
                 case ptb::content::word::t_ch:
                   chs = reinterpret_cast<ptb::content::word::ch_status_t *>(word);
                   val = chs->pds;
-                  cout << "CH: " << std::bitset<3>(chs->word_type) << " " << chs->timestamp << " " << std::hex << val << std::dec << " " << std::bitset<24>(val) << endl;
+                  cout << "CH: " << std::bitset<3>(chs->word_type) << " " << chs->timestamp << " PDS 0x" << std::hex << val << std::dec << " " << std::bitset<24>(val)
+                       << " CRT 0x" << std::hex << chs->get_crt() << std::dec
+                       << " BI  0x" << std::hex << chs->get_beam() << std::dec << endl;
                   pos += ptb::content::word::word_t::size_bytes;
                   break;
                 default:
