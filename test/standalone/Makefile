@@ -7,7 +7,7 @@ DEF_CFLAGS := -std=c++11 -Wall -I.
 DEF_LFLAGS := -lpthread
 BOOST_CFLAGS_LINUX := -I/usr/local/boost/1.66.00/include
 BOOST_LFLAGS_LINUX := /usr/local/boost/1.66.00/lib/libboost_thread.a /usr/local/boost/1.66.00/lib/libboost_system.a
-BOOST_FLAGS_CTB := /usr/lib/arm-linux-gnueabihf/libboost_thread.a /usr/lib/arm-linux-gnueabihf/libboost_system.a
+BOOST_LFLAGS_CTB := /usr/lib/arm-linux-gnueabihf/libboost_thread.a /usr/lib/arm-linux-gnueabihf/libboost_system.a
 BOOST_CFLAGS_CTB := 
 # TPB Build
 
@@ -18,7 +18,7 @@ ifeq ($(MACHINE), armv7l)
    $(info ======================)
    $(info ++++Compiling for uZed)
    $(info ======================)
-    LFLAGS   := -g $(DEF_LFLAGS)
+   LFLAGS   := -g $(DEF_LFLAGS)
 #   CFLAGS   := -g -O0 $(DEF_CFLAGS)
    CFLAGS   := $(OPT_FLAGS) -march=armv7-a $(DEF_CFLAGS) 
 #   CFLAGS   := -O1 -march=armv7-a -mcpu=cortex-a9 $(DEF_CFLAGS)
@@ -49,6 +49,6 @@ standalone_run: standalone_run.cpp PracticalSocket.cpp
 	$(CC) -I./ $(CFLAGS) -o $@ $? $(LFLAGS)
 
 standalone_run_boost: ctbdatareceiver.cpp ctbclient.cpp standalone_run_boost.cpp 
-	$(CC) -I./ $(CFLAGS) $(BOOST_CFLAGS) -o $@ $^ $(BOOST_LFLAGS)
+	$(CC) -I./ $(CFLAGS) $(BOOST_CFLAGS) -o $@ $^ $(LFLAGS) $(BOOST_LFLAGS)
 
 
