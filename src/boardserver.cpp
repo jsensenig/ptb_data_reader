@@ -291,9 +291,7 @@ Log(info,"Working  with thread 0x%x",std::this_thread::get_id());
         answer["feedback"] = msg_answers_;
 
         Log(debug,"Answers : %s",answer.at("feedback").dump(2).c_str());
-//        for (const string s : msg_answers_) {
-//          Log(debug,"::[%s]",s.c_str());
-//        }
+
         client_socket_->send(answer.dump().c_str(),answer.dump().size());
         Log(debug,"Answer sent");
         msg_answers_.clear();

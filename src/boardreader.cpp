@@ -500,8 +500,6 @@ void board_reader::data_transmitter() {
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
   ptb::content::word::word_t *frame;
-  ptb::content::word::header_t *wh;
-  ptb::content::word::body_t *wp;
   while(keep_transmitting_) {
 
     // Set the local pointer to the place pointer by the global pointer
@@ -552,8 +550,7 @@ void board_reader::data_transmitter() {
     size_t tpos = 0;
     while (tpos < dma_buffer.len) {
        frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]+tpos);
-       wh = &(frame->wheader);
-       switch(wh->word_type) {
+       switch(frame->word_type) {
          case ptb::content::word::t_fback:
            num_word_feedback_++;
            break;
@@ -566,9 +563,13 @@ void board_reader::data_transmitter() {
          case ptb::content::word::t_ts:
            num_word_tstamp_++;
            break;
+         case ptb::content::word::t_ch:
+           num_word_counter_++;
+           break;
+
        }
        // Advance the pointer
-       tpos += ptb::content::word::body_t::size_bytes;
+       tpos += ptb::content::word::word_t::size_bytes;
     }
 
     // -- Send the data
