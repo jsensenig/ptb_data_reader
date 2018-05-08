@@ -8,6 +8,11 @@ DEF_CFLAGS += -I$(PWD)/src -I./
 #DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src
 #DEF_CFLAGS += -I/usr/local/boost/1.66.00/include
 
+BOOST_CFLAGS_SERVER := -I/usr/local/boost/1.66.00/include
+BOOST_LFLAGS_SERVER := /usr/local/boost/1.66.00/lib/libboost_thread.a /usr/local/boost/1.66.00/lib/libboost_system.a
+BOOST_FLAGS_CTB := /usr/lib/arm-linux-gnueabihf/libboost_thread.a /usr/lib/arm-linux-gnueabihf/libboost_system.a
+BOOST_CFLAGS_CTB := 
+
 DEF_LFLAGS := -lpthread
 #-lrt
 #DEF_LFLAGS := -lpthread -lrt -lbz2 
@@ -36,15 +41,17 @@ else
    ifdef CROSS_COMPILE
       CC       := $(CROSS_COMPILE)g++
       CFLAGS   := $(DEF_CFLAGS) -fpermissive
+      LFLAGS   := 
    else
       CC       := g++
-      CFLAGS   := $(DEF_CFLAGS) -fpermissive -m32
+      CFLAGS   := $(DEF_CFLAGS) -fpermissive -m32 $(BOOST_CFLAGS_SERVER)
+      LFLAGS   := $(DEF_LFLAGS) $(BOOST_LFLAGS_SERVER)
    endif
    DEF      := 
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g
 #   CFLAGS   := $(DEF_CFLAGS) -fpermissive -g -O0 -m32 
-   CFLAGS   := $(DEF_CFLAGS) -fpermissive -m32
-   LFLAGS   := $(DEF_LFLAGS) 
+   #CFLAGS   += $(DEF_CFLAGS) -fpermissive -m32
+   #LFLAGS   += $(DEF_LFLAGS) 
    EXT_TARS := 
    CLN      := server_clean
    UTL_DIR  := $(PWD)/util/server
