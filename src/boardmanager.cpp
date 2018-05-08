@@ -476,7 +476,6 @@ namespace ptb {
   }
 
 
-#ifndef OLD_CODE
   void board_manager::process_config(json &doc,json &answers) {
     feedback_.clear();
 

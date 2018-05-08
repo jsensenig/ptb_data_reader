@@ -259,7 +259,9 @@ void board_reader::init_data_connection(bool force) {
       Log(error,"Socket exception caught : %s",e.what() );
       json obj;
       obj["type"] = "error";
-      obj["message"] = "Socket exception caught creating data connection : " + e.what();
+      std::string emsg = "Socket exception caught creating data connection : ";
+      emsg += e.what();
+      obj["message"] =  emsg;
       error_messages_.push_back(obj);
       error_state_.store(true);
       ready_ = false;
@@ -274,7 +276,9 @@ void board_reader::init_data_connection(bool force) {
       Log(error,"STD exception caught : %s",e.what() );
       json obj;
       obj["type"] = "error";
-      obj["message"] = "STL exception caught creating data connection : " + e.what();
+      std::string emsg = "STL exception caught creating data connection : ";
+      emsg += e.what();
+      obj["message"] =  emsg;
       error_messages_.push_back(obj);
       error_state_.store(true);
 
@@ -486,7 +490,7 @@ void board_reader::data_transmitter() {
   static uint32_t n_bytes_sent = 0;
 
   // Temporary variables that will end up making part of the eth packet
-  static uint32_t packet_size = 0;
+  //  static uint32_t packet_size = 0;
 
   // pointer to a new word
   ptb::content::buffer_t dma_buffer;
@@ -495,7 +499,7 @@ void board_reader::data_transmitter() {
   // Assign the skelleton packet header
   // This would be nice to go out of the loop but it
   ptb::content::tcp_header eth_header;
-  eth_header.word.format_version = (fw_version_ << 4) | ((~fw_version_) & 0xF);
+  eth_header.word.format_version = (ptb::content::format_version << 4) | ((~ptb::content::format_version) & 0xF);
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.

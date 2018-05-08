@@ -325,7 +325,7 @@ void board_server::get_num_instances() const {
  * and on another we want to be able to pass commands to start and end the run.
  * Implement a register handle, that can be used to trigger the manager
  */
-void board_server::process_request(const std::string &buffer,std::vector<std::string> &answer) {
+void board_server::process_request(const std::string &buffer,json &answer) {
   // Before doing any processing check that a DataManager has already
   // been registered. If not simply queue the command into a list and wait
   // Careful if the client connection in the meantime is lost, the memory will disappear.

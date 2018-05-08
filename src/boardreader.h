@@ -209,7 +209,7 @@ private:
   static const uint32_t frame_size_u32    = 0x4;    // 4xuint32_t
 
   // A few more constants that are important
-  static const uint32_t fw_version_ = FIRMWARE_REVISION;
+  //static const uint32_t fw_version_ = FIRMWARE_REVISION;
 
   // Frame sequence number
   uint32_t seq_num_;
