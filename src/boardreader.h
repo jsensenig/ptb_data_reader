@@ -143,14 +143,16 @@ class board_reader {
   uint32_t get_n_timestamps() {return num_word_tstamp_;};
   uint32_t get_sent_bytes() {return bytes_sent_;};
 
+  void reset_counters();
 
-  void set_dry_run(bool status) {dry_run_ = status;};
+//  void set_dry_run(bool status) {dry_run_ = status;};
+//
+//  bool get_dry_run() {return dry_run_;};
 
-  bool get_dry_run() {return dry_run_;};
-
-  bool get_error_state() {return error_state_;};
-
-  json & get_error_msgs() {return error_messages_;};
+  void get_feedback(bool &error, json&msgs,const bool reset = true);
+//  bool get_error_state();
+//
+//  json get_error_msgs();
 
 protected:
   /** Data collector function into the queue. Runs on it's own thread**/
@@ -224,10 +226,10 @@ private:
   // timeouts don't make sense with MMAP
   // neither does in SG_DMA, as it depends on the frequency of the data
 
-bool dry_run_; // Run the reader without collecting data
+//bool dry_run_; // Run the reader without collecting data
   // FIXME: Finish implementing the atomicity
 std::atomic<bool> error_state_;
-  json error_messages_;
+  json feedback_messages_;
 //  std::vector<std::string> error_messages_;
 
   // -- Internal run statistics
@@ -238,8 +240,8 @@ std::atomic<bool> error_state_;
   uint32_t num_word_feedback_;
   uint32_t num_word_tstamp_;
   uint32_t bytes_sent_;
-  std::map<int,int> counter_stats_;
-  std::map<ptb::content::word::trigger_code_t,int> trigger_stats_;
+//  std::map<int,int> counter_stats_;
+//  std::map<ptb::content::word::trigger_code_t,int> trigger_stats_;
 
 };
 

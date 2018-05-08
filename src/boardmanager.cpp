@@ -95,9 +95,6 @@ namespace ptb {
 
   void board_manager::exec_command(const std::string &cmd, json &answers) {
     feedback_.clear();
-    //  try{
-    //    msgs_.clear();
-    //    msgs_.str("");
     error_state_ = false;
     Log(debug,"Received command [%s]", cmd.c_str());
     std::map<std::string, command>::iterator it;
@@ -156,13 +153,11 @@ namespace ptb {
       case STOPRUN:
         if (get_board_state() != board_manager::RUNNING) {
           Log(warning,"Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.." );
-          json obj;
-          obj["type"] = "warning";
-          obj["message"] = "Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop";
-          feedback_.push_back(obj);
+          // -- This warning does not need to be reported out
           // The GLB_EN is located in bin 31 of register 30
           set_enable_bit(false);
           Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
+
         } else {
           Log(verbose,"The Run should STOP now" );
           stop_run();
@@ -173,6 +168,7 @@ namespace ptb {
         obj["type"] = "error";
         obj["message"] = "Unknown PTB command [" + cmd + "]";
         feedback_.push_back(obj);
+        error_state_ = true;
         break;
     }
 
@@ -217,8 +213,10 @@ namespace ptb {
         reader_->init_data_connection();
         // sleep for a few ms to check for erorrs
         usleep(3000);
-        json otmp = reader_->get_error_msgs();
-        feedback_.insert(feedback_.end(),otmp.begin(),otmp.end());
+        bool has_error = false;
+        json reader_msgs;
+        reader_->get_feedback(has_error,reader_msgs,true);
+        feedback_.insert(feedback_.end(),reader_msgs.begin(),reader_msgs.end());
       }
 
       if (!reader_->get_ready()) {
@@ -275,9 +273,12 @@ namespace ptb {
     /// -- Sleep a few ms to check for errors from the reader
     ///
     usleep(3000);
-    json otmp = reader_->get_error_msgs();
-    feedback_.insert(feedback_.end(),otmp.begin(),otmp.end());
-    if (reader_->get_error_state()) {
+    bool has_error = false;
+    json reader_msgs;
+    reader_->get_feedback(has_error,reader_msgs,true);
+    feedback_.insert(feedback_.end(),reader_msgs.begin(),reader_msgs.end());
+    if (has_error) {
+      Log(error,"Received error state from the board reader");
       error_state_ = true;
       return;
     }
@@ -291,7 +292,6 @@ namespace ptb {
 
     Log(info,"Run Start requested...");
 
-    error_state_ = false;
     json obj;
     obj["type"] = "info";
     obj["message"] = "Success starting the run";
@@ -300,6 +300,8 @@ namespace ptb {
 
   void board_manager::stop_run() {
     Log(debug,"Stopping the run" );
+
+    // Check is the run is running
 
     // The order should be:
     // 1. Set the GLB_EN register to 0 (stop readout in the fabric)
@@ -314,29 +316,30 @@ namespace ptb {
     // Try to set the run to stop on the software
     reader_->stop_data_taking();
 
-    if (reader_->get_error_state()) {
-      json tmp = reader_->get_error_msgs();
-      feedback_.insert(std::end(feedback_),tmp.begin(),tmp.end());
-//      feedback_.insert(std::end(feedback_),std::begin(tmp),std::end(tmp));
-//      std::vector<std::string> tmp = reader_->get_error_msgs();
-//      feedback_.insert(std::end(feedback_), std::begin(tmp), std::end(tmp));
-      //msgs_ << "<error> Data socket was lost while taking data. </error>";
+    usleep(3000);
+    bool has_error = false;
+    json reader_msgs;
+    reader_->get_feedback(has_error,reader_msgs,true);
+    feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
+    if (has_error) {
+      Log(error,"Received an error state from the board reader");
     }
 
     // Build a statistics object
-    json stat;
-    stat["type"] = "statistics";
-    stat["num_eth_packets"] = reader_->get_n_sent_frags();
-    stat["num_eth_bytes"] = reader_->get_sent_bytes();
-    stat["num_word_counter"] = reader_->get_n_status();
-    stat["num_hlt"] = reader_->get_n_gtriggers();
-    stat["num_llt"] = reader_->get_n_ltriggers();
-    stat["num_tstamp"] = reader_->get_n_timestamps();
-    stat["num_fifo_warn"] = reader_->get_n_warns();
-
-    feedback_.push_back(stat);
-    Log(info,"End of run message: %s",stat.dump(2).c_str());
-
+    if (get_board_state() == board_manager::RUNNING) {
+      json stat;
+      stat["type"] = "statistics";
+      stat["num_eth_packets"] = reader_->get_n_sent_frags();
+      stat["num_eth_bytes"] = reader_->get_sent_bytes();
+      stat["num_word_counter"] = reader_->get_n_status();
+      stat["num_hlt"] = reader_->get_n_gtriggers();
+      stat["num_llt"] = reader_->get_n_ltriggers();
+      stat["num_tstamp"] = reader_->get_n_timestamps();
+      stat["num_fifo_warn"] = reader_->get_n_warns();
+      reader_->reset_counters();
+      feedback_.push_back(stat);
+      Log(info,"End of run message: %s",stat.dump(2).c_str());
+    }
     //-- Soft Reset
     //-- Also send a soft reset to make sure that when the next start run comes
     // things are just as if we were starting anew.
