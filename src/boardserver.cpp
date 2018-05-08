@@ -28,6 +28,7 @@
 #include <thread>
 #include <csignal>
 #include <queue>
+#include <cinttypes>
 
 #include "boardmanager.h"
 #include "boardreader.h"
@@ -76,7 +77,7 @@ namespace ptb {
       // DAQ crashed.
       board_manager_->exec_command("HardReset",msg_answers_);
     }
-    Log(warning,"Relaunching the socket for connection acceptance in %ld s.",relaunch_wait_);
+    Log(warning,"Relaunching the socket for connection acceptance in %d s.",(int)relaunch_wait_);
     std::this_thread::sleep_for(std::chrono::seconds(relaunch_wait_));
   }
 
@@ -99,14 +100,14 @@ namespace ptb {
        Log(error,"Socket exception caught : %s",e.what());
        if (servSock != nullptr) delete servSock;
        servSock = nullptr;
-       Log(warning,"Relaunching the socket for connection acceptance in %ld s.",relaunch_wait_);
+       Log(warning,"Relaunching the socket for connection acceptance in %d s.",(int)relaunch_wait_);
        std::this_thread::sleep_for(std::chrono::seconds(relaunch_wait_));
      }
      catch(...) {
       Log(error,"Unknown exception caught");
       if (servSock != nullptr) delete servSock;
       servSock = nullptr;
-      Log(warning,"Relaunching the socket for connection acceptance in %lds.",relaunch_wait_);
+      Log(warning,"Relaunching the socket for connection acceptance in %d s.",(int)relaunch_wait_);
       std::this_thread::sleep_for(std::chrono::seconds(relaunch_wait_));
     }
   } while (servSock == nullptr);
@@ -141,7 +142,7 @@ namespace ptb {
    Log(error,"An unspecified exception was caught. Cleaning up and relaunching.");
    clean_and_relaunch();
  }
- Log(warning,"Relaunching the socket for connection acceptance in %ld s.",relaunch_wait_);
+ Log(warning,"Relaunching the socket for connection acceptance in %d s.",(int)relaunch_wait_);
  std::this_thread::sleep_for(std::chrono::seconds(relaunch_wait_));
 }
 Log(warning,"Reaching the end of execution, but not sure why...should *never* happen!");
