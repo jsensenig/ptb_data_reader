@@ -73,10 +73,10 @@ public:
     this->board_state_ = status;
   }
 
-  void exec_command(const std::string &cmd,std::vector<std::string> &answers);
+  void exec_command(const std::string &cmd,json &answers);
   // Receive the configuration as
   // Passed by copy to keep locally
-  void process_config(json & config,std::vector<std::string> &answers);
+  void process_config(json & config,json &answers);
 
   //Resets and configures the dacs
   void dac_config(json & ssp_config);
@@ -194,7 +194,9 @@ private:
   json config_;
   void *mapped_conf_base_addr_;
 
-  std::vector<std::string> feedback_;
+  //std::vector<std::string> feedback_;
+  json feedback_;
+
   //std::ostringstream msgs_;
   std::string msgs_str_;
   bool error_state_;

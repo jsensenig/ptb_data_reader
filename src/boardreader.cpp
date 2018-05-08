@@ -100,6 +100,8 @@ void board_reader::clear_threads() {
     }
     Log(info,"Threads cleared");
   }
+  error_state_.store(false);
+  error_messages_.clear();
 }
 
 void board_reader::stop_data_taking() {
@@ -115,7 +117,11 @@ void board_reader::stop_data_taking() {
   Log(info,"Data taking stopped.");
 }
 
+/// -- This lives in the main thread (same as manager)
+/// NOTE: Any state reset should be done here
 void board_reader::start_data_taking() {
+  error_state_.store(false);
+  error_messages_.clear();
   if (dry_run_) { // in dry run don't launch anything
     return;
   } else {
@@ -131,30 +137,37 @@ void board_reader::start_data_taking() {
       client_thread_collector_ = new std::thread(&board_reader::data_collector,this);
       if (client_thread_collector_ == nullptr) {
         Log(error,"Unable to create collector thread . Failing..." );
+        json obj;
+        obj["type"] = "error";
+        obj["message"] = "Unable to create collector thread";
+        error_messages_.push_back(obj);
+        error_state_.store(true);
         throw ptb::op_exception("Unable to create data collector.");
       }
-      //      if (pthread_create(&client_thread_collector_,NULL,&(board_reader::ClientCollectorFunc),this) != 0) {
-      //        Log(error,"Unable to create client thread. Failing..." );
-      //        throw op_exception("Unable to create data collector.");
-      //        return;
-      //      }
       // We are ready to do business. Start reading the DMA into the queue.
       Log(verbose, "==> Creating transmitter\n" );
       keep_transmitting_ = true;
       client_thread_transmitter_ = new std::thread(&board_reader::data_transmitter,this);
       if (client_thread_transmitter_ == nullptr) {
-        Log(error,"Unable to create collector thread . Failing..." );
+        Log(error,"Unable to create transmitter thread . Failing..." );
+        json obj;
+        obj["type"] = "error";
+        obj["message"] = "Unable to create transmitter thread";
+        error_messages_.push_back(obj);
+        error_state_.store(true);
+
         throw ptb::op_exception("Unable to create data transmitter.");
       }
 
-      //      if (pthread_create(&client_thread_transmitter_,NULL,&(board_reader::ClientTransmitterFunc),this) != 0) {
-      //        Log(error,"Unable to create client thread. Failing..." );
-      //        throw op_exception("Unable to create transmitter thread.");
-      //        return;
-      //      }
 
     } else {
       Log(error,"Calling to start data taking but connection is not ready yet." );
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = "Calling to start data taking but data connection is not ready yet";
+      error_messages_.push_back(obj);
+      error_state_.store(true);
+
       throw ptb::op_exception("Connection not available.");
     }
   }
@@ -192,7 +205,13 @@ bool board_reader::test_socket() {
   return socket_good;
 }
 
+/// -- This is one of the main calls from the manager.
+/// NOTE: Any state reset should the done here
 void board_reader::init_data_connection(bool force) {
+  // -- reset the state machine
+  error_state_.store(false);
+  error_messages_.clear();
+
   //-- If a connection exists, assume it is correct and continue to use it
   // FIXME: A ghost connection can exist
   // Try first if the connection is good
@@ -202,6 +221,10 @@ void board_reader::init_data_connection(bool force) {
     if (socket_good) {
       if (force) {
         Log(warning,"Destroying existing socket!");
+        json obj;
+        obj["type"] = "warning";
+        obj["message"] = "Stale data socket found. Destroying existing socket!";
+        error_messages_.push_back(obj);
         delete data_socket_;
         data_socket_ = nullptr;
       } else {
@@ -220,6 +243,11 @@ void board_reader::init_data_connection(bool force) {
 
       if (data_socket_ == nullptr) {
         Log(error,"Unable to establish the client socket. Failing." );
+        json obj;
+        obj["type"] = "error";
+        obj["message"] = "Unable to establish the client socket";
+        error_messages_.push_back(obj);
+        error_state_.store(true);
         ready_ = false;
       }
       // Otherwise just tell we're ready and start waiting for data.
@@ -229,6 +257,11 @@ void board_reader::init_data_connection(bool force) {
     // -- Catch and rethrow the exceptions so that they can be dealt with at higher level.
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what() );
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = "Socket exception caught creating data connection : " + e.what();
+      error_messages_.push_back(obj);
+      error_state_.store(true);
       ready_ = false;
       if (data_socket_) delete data_socket_;
       data_socket_ = nullptr;
@@ -239,6 +272,12 @@ void board_reader::init_data_connection(bool force) {
       if (data_socket_) delete data_socket_;
       data_socket_ = nullptr;
       Log(error,"STD exception caught : %s",e.what() );
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = "STL exception caught creating data connection : " + e.what();
+      error_messages_.push_back(obj);
+      error_state_.store(true);
+
       throw;
     }
     catch(...) {
@@ -246,10 +285,22 @@ void board_reader::init_data_connection(bool force) {
       if (data_socket_) delete data_socket_;
       data_socket_ = nullptr;
       Log(error,"Unknown exception caught." );
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = "Unknown exception caught creating data connection";
+      error_messages_.push_back(obj);
+      error_state_.store(true);
+
       throw;
     }
   } else {
     Log(error,"Calling to start connection without defining connection parameters." );
+    json obj;
+    obj["type"] = "error";
+    obj["message"] = "Calling to start connection without defining connection parameters";
+    error_messages_.push_back(obj);
+    error_state_.store(true);
+
     ready_ = false;
     if (data_socket_) delete data_socket_;
     data_socket_ = nullptr;
@@ -292,25 +343,27 @@ void board_reader::data_collector() {
       // something crapped out
       if (dma_buffer.handle == PZDUD_ERROR_TIMEOUT) {
         Log(error,"Failed to acquire data with timeout . Returned %i",dma_buffer.handle);
-        err_msg << "<error>Failed to acquire data with timeout</error>";
+        json obj;
+        obj["type"] = "error";
+        obj["message"] = "Failed to acquire data with timeout from DMA";
+        error_messages_.push_back(obj);
       }
       if (dma_buffer.handle == PZDUD_ERROR_CLAIMED) {
         Log(error,"Failed to acquire data due to claimed buffers.");
-        err_msg << "<error>Failed to acquire data due to claimed buffers</error>";
+        json obj;
+        obj["type"] = "error";
+        obj["message"] = "Failed to acquire data due to claimed DMA buffers";
+        error_messages_.push_back(obj);
       }
       Log(error,"Failed to acquire data. Returned %i",dma_buffer.handle);
-      err_msg  << "<error>Failed to acquire data. Returned " << dma_buffer.handle << "</error>";
-
-      // Stop just the collection thread
-      error_messages_.push_back(err_msg.str());
-      error_state_ = true;
+      err_msg  << "Failed to acquire data. Returned " << dma_buffer.handle;
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = err_msg.str();
+      error_messages_.push_back(obj);
+      error_state_.store(true);
       keep_collecting_ = false;
       break;
-//      if (keep_collecting_) {
-//        keep_collecting_ = false;
-//        stop_data_taking();
-//        break;
-//      }
     }
     // -- Push the transfer to the queue
     //dma_buffer.handle = handle;
@@ -339,6 +392,11 @@ void board_reader::clean_and_shutdown_dma() {
 void board_reader::init_dma() {
   if (dma_initialized_) {
     Log(warning,"DMA already initialized. This call should not happen.");
+    json obj;
+    obj["type"] = "warning";
+    obj["message"] = "Stale data socket found. Destroying existing socket!";
+    error_messages_.push_back(obj);
+
     return;
   }
   int retstat = 0;
@@ -348,6 +406,12 @@ void board_reader::init_dma() {
 
   if (s2mm == nullptr) {
     Log(error,"Failed to establish connection to device");
+    json obj;
+    obj["type"] = "error";
+    obj["message"] = "Failed to establish connection to DMA device";
+    error_messages_.push_back(obj);
+    error_state_.store(true);
+
     throw ptb::op_exception("Failed DMA 'create' stage.");
   }
   Log(debug,"Allocating DMA buffers");
@@ -355,6 +419,12 @@ void board_reader::init_dma() {
   Log(debug,"Received answer %d\n", retstat);
   if (retstat != PZDUD_OK) {
     Log(error,"Failed to allocate DMA buffers");
+    json obj;
+    obj["type"] = "error";
+    obj["message"] = "Failed to allocate DMA buffers";
+    error_messages_.push_back(obj);
+    error_state_.store(true);
+
     pzdud_destroy(s2mm);
     throw ptb::op_exception("Failed DMA 'alloc' stage.");
   }
@@ -368,6 +438,12 @@ void board_reader::init_dma() {
   Log(debug,"Received answer %d\n", retstat);
   if (retstat != PZDUD_OK) {
     Log(error,"Failed to initialize DMA engine");
+    json obj;
+    obj["type"] = "error";
+    obj["message"] = "Failed to initialize DMA engine";
+    error_messages_.push_back(obj);
+    error_state_.store(true);
+
     pzdud_free(s2mm);
     pzdud_destroy(s2mm);
     throw ptb::op_exception("Failed DMA 'init' stage.");
@@ -488,12 +564,6 @@ void board_reader::data_transmitter() {
            num_word_ltrigger_++;
            break;
          case ptb::content::word::t_ts:
-//           ptb::content::word::payload::timestamp_t *ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(&(word->wbody));
-//           cout << "Received timestamp           " << ts->timestamp() << endl;
-//           // -- Alternative way is going through the body_t structure
-//           pld = &(word->wbody);
-//           ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(pld);
-//           cout << "Received timestamp (xcheck)  " << ts->timestamp() << endl;
            num_word_tstamp_++;
            break;
        }
@@ -501,36 +571,6 @@ void board_reader::data_transmitter() {
        tpos += ptb::content::word::body_t::size_bytes;
     }
 
-//    Log(debug,"Reinterpreting...");
-//     -- cast the buffer into a payload
-//    ptb::content::word::word_t *frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]);
-//    uint8_t *tad = reinterpret_cast<uint8_t*>(buff_addr_[dma_buffer.handle]);
-//    for (size_t i = 0; i < dma_buffer.len; i++) {
-//      printf("%02X ",tad[i]);
-//    }
-//    printf("\n");
-//    Log(debug,"Size word %u",sizeof(ptb::content::word::word_t));
-//    Log(debug,"Size header %u",sizeof(ptb::content::word::header_t));
-//    Log(debug,"Size body %u",sizeof(ptb::content::word::body_t));
-//    Log(debug,"Size timestamp %u",sizeof(ptb::content::word::payload::timestamp_t));
-//    ptb::content::word::body_t *wbd = &(frame->wbody);
-//    ptb::content::word::payload::timestamp_t*wts2 = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(wbd->data);
-//    ptb::content::word::payload::timestamp_t*wts = reinterpret_cast<ptb::content::word::payload::timestamp_t*>(frame->wbody.data);
-//    uint8_t * wdt = frame->wbody.data;
-//    uint64_t fts = wts->timestamp();
-//    Log(debug," PD %X TS %" PRIx64,wts->padding,wts->timestamp());
-//    Log(debug," PD2 %X TS2 %" PRIx64,wts2->padding,wts2->timestamp());
-//    Log(debug," TS parts %X %X %X",wts->padding,wts->time_low,wts->time_up);
-//    Log(debug," TS ");
-//    for (size_t i = 0; i < 12; i++) {
-//      printf("%X ",wdt[i]);
-//    }
-//    printf("\n");
-//
-//    uint32_t roll = static_cast<uint32_t>(frame->wheader.ts_rollover);
-//    Log(debug,
-//        "word type : %X ts %u (%X) %" PRIu64 " %" PRIx64,
-//        static_cast<uint32_t>(frame->wheader.word_type),roll,roll,fts,fts);
     // -- Send the data
     try {
       //Log(debug,"%X",eth_buffer[0]);
@@ -555,9 +595,7 @@ void board_reader::data_transmitter() {
     }
     catch(SocketException &e) {
       Log(error,"Socket exception : %s",e.what() );
-      // Stop collecting and transmitting
-      //
-      error_state_ = true;
+      error_state_.store(true);
       std::string err_msg;
       err_msg = "ERROR: Data socket exception [";
       std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
@@ -568,19 +606,16 @@ void board_reader::data_transmitter() {
       err_msg += date;
       err_msg += "] : ";
       err_msg += e.what();
-      error_messages_.push_back(err_msg);
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = err_msg;
+      error_messages_.push_back(obj);
       keep_collecting_ = false;
       keep_transmitting_ = false;
     }
 
     // increment the sequence number
     seq_num_++;
-    // if (seq_num_ >= 5) {
-    //   Log(warning,"FIXME: Forcing to stop after the first packet being generated");
-    //   keep_collecting_ = false;
-    //   keep_transmitting_ = false;
-    //   // sleep for a while waiting for the generators to stop
-    //   std::this_thread::sleep_for (std::chrono::seconds(5));
 
   } // -- while(keep_transmitting_)
   // Exited the  run loop. Return.

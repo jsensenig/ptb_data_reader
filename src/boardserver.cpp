@@ -39,6 +39,7 @@ using json = nlohmann::json;
 using std::string;
 namespace ptb {
 //-- Assignment of the static variables
+
   std::string board_server::tcp_buffer_ = "";
   unsigned int board_server::num_instances_ = 0;
   unsigned int board_server::port_ = 8991;
@@ -46,8 +47,12 @@ namespace ptb {
   std::queue<std::string> board_server::queue_;
   bool board_server::shutdown_requested_= false;
   TCPSocket* board_server::client_socket_ = nullptr;
-  std::vector<std::string> board_server::msg_answers_;
+  //std::vector<std::string> board_server::msg_answers_;
+  json board_server::msg_answers_;
 //std::string board_server::msg_answer_ = "";
+  // -- this is the amount of time the server waits before relaunching the listening socket
+  const long long board_server::relaunch_wait_ = 3;
+
 
   board_server::board_server() {
   // Use the practical socket to establish a connection
@@ -65,14 +70,14 @@ namespace ptb {
     client_socket_ = nullptr;
 
     if (board_manager_ != nullptr) {
-      Log(warning,"Passing down a shutdown signal to the PTB.");
+      Log(info,"Passing down a shutdown signal to the PTB.");
       board_manager_->exec_command("StopRun",msg_answers_);
       // -- Force a hard reset in the PTB to account for the case the
       // DAQ crashed.
       board_manager_->exec_command("HardReset",msg_answers_);
     }
-    Log(warning,"Relaunching the socket for connection acceptance in 5s.");
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    Log(warning,"Relaunching the socket for connection acceptance in %ld s.",relaunch_wait_);
+    std::this_thread::sleep_for(std::chrono::seconds(relaunch_wait_));
   }
 
   void board_server::run() {
@@ -94,15 +99,15 @@ namespace ptb {
        Log(error,"Socket exception caught : %s",e.what());
        if (servSock != nullptr) delete servSock;
        servSock = nullptr;
-       Log(warning,"Relaunching the socket for connection acceptance in 5s.");
-       std::this_thread::sleep_for(std::chrono::seconds(5));
+       Log(warning,"Relaunching the socket for connection acceptance in %ld s.",relaunch_wait_);
+       std::this_thread::sleep_for(std::chrono::seconds(relaunch_wait_));
      }
      catch(...) {
       Log(error,"Unknown exception caught");
       if (servSock != nullptr) delete servSock;
       servSock = nullptr;
-      Log(warning,"Relaunching the socket for connection acceptance in 5s.");
-      std::this_thread::sleep_for(std::chrono::seconds(5));
+      Log(warning,"Relaunching the socket for connection acceptance in %lds.",relaunch_wait_);
+      std::this_thread::sleep_for(std::chrono::seconds(relaunch_wait_));
     }
   } while (servSock == nullptr);
 
@@ -136,8 +141,8 @@ namespace ptb {
    Log(error,"An unspecified exception was caught. Cleaning up and relaunching.");
    clean_and_relaunch();
  }
- Log(warning,"Relaunching the socket for connection acceptance in 5s.");
- std::this_thread::sleep_for(std::chrono::seconds(5));
+ Log(warning,"Relaunching the socket for connection acceptance in %ld s.",relaunch_wait_);
+ std::this_thread::sleep_for(std::chrono::seconds(relaunch_wait_));
 }
 Log(warning,"Reaching the end of execution, but not sure why...should *never* happen!");
 }
@@ -166,6 +171,7 @@ Log(info,"Working  with thread 0x%x",std::this_thread::get_id());
 
   // Send received string and receive again until the end of transmission
 
+//FIXME: Review this once the ethernet software is migrated to boost
   // Receive 1kB at a time.
   // Loop into the permanent buffer so that we know have all the configuration
   const size_t RCVBUFSIZE = 20480; //20 kB. Really hope will not overdo this.
@@ -244,37 +250,50 @@ Log(info,"Working  with thread 0x%x",std::this_thread::get_id());
           process_request(tcp_buffer_.c_str(),msg_answers_);
         }
         catch(json::exception &e) {
-          std::string msg = "ERROR : JSON exception : ";
+          std::string msg = "JSON exception : ";
           msg += e.what();
           Log(error,"%s",msg.c_str());
-          msg_answers_.push_back(msg);
+          json obj;
+          obj["type"]="error";
+          obj["message"]=msg;
+          msg_answers_.push_back(obj);
         }
         catch(std::exception &e) {
-          std::string msg = "ERROR : STD exception : ";
+          std::string msg = "STD exception : ";
           msg += e.what();
           Log(error,"%s",msg.c_str());
-          msg_answers_.push_back(msg);
+          json obj;
+          obj["type"]="error";
+          obj["message"]=msg;
+          msg_answers_.push_back(obj);
         }
         catch(ptb::op_exception &e) {
-          std::string msg = "ERROR : PTB exception : ";
+          std::string msg = "PTB exception : ";
           msg += e.what();
           Log(error,"%s",msg.c_str());
-          msg_answers_.push_back(msg);
+          json obj;
+          obj["type"]="error";
+          obj["message"]=msg;
+          msg_answers_.push_back(obj);
         }
         catch (...) {
-          std::string msg = "ERROR : Unidentified exception caught";
+          std::string msg = "Unidentified exception caught";
           Log(error,"%s",msg.c_str());
-          msg_answers_.push_back(msg);
+          json obj;
+          obj["type"]="error";
+          obj["message"]=msg;
+          msg_answers_.push_back(obj);
         }
 
           //Log(verbose,"Returning answer : %s",msg_answers_.c_str());
           // -- create a json object with all the messages
         json answer;
         answer["feedback"] = msg_answers_;
-        Log(debug,"Answers : ");
-        for (const string s : msg_answers_) {
-          Log(debug,"::[%s]",s.c_str());
-        }
+
+        Log(debug,"Answers : %s",answer.at("feedback").dump(2).c_str());
+//        for (const string s : msg_answers_) {
+//          Log(debug,"::[%s]",s.c_str());
+//        }
         client_socket_->send(answer.dump().c_str(),answer.dump().size());
         Log(debug,"Answer sent");
         msg_answers_.clear();
@@ -315,9 +334,13 @@ void board_server::process_request(const std::string &buffer,std::vector<std::st
   // Have to copy the string into the queue
 
   if (board_manager_ == NULL) {
-    answer.push_back("WARNING: Request received without valid board manager. Queueing the msg.");
+    //answer.push_back("WARNING: Request received without valid board manager. Queueing the msg.");
     Log(warning,"Attempting to process a transmission without a valid data Manager. Queueing.");
     Log(verbose,"[%s]",buffer.c_str());
+    json obj;
+    obj["type"] = "warning";
+    obj["message"] = "Attempting to process a transmission without a valid data Manager. Queueing";
+    msg_answers_.push_back(obj);
 
     queue_.push(buffer);
     //    queue_.push_back(buffer);
@@ -372,11 +395,7 @@ void board_server::shutdown(bool force) {
  } else if (queue_.size() != 0){
     // Soft shutdown requested. Do nothing and wait for the client to disconnect
   Log(warning,"Soft shutdown requested with non-empty queue. Shutdown will occur when queue empties.");
-    // Kill the server.
-    // Detach to deallocate resources
-    //    pthread_detach(thread_id_);
-    //    // Send a cancel call.
-    //    pthread_cancel(thread_id_);
+
     // Process the queue
   while (queue_.size() > 0) {
     Log(verbose,"Processing an entry");
@@ -386,15 +405,7 @@ void board_server::shutdown(bool force) {
   }
 } else {
   Log(info,"Performing a soft shutdown");
-    // First kill the thread that is waiting for a connection
-    //pthread_detach(thread_id_);
-    // Send a cancel call.
-    //    if (thread_id_) {
-    //      pthread_cancel(thread_id_);
-    //    }
-      //pthread_kill(thread_id_,SIGINT);
 
-    //thread_id_ = 0;
 
     // Try to do a soft exit
     // If there is a manager tell it to stop
@@ -402,14 +413,6 @@ void board_server::shutdown(bool force) {
    clean_and_relaunch();
    board_manager_->free_registers();
    delete board_manager_;
-//    	// Get the reader
-//      PTBReader *reader = const_cast<PTBReader*>(board_manager_->getReader());
-//      reader->ClearThreads();
-//      delete reader;
-//      board_manager_->free_registers();
-//      board_manager_->ClearCommands();
-//      Log(verbose,"Destroying the manager");
-      //delete data_manager_;
    Log(verbose,"Manager destroyed");
  }
 }

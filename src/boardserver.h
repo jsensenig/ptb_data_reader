@@ -47,7 +47,7 @@ public:
 
 	void shutdown(bool force = false);
 protected:
-	static void process_request(const std::string &buffer,std::vector<std::string> & answer);
+	static void process_request(const std::string &buffer,json & answer);
 	//static void process_config(pugi::xml_node &config,char*& answer);
 	//  static void ProcessCommand(pugi::xml_node &command,char*& answer);
 	static void clean_and_relaunch();
@@ -64,7 +64,9 @@ private:
 	// Self thread of the server.
 	static TCPSocket *client_socket_;
 	//static std::string msg_answer_;
-	static std::vector<std::string> msg_answers_;
+	//static std::vector<std::string> msg_answers_;
+	static json msg_answers_;
+	static const long long relaunch_wait_;
 	//static pthread_t thread_id_;
 	//	static std::thread::id thread_id_;
 	// parameters
