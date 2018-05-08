@@ -292,6 +292,9 @@ class ctb_robot {
                   cout << "Received a low level trigger. Do something here on how to parse it" << endl;
                   trg = reinterpret_cast<ptb::content::word::trigger_t*>(word);
                   // advance the pointer by the size of this payload
+                  cout << "LT: " << std::bitset<3>(trg->word_type) << " 0x"
+                      << std::hex << trg->trigger_mask << std::dec << " "
+                      << std::bitset<61>(trg->trigger_mask) << endl;
                   pos += ptb::content::word::word_t::size_bytes;
                   break;
                 case ptb::content::word::t_ts:

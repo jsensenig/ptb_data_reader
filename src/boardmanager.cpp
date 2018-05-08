@@ -118,10 +118,6 @@ namespace ptb {
           obj["type"] = "warning";
           obj["message"] = "Board already taking data. Restarting new run.Might miss the sync pulse.";
           feedback_.push_back(obj);
-//          msgs_ << "Warning::Board already taking data. Restarting new run.Might miss the sync pulse.";
-//          feedback_.push_back(msgs_.str());
-//          msgs_.clear();
-//          msgs_.str("");
           stop_run();
         } else {
           // Start the run
