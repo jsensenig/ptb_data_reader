@@ -128,6 +128,7 @@ void board_reader::stop_data_taking() {
   // This stops the data taking completely.
 
   // Clean up the threads
+  Log(info,"Clearing the threads");
   clear_threads();
   // Prepare everything so that the PTB gets ready again
 
@@ -390,7 +391,10 @@ void board_reader::data_collector() {
 
 
 void board_reader::clean_and_shutdown_dma() {
-  if (!dma_initialized_) return;
+  if (!dma_initialized_) {
+    Log(warning,"Asking to shutdown an uninitialized DMA ");
+    return;
+  }
   Log(debug,"Halting the S2MM transition stream");
   pzdud_halt(s2mm);
   Log(debug,"Freeing allocated buffers associated with the S2MM transition stream");
@@ -442,7 +446,7 @@ void board_reader::init_dma() {
   Log(debug,"Initializing buffer table");
   for (size_t i = 0; i < num_buffs_; i++) {
     buff_addr_[i] = (uint32_t)pzdud_addr(s2mm,i);
-    Log(verbose,"Buffer %u : 0x%p",i,buff_addr_[i]);
+    //Log(verbose,"Buffer %u : 0x%p",i,buff_addr_[i]);
   }
   Log(debug,"Initializing the DMA engine...");
   retstat = pzdud_init(s2mm, true);
