@@ -73,9 +73,9 @@ int main() {
 	std::signal(SIGINT,handler);
 	g_relaunch = true;
 	g_shutdown = false;
-	Logger::SetSeverity(Logger::verbose);
+	//Logger::SetSeverity(Logger::verbose);
 	//Logger::SetSeverity(Logger::debug);
-	//Logger::SetSeverity(Logger::info);
+	Logger::SetSeverity(Logger::info);
 	// Logger::SetSeverity(Logger::warning);
 	// Logger::SetSeverity(Logger::error);
 

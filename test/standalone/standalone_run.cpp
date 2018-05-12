@@ -14,6 +14,7 @@
 #include <csignal>
 #include <cstdint>
 #include <sstream>
+#include <algorithm>
 
 //FIXME: Use a more robust socket library...for example boost seems sensible
 #include "PracticalSocket.h"
@@ -54,7 +55,8 @@ class ctb_robot {
       client_sock.send(cmd,28);
       client_sock.recv(answer_,1024);
       cout << "Received answer [" << answer_ << "]" << endl;
-      answer_[0]='\0';
+      std::fill(answer_, answer_+1024, 0);
+      //answer_[0]='\0';
 
       is_running_ = false;
       is_conf_ = false;
@@ -69,7 +71,8 @@ class ctb_robot {
       client_sock.send(cmd,27);
       client_sock.recv(answer_,1024);
       cout << "Received answer [" << answer_ << "]" << endl;
-      answer_[0]='\0';
+      std::fill(answer_, answer_+1024, 0);
+            //answer_[0]='\0';
       is_running_ = true;
     }
 
@@ -79,7 +82,8 @@ class ctb_robot {
       client_sock.send(cmd,27);
       client_sock.recv(answer_,1024);
       cout << "Received answer [" << answer_ << "]" << endl;
-      answer_[0]='\0';
+      std::fill(answer_, answer_+1024, 0);
+            //answer_[0]='\0';
       is_running_ = false;
     }
 
@@ -94,7 +98,8 @@ class ctb_robot {
       client_sock.send(g_config.c_str(),g_config.size());
       client_sock.recv(answer_,1024);
       cout << "Received answer [" << answer_ << "]" << endl;
-      answer_[0]='\0';
+      std::fill(answer_, answer_+1024, 0);
+            //answer_[0]='\0';
       is_conf_ = true;
     }
 
@@ -220,7 +225,7 @@ class ctb_robot {
           ptb::content::word::word_t*word;
 
           //uint32_t header;
-          uint8_t tcp_data[4096];
+          uint8_t tcp_data[8192];
           size_t count = 0;
           bool timeout_reached = false;
           size_t tcp_body_size = 0;
@@ -238,6 +243,7 @@ class ctb_robot {
             header = reinterpret_cast<ptb::content::tcp_header *>(tcp_data);
             count++;
             if (!(count%1000)) cout << "Counting " << count << "packets received..." << endl;
+	    
             // check the number of bytes in this packet
             //cout << "Expecting to receive " << header->word.packet_size << " bytes " << endl;
             tcp_body_size = header->word.packet_size;
@@ -245,6 +251,7 @@ class ctb_robot {
             while (bytes_collected != tcp_body_size) {
               bytes_collected += sock->recv(&tcp_data[bytes_collected],(int)(tcp_body_size-bytes_collected));
             }
+	    //HERE
             // cout << "Collected expected bytes. " << endl;
             // for(size_t i = 0; i < bytes_collected; i++) {
             //   printf("%02X ",tcp_data[i]);
@@ -299,7 +306,7 @@ class ctb_robot {
                   break;
                 case ptb::content::word::t_ts:
                   ts = reinterpret_cast<ptb::content::word::timestamp_t *>(word);
-                  //cout << "Received timestamp " << ts->timestamp << endl;
+                  cout << "Received timestamp " << ts->timestamp << endl;
                   pos += ptb::content::word::word_t::size_bytes;
                   break;
                 case ptb::content::word::t_ch:
@@ -315,6 +322,7 @@ class ctb_robot {
                   break;
               }
             }
+	    //...to here
           }
           cout << "Left the loop for running..." << endl;
           delete sock;

@@ -95,9 +95,6 @@ namespace ptb {
 
   void board_manager::exec_command(const std::string &cmd, json &answers) {
     feedback_.clear();
-    //  try{
-    //    msgs_.clear();
-    //    msgs_.str("");
     error_state_ = false;
     Log(debug,"Received command [%s]", cmd.c_str());
     std::map<std::string, command>::iterator it;
@@ -156,13 +153,14 @@ namespace ptb {
       case STOPRUN:
         if (get_board_state() != board_manager::RUNNING) {
           Log(warning,"Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.." );
-          json obj;
-          obj["type"] = "warning";
-          obj["message"] = "Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop";
-          feedback_.push_back(obj);
+          // -- we could still try to stop, no???
+          //FIXME: Check this
+          stop_run();
+          // -- This warning does not need to be reported out
           // The GLB_EN is located in bin 31 of register 30
-          set_enable_bit(false);
-          Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
+//          set_enable_bit(false);
+//          Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
+
         } else {
           Log(verbose,"The Run should STOP now" );
           stop_run();
@@ -173,6 +171,7 @@ namespace ptb {
         obj["type"] = "error";
         obj["message"] = "Unknown PTB command [" + cmd + "]";
         feedback_.push_back(obj);
+        error_state_ = true;
         break;
     }
 
@@ -217,8 +216,16 @@ namespace ptb {
         reader_->init_data_connection();
         // sleep for a few ms to check for erorrs
         usleep(3000);
-        json otmp = reader_->get_error_msgs();
-        feedback_.insert(feedback_.end(),otmp.begin(),otmp.end());
+        bool has_error = false;
+        json reader_msgs;
+        reader_->get_feedback(has_error,reader_msgs,true);
+        if (!reader_msgs.empty()) {
+          feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
+        }
+        if (has_error) {
+          Log(error,"Got an error while initializing data socket.");
+          error_state_ = true;
+        }
       }
 
       if (!reader_->get_ready()) {
@@ -275,9 +282,14 @@ namespace ptb {
     /// -- Sleep a few ms to check for errors from the reader
     ///
     usleep(3000);
-    json otmp = reader_->get_error_msgs();
-    feedback_.insert(feedback_.end(),otmp.begin(),otmp.end());
-    if (reader_->get_error_state()) {
+    bool has_error = false;
+    json reader_msgs;
+    reader_->get_feedback(has_error,reader_msgs,true);
+    if (!reader_msgs.empty()) {
+      feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
+    }
+    if (has_error) {
+      Log(error,"Received error state from the board reader");
       error_state_ = true;
       return;
     }
@@ -291,7 +303,6 @@ namespace ptb {
 
     Log(info,"Run Start requested...");
 
-    error_state_ = false;
     json obj;
     obj["type"] = "info";
     obj["message"] = "Success starting the run";
@@ -300,6 +311,8 @@ namespace ptb {
 
   void board_manager::stop_run() {
     Log(debug,"Stopping the run" );
+
+    // Check is the run is running
 
     // The order should be:
     // 1. Set the GLB_EN register to 0 (stop readout in the fabric)
@@ -314,29 +327,32 @@ namespace ptb {
     // Try to set the run to stop on the software
     reader_->stop_data_taking();
 
-    if (reader_->get_error_state()) {
-      json tmp = reader_->get_error_msgs();
-      feedback_.insert(std::end(feedback_),tmp.begin(),tmp.end());
-//      feedback_.insert(std::end(feedback_),std::begin(tmp),std::end(tmp));
-//      std::vector<std::string> tmp = reader_->get_error_msgs();
-//      feedback_.insert(std::end(feedback_), std::begin(tmp), std::end(tmp));
-      //msgs_ << "<error> Data socket was lost while taking data. </error>";
+    usleep(3000);
+    bool has_error = false;
+    json reader_msgs;
+    reader_->get_feedback(has_error,reader_msgs,true);
+    if (!reader_msgs.empty()) {
+      feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
+    }
+    if (has_error) {
+      Log(error,"Received an error state from the board reader");
     }
 
     // Build a statistics object
-    json stat;
-    stat["type"] = "statistics";
-    stat["num_eth_packets"] = reader_->get_n_sent_frags();
-    stat["num_eth_bytes"] = reader_->get_sent_bytes();
-    stat["num_word_counter"] = reader_->get_n_status();
-    stat["num_hlt"] = reader_->get_n_gtriggers();
-    stat["num_llt"] = reader_->get_n_ltriggers();
-    stat["num_tstamp"] = reader_->get_n_timestamps();
-    stat["num_fifo_warn"] = reader_->get_n_warns();
-
-    feedback_.push_back(stat);
-    Log(info,"End of run message: %s",stat.dump(2).c_str());
-
+    if (get_board_state() == board_manager::RUNNING) {
+      json stat;
+      stat["type"] = "statistics";
+      stat["num_eth_packets"] = reader_->get_n_sent_frags();
+      stat["num_eth_bytes"] = reader_->get_sent_bytes();
+      stat["num_word_counter"] = reader_->get_n_status();
+      stat["num_hlt"] = reader_->get_n_gtriggers();
+      stat["num_llt"] = reader_->get_n_ltriggers();
+      stat["num_tstamp"] = reader_->get_n_timestamps();
+      stat["num_fifo_warn"] = reader_->get_n_warns();
+      reader_->reset_counters();
+      feedback_.push_back(stat);
+      Log(info,"End of run message: %s",stat.dump(2).c_str());
+    }
     //-- Soft Reset
     //-- Also send a soft reset to make sure that when the next start run comes
     // things are just as if we were starting anew.
@@ -539,7 +555,9 @@ namespace ptb {
     data_socket_port_ = receiver.at("port").get<unsigned short>();
     reader_->set_tcp_port(data_socket_port_);
     Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
-    // -- Grab the PDS configuration
+    // -- Grab the subsystem configurations
+    json beamconf = doc.at("ctb").at("subsystems").at("beam");
+    json crtconf = doc.at("ctb").at("subsystems").at("crt");
     json pdsconf = doc.at("ctb").at("subsystems").at("pds");
     
     // uint32_t duration;
@@ -555,11 +573,19 @@ namespace ptb {
       Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",rtriggerfreq);
       rtriggerfreq = (1<<26)-1;
     }
-    set_bit(6,30,rtrigger_en);
-    set_bit_range_register(28,0,26,rtriggerfreq);
-
-//    uint8_t rtrigger_enable = 0;
-//    if(rtrigger_ena) { rtrigger_enable = 1; }
+    set_bit(27,0,rtrigger_en);
+    set_bit_range_register(25,0,26,rtriggerfreq);
+    //Set pulser frequency
+    json pulserconf = doc.at("ctb").at("pulser");
+    bool pulser_en = pulserconf.at("enable").get<bool>();
+    uint32_t pulserfreq = pulserconf.at("frequency").get<unsigned int>();
+    Log(debug,"Pulser Frequency [%d] (%u) [0x%X][%s]",pulserfreq,pulserfreq,pulserfreq, std::bitset<26>(pulserfreq).to_string().c_str());
+    if (pulserfreq >= (1<<26)) {
+      Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",pulserfreq);
+      pulserfreq = (1<<26)-1;
+    }
+    set_bit(26,31,pulser_en);
+    set_bit_range_register(26,0,26,pulserfreq);
 
     uint32_t duration = receiver.at("rollover").get<unsigned int>();
     // Microslice duration is now a full number...check if it fits into 27 bits
@@ -582,7 +608,9 @@ namespace ptb {
     Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
     strVal.clear();
 
-    //Program the DACs with config values
+    //Program the regss with config values
+    board_manager::beam_config(beamconf);
+    board_manager::crt_config(crtconf);
     board_manager::pds_config(pdsconf);
     answers.insert(answers.end(),feedback_.begin(),feedback_.end());
 
@@ -597,7 +625,7 @@ namespace ptb {
 
     //Program the DACs with config values
     //board_manager::pds_config(pdsconf);
-    pds_config(pdsconf);
+   // pds_config(pdsconf);
 
     // -- Once the configuration is set, dump locally the status of the config registers
     dump_config_registers();
@@ -741,9 +769,39 @@ void board_manager::pds_config(json &pdsconfig){
     set_bit_range_register(2,0,24,channelmask);
 
     //Configure counting trigger 0
-    uint32_t trig0 = (count0<<27) + (trigtype0<<24);
-    set_bit_range_register(27,0,32,trig0);
+    uint32_t trig0 = trigtype0 + count0;
+    set_bit_range_register(38,0,9,trig0);
 
 }
+
+
+void board_manager::crt_config(json &crtconfig){
+/*
+    std::vector<uint32_t> dac_values = crtconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
+    std::string s_channelmask = crtconfig.at("channel_mask").get<std::string>();
+    std::string s_trigtype0 = crtconfig.at("triggers").at(0).at("type").get<std::string>();
+    std::string s_count0 = crtconfig.at("triggers").at(0).at("count").get<std::string>();
+
+    uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
+    uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
+    uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
+*/
+
+}
+
+void board_manager::beam_config(json &beamconfig){
+/*
+    std::vector<uint32_t> dac_values = beamconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
+    std::string s_channelmask = beamconfig.at("channel_mask").get<std::string>();
+    std::string s_trigtype0 = beamconfig.at("triggers").at(0).at("type").get<std::string>();
+    std::string s_count0 = beamconfig.at("triggers").at(0).at("count").get<std::string>();
+
+    uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
+    uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
+    uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
+*/
+
+}
+
 
 }
