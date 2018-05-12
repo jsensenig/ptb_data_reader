@@ -555,7 +555,9 @@ namespace ptb {
     data_socket_port_ = receiver.at("port").get<unsigned short>();
     reader_->set_tcp_port(data_socket_port_);
     Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
-    // -- Grab the PDS configuration
+    // -- Grab the subsystem configurations
+    json beamconf = doc.at("ctb").at("subsystems").at("beam");
+    json crtconf = doc.at("ctb").at("subsystems").at("crt");
     json pdsconf = doc.at("ctb").at("subsystems").at("pds");
     
     // uint32_t duration;
@@ -606,7 +608,9 @@ namespace ptb {
     Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
     strVal.clear();
 
-    //Program the DACs with config values
+    //Program the regss with config values
+    board_manager::beam_config(beamconf);
+    board_manager::crt_config(crtconf);
     board_manager::pds_config(pdsconf);
     answers.insert(answers.end(),feedback_.begin(),feedback_.end());
 
@@ -621,7 +625,7 @@ namespace ptb {
 
     //Program the DACs with config values
     //board_manager::pds_config(pdsconf);
-    pds_config(pdsconf);
+   // pds_config(pdsconf);
 
     // -- Once the configuration is set, dump locally the status of the config registers
     dump_config_registers();
@@ -769,5 +773,35 @@ void board_manager::pds_config(json &pdsconfig){
     set_bit_range_register(38,0,9,trig0);
 
 }
+
+
+void board_manager::crt_config(json &crtconfig){
+/*
+    std::vector<uint32_t> dac_values = crtconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
+    std::string s_channelmask = crtconfig.at("channel_mask").get<std::string>();
+    std::string s_trigtype0 = crtconfig.at("triggers").at(0).at("type").get<std::string>();
+    std::string s_count0 = crtconfig.at("triggers").at(0).at("count").get<std::string>();
+
+    uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
+    uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
+    uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
+*/
+
+}
+
+void board_manager::beam_config(json &beamconfig){
+/*
+    std::vector<uint32_t> dac_values = beamconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
+    std::string s_channelmask = beamconfig.at("channel_mask").get<std::string>();
+    std::string s_trigtype0 = beamconfig.at("triggers").at(0).at("type").get<std::string>();
+    std::string s_count0 = beamconfig.at("triggers").at(0).at("count").get<std::string>();
+
+    uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
+    uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
+    uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
+*/
+
+}
+
 
 }

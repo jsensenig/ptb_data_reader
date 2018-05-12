@@ -18,27 +18,31 @@
       }
     },
     "randomtrigger":{
-      "enable":true,
+      "enable":false,
       "frequency":10
     },
     "pulser":{
       "enable":true,
-      "frequency":10
+      "frequency":500
     },
     "subsystems":{
       "pds":{
         "channel_mask":"0xFFFFF",
         "reshape_length" : 10,
-        "dac_thresholds":[3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,1930,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000],
+        "dac_thresholds":[2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290],
         "triggers": [
           { "id":"LLT_1",
             "type" : "0x1",
-            "count" : "0x1"
+            "count" : "0x8"
           }
         ]
       },
       "crt":{
         "ch_mask": "0xFFFFFFFF",
+        "reshape_length" : 10
+      },
+      "beam":{                     
+        "ch_mask": "0x1FF",
         "reshape_length" : 10
       }
     }
