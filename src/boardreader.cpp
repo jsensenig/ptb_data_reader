@@ -735,7 +735,7 @@ void board_reader::data_transmitter() {
   //  std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
   // Deallocate the memory
-  delete [] global_eth_buffer;
+  // delete [] global_eth_buffer;
   // Finish the connection
   Log(info,"Closing data socket.");
   close_data_connection();

@@ -193,6 +193,7 @@ namespace ptb {
     answers = feedback_;
   }
 
+  // -- Writes everything to the feedback
   void board_manager::start_run() {
     Log(verbose,"Starting the run" );
 
@@ -312,6 +313,7 @@ namespace ptb {
     feedback_.push_back(obj);
   }
 
+  // -- Writes everything to the feedback
   void board_manager::stop_run() {
     Log(debug,"Stopping the run" );
 
