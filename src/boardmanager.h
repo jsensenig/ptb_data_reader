@@ -79,7 +79,7 @@ public:
   void process_config(json & config,json &answers);
 
   //Resets and configures the dacs
-  void pds_config(json & pdsconfig);
+  void pds_config(json & pdsconfig, json& feedback);
 
   /**
    * Loops over the registers and dum their contents, both in decimal and Hex.

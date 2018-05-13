@@ -124,7 +124,7 @@ namespace ptb {
         start_run();
         break;
       case SOFTRESET:
-        Log(info,"Applying a soft reset");
+        Log(debug,"Applying a soft reset");
         set_reset_bit(true);
         // Sleep for 100 microseconds to make sure that reset has taken place
         std::this_thread::sleep_for (std::chrono::microseconds(100));
@@ -136,6 +136,8 @@ namespace ptb {
         set_config_bit(true);
         break;
       case HARDRESET:
+        Log(debug,"Applying a hard reset");
+
         // A hard reset should sent the whole thing to zeros
         // Including clearing up the configuration. A new configuration will have to be reissued
         set_enable_bit(false);
@@ -220,6 +222,7 @@ namespace ptb {
         json reader_msgs;
         reader_->get_feedback(has_error,reader_msgs,true);
         if (!reader_msgs.empty()) {
+
           feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
         }
         if (has_error) {
@@ -332,6 +335,7 @@ namespace ptb {
     json reader_msgs;
     reader_->get_feedback(has_error,reader_msgs,true);
     if (!reader_msgs.empty()) {
+      Log(debug,"Received %u messages from the reader",reader_msgs.size());
       feedback_.insert(std::end(feedback_),reader_msgs.begin(),reader_msgs.end());
     }
     if (has_error) {
@@ -462,7 +466,9 @@ namespace ptb {
   // -- And the control register as well.
   void board_manager::zero_config_registers() {
     Log(debug,"Resetting configuration registers");
-    stop_run();
+    if (board_state_ == RUNNING) {
+      stop_run();
+    }
     set_config_bit(false);
     for (size_t i = 1; i < register_map_.size(); ++i) {
       Log(verbose,"Reg %u : dec=[%010u] hex=[%08X]",i, register_map_.at(i).value(), register_map_.at(i).value() );
@@ -603,10 +609,11 @@ namespace ptb {
 #else
     //Program the DACs with config values
     strVal.str("");
-
-    pds_config(pdsconf);
-    if (!feedback_.empty()) {
-      answers.insert(answers.end(),feedback_.begin(),feedback_.end());
+    json feedback;
+    pds_config(pdsconf,feedback);
+    if (!feedback.empty()) {
+      Log(debug,"Received %u messages from configuring the PDS",feedback.size());
+      answers.insert(std::end(answers),feedback.begin(),feedback.end());
     }
 #endif
 
@@ -711,7 +718,7 @@ namespace ptb {
 
   }
 
-void board_manager::pds_config(json &pdsconfig){
+void board_manager::pds_config(json &pdsconfig, json& feedback){
 
     i2conf* dacsetup;
 
@@ -734,7 +741,7 @@ void board_manager::pds_config(json &pdsconfig){
         json obj;
         obj["type"] = "warning";
         obj["message"] = tmp.str();
-        feedback_.push_back(obj);
+        feedback.push_back(obj);
     }
     Log(info,"Size of channel values vector %i", dac_values.size());
     for (int i=0; i<dac_values.size(); i++) {
@@ -746,7 +753,7 @@ void board_manager::pds_config(json &pdsconfig){
             json obj;
             obj["type"] = "warning";
             obj["message"] = tmp.str();
-            feedback_.push_back(obj);
+            feedback.push_back(obj);
               dac_values[i] = 4095; 
         }
     }
@@ -756,7 +763,7 @@ void board_manager::pds_config(json &pdsconfig){
         json obj;
          obj["type"] = "error";
          obj["message"] = "Failed to write configuration values to DACs";
-         feedback_.push_back(obj);
+         feedback.push_back(obj);
    }
     Log(info,"Programmed %i DAC channels", dac_values.size());
 
