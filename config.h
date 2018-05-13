@@ -15,6 +15,8 @@
 
 #define FIRMWARE_REVISION 0x5
 
+#define NO_PDS_DAC  1
+
 // To enable parsing and status word awareness.
 #undef CHANNEL_STATUS_WORD
 #undef OLD_WORDS

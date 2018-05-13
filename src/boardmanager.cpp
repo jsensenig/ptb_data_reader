@@ -598,22 +598,29 @@ namespace ptb {
     Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
     strVal.clear();
 
+#ifdef NO_PDS_DAC
+    Log(warning,"PDS configuration block was disabled. Not configuring any PDS input");
+#else
     //Program the DACs with config values
-    board_manager::pds_config(pdsconf);
-    answers.insert(answers.end(),feedback_.begin(),feedback_.end());
-
-    // 1 ms in a 50MHz clock
-    //  if (duration <= 50000) {
-    //    msgs_ << "<warning>Input value of ["<< duration << "] below recommended limit of 1 ms (50000). ";
-    //    msgs_ << "Will allow but this setting is likely to cause overload of the ethernet connection. </warning>";
-
-    //  }
-
     strVal.str("");
 
-    //Program the DACs with config values
-    //board_manager::pds_config(pdsconf);
     pds_config(pdsconf);
+    if (!feedback_.empty()) {
+      answers.insert(answers.end(),feedback_.begin(),feedback_.end());
+    }
+#endif
+
+//    // 1 ms in a 50MHz clock
+//    //  if (duration <= 50000) {
+//    //    msgs_ << "<warning>Input value of ["<< duration << "] below recommended limit of 1 ms (50000). ";
+//    //    msgs_ << "Will allow but this setting is likely to cause overload of the ethernet connection. </warning>";
+//
+//    //  }
+//
+//
+//    //Program the DACs with config values
+//    //board_manager::pds_config(pdsconf);
+//    pds_config(pdsconf);
 
     // -- Once the configuration is set, dump locally the status of the config registers
     dump_config_registers();
