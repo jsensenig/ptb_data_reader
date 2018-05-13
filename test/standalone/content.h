@@ -199,7 +199,7 @@ namespace ptb {
 
            ts_size_t timestamp;
 
-           mask_size_t  trigger_mask       : 61;
+           mask_size_t  trigger_word       : 61;
            wtype_size_t word_type : 3;
 
            static size_t const size_bytes = 2*sizeof(uint64_t);

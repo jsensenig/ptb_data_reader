@@ -59,6 +59,9 @@ namespace ptb {
       enum word_type {t_fback=0x0,t_lt=0x1,t_gt=0x2, t_ch=0x3,t_chksum=0x4,t_ts=0x7};
 
 
+      static const uint32_t word_size_bits   = 0x80;   // the buffer is 128 bits
+      static const uint32_t word_size_bytes  = 0x10;   // 16 bytes
+      static const uint32_t word_size_u32    = 0x4;    // 4xuint32_t
 
       ///
       /// -- payload
@@ -193,8 +196,8 @@ namespace ptb {
 
            ts_size_t timestamp;
 
-           mask_size_t  trigger_mask       : 61;
-           wtype_size_t word_type : 3;
+           mask_size_t  trigger_word       : 61;
+           wtype_size_t trigger_type : 3;
 
            static size_t const size_bytes = 2*sizeof(uint64_t);
            static size_t const size_u32 = size_bytes/sizeof(uint32_t);
