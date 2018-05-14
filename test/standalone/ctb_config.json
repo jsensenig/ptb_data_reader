@@ -23,26 +23,27 @@
     },
     "pulser":{
       "enable":true,
-      "frequency":500
+      "frequency":100
     },
     "subsystems":{
       "pds":{
-        "channel_mask":"0xFFFFF",
+        "channel_mask":"0xFFFFFF",
         "reshape_length" : 10,
         "dac_thresholds":[2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290,2290],
         "triggers": [
           { "id":"LLT_1",
-            "type" : "0x1",
-            "count" : "0x8"
+            "enable":true,
+            "type" : "0x2",
+            "count" : "0x1"
           }
         ]
       },
       "crt":{
-        "ch_mask": "0xFFFFFFFF",
+        "channel_mask": "0xFFFFFFFF",
         "reshape_length" : 10
       },
       "beam":{                     
-        "ch_mask": "0x1FF",
+        "channel_mask": "0x1FF",
         "reshape_length" : 10
       }
     }
