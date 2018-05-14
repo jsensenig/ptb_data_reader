@@ -49,80 +49,124 @@ std::string cfile = "ctb_config.json";
 class ctb_robot {
   public:
     ctb_robot(const std::string &host = "localhost",const uint16_t &port = 8991)
-  : stop_req_(false), is_running_(false),is_conf_(false),
+  : exit_req_(false), is_running_(false),is_conf_(false),
     outroot_(NULL),outtree_(NULL),
-    outfilename_("ctb_output")
+    outfilename_("ctb_output"), archiver_(), receiver_(),archiver_ready_(false)
   {
       client_sock.connect(host,port);
   }
     virtual ~ctb_robot() {};
 
     void send_reset() {
-      cout << "Sending a reset" << endl;
+      printf("send_reset:: Sending a reset\n");
       const char *cmd = "{\"command\":\"HardReset\"}";
       client_sock.send(cmd,28);
       client_sock.recv(answer_,1024);
-      cout << "Received answer [" << answer_ << "]" << endl;
+      json answer = json::parse(answer_);
+      printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
       std::fill(answer_, answer_+1024, 0);
       //answer_[0]='\0';
 
-      is_running_ = false;
-      is_conf_ = false;
+      is_running_.store(false);
+      is_conf_.store(false);
     }
 
     void send_start() {
-      if (!is_conf_) {
-        cout << "ERROR: Can't start a run without configuring first" << endl;
+      if (!is_conf_.load()) {
+        printf("send_start:: ERROR: Can't start a run without configuring first\n");
       }
+      printf("send_start:: Launching reader thread...\n");
+
+      is_running_.store(true);
+
+      receiver_ = std::thread(&ctb_robot::receive_data, this);
+      std::this_thread::sleep_for(std::chrono::seconds(1));
 
       printf("send_start:: Opening output file prior to start running.\n");
-      std::thread archiver(&ctb_robot::store_root, this);
-      cout << "Sending a start run" << endl;
+      archiver_ = std::thread(&ctb_robot::store_root, this);
+      //archiver_ = archiver;
+      printf("send_start:: Waiting for archiving thread to flag readyness...\n");
+      while(!archiver_ready_.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      printf("send_start:: Archiver ready!\n");
+
+      printf("send_start:: Sending a start run\n");
       const char *cmd = "{\"command\":\"StartRun\"}";
       client_sock.send(cmd,27);
       client_sock.recv(answer_,1024);
-      cout << "Received answer [" << answer_ << "]" << endl;
+      json answer = json::parse(answer_);
+      printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
+
+//      printf("send_start:: Received answer [%s]\n",answer_);
       std::fill(answer_, answer_+1024, 0);
             //answer_[0]='\0';
-      is_running_ = true;
     }
 
     void send_stop() {
-      cout << "Sending a stop run" << endl;
+      printf("send_stop:: Sending a stop run\n");
       const char *cmd = "{\"command\":\"StopRun\"}";
       client_sock.send(cmd,27);
       client_sock.recv(answer_,1024);
-      cout << "Received answer [" << answer_ << "]" << endl;
+      json answer = json::parse(answer_);
+      printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
+
+//      printf("send_stop:: Received answer [%s]\n",answer_);
       std::fill(answer_, answer_+1024, 0);
             //answer_[0]='\0';
-      is_running_ = false;
+      is_running_.store(false);
+
+      // -- kill the threads
+      // -- first the receiver
+      printf("send_stop:: Joining client threads\n");
+      if ( receiver_.joinable() == false ) {
+        printf("Thread receiver_ is not joinable?!\n");
+      } else {
+        printf("Joining receiver\n");
+        receiver_.join();
+      }
+
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      if ( archiver_.joinable() == false ) {
+        printf("Thread archiver_ is not joinable?!\n");
+      } else {
+        printf("Joining archiver\n");
+        archiver_.join();
+      }
+      //archiver_.join();
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      printf("Threads joined.\n");
     }
 
     void send_config() {
 
-      cout << "Sending config" << endl;
-      if (!is_conf_) {
-        cout << "Resetting before configuring" << endl;
+      printf("send_config:: Sending config\n");
+      if (!is_conf_.load()) {
+        printf("send_config:: Resetting before configuring\n");
         send_reset();
       }
       send_reset();
       client_sock.send(g_config.c_str(),g_config.size());
       client_sock.recv(answer_,1024);
-      cout << "Received answer [" << answer_ << "]" << endl;
+      json answer = json::parse(answer_);
+      printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
+
+//      printf("send_config:: Received answer [%s]\n",answer_);
       std::fill(answer_, answer_+1024, 0);
             //answer_[0]='\0';
-      is_conf_ = true;
+      is_conf_.store(true);
 
     }
 
     void process_quit()
     {
-      if (is_running_) {
+      if (is_running_.load()) {
         // if we are taking data, stop it
         send_stop();
       } else {
         // If we are not, stop execution
-        stop_req_ = true;
+        exit_req_.store(true);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
 
       }
     }
@@ -131,25 +175,24 @@ class ctb_robot {
       enum commands {init=1,start=2,stop=3,quit=4};
       // Set the stop condition to false to wait for the data
       //std::signal(SIGINT, ctb_robot::static_sig_handler);
-      int command = -1;
+      //int command = -1;
       // Now make the receiving thread
-      cout << "### Launching reader thread" << endl;
-      //std::thread reader(this->receive_data);
-      std::thread reader(&ctb_robot::receive_data, this);
+      std::string rcommand;
       // Now loop for commands
       std::ifstream cfin;
       json conf;
-      while(!stop_req_) {
-        cout << "### Select command : " << endl;
-        cout << " 1 : Init" << endl;
-        cout << " 2 : Start Run" << endl;
-        cout << " 3 : Stop Run" << endl;
-        cout << " 4 : Quit" << endl;
+      while(!exit_req_.load()) {
+        printf("\n\n### Select command : \n 1 : Init\n 2 : Start Run\n 3 : Stop Run\n 4 : Quit\n\n");
 
         //    cout << " 4 : Soft Reset" << endl;
         //    cout << " 5 : Hard Reset" << endl;
 
-        cin >> command;
+        cin >> rcommand;
+        if (!isdigit (rcommand.c_str()[0])) {
+          printf("ERROR: Wrong option!\n");
+          continue;
+        }
+        int command = stoi(rcommand);
         switch(command) {
           case init:
             // Now open the file
@@ -169,11 +212,11 @@ class ctb_robot {
             }
             catch (const ifstream::failure& e)
             {
-              cout << "** Failure opening/reading the configuration file: " << e.what() << endl;
+              printf("** Failure opening/reading the configuration file: %s\n",e.what());
               exit(1);
             }
             catch( const json::exception& e) {
-              cout << "Caught a JSON exception: " << e.what() << endl;
+              printf("Caught a JSON exception: %s\n",e.what());;
               exit(1);
             }
             send_config();
@@ -191,11 +234,11 @@ class ctb_robot {
             //reader.join();
             break;
           default:
-            cout << "Wrong option (" << command << ")." << endl;
+            printf("Wrong option [%d]\n",command);
             break;
         }
       }
-      cout << "### Stop requested." << endl;
+      printf("### Stop requested.\n");
       // Wait for the reading function to return
 
     }
@@ -205,12 +248,12 @@ class ctb_robot {
       // Important to avoid mangling of the output due to race conditions to the
       // IO buffers. The trick is to use unbuffered (ie. direct) output
       std::cout.setf(std::ios::unitbuf);
-      cout << "Working in receiving thread!!!" << endl;
+      printf("receive_data:: Starting receiving thread.\n");
 
-      receiver_id_ = std::this_thread::get_id();
+      std::thread::id receiver_id_ = std::this_thread::get_id();
       std::ostringstream stream;
       stream << std::hex << receiver_id_ << " " << std::dec << receiver_id_;
-      cout << "#### Receiving thread: %s" << stream.str() << endl;
+      printf("receive_data:: Receiving thread: %s\n", stream.str().c_str());
 
       // Create a server that is meant to receive the data from the
       // PTB and keep dumping the contents into somewhere...like a binary file
@@ -219,18 +262,18 @@ class ctb_robot {
         TCPServerSocket servSock(8992);
 
 
-        while (!stop_req_) {
+        while (!exit_req_.load()) {
           // Accept a client
-          cout << "Opening the receiver socket" << endl;
+          printf("Opening the receiver socket\n");
           TCPSocket *sock = servSock.accept();
-          cout << "--> Received a client request." << endl;
+          printf("--> Received a client request.\n");
 
           // just wait for the run to be started
-          while (!is_running_ && !stop_req_) {
-            std::this_thread::sleep_for(std::chrono::microseconds(1));
+          while (!is_running_.load() && !exit_req_.load()) {
+            std::this_thread::sleep_for(std::chrono::microseconds(10));
           }
 
-          cout << "Run started...." << endl;
+          printf("receive_data:: Run started....\n");
 
           uint16_t bytes_collected= 0;
           ptb::content::tcp_header *header;
@@ -243,18 +286,22 @@ class ctb_robot {
           size_t tcp_body_size = 0;
 
           // FIXME: Receive the ethernet packets
-          while (is_running_ && !stop_req_) {
+          while (is_running_.load() && !exit_req_.load()) {
 
             // grab a header
             //cout << "Going to receive " << header->word.size_bytes << " bytes" << endl;
             bytes_collected = 0;
+            //printf("Collecting data\n");
+
             while ((bytes_collected != header->word.size_bytes) && is_running_) {
               bytes_collected += sock->recv(&tcp_data[bytes_collected],header->word.size_bytes-bytes_collected);
             }
+            //printf("have a header\n");
+
             //printf("Received %u bytes : %X\n",bytes_collected,*(reinterpret_cast<uint32_t*>(&tcp_data[0])));
             header = reinterpret_cast<ptb::content::tcp_header *>(tcp_data);
             count++;
-            if (!(count%1000)) cout << "Counting " << count << "packets received..." << endl;
+            if (!(count%1000)) printf("receive_data:: Counting %u packets received...\n",count);
 	    
             // check the number of bytes in this packet
             //cout << "Expecting to receive " << header->word.packet_size << " bytes " << endl;
@@ -269,11 +316,14 @@ class ctb_robot {
             bool ret = false;
             while (pos < tcp_body_size) {
               buffer word;
-              memcpy(&(word.data),&tcp_data[pos],16);
+              std::memcpy(word.data,&(tcp_data[pos]),16);
+
               ret = buffer_queue_.push(word);
               if (!ret) {
                 printf("WARNING::: Failed to store the received data\n");
               }
+              // advance pointer to the next word
+              pos += 16;
             }
 	    /*
             // cout << "Collected expected bytes. " << endl;
@@ -348,35 +398,36 @@ class ctb_robot {
             }
 	    */
           }
-          cout << "Left the loop for running..." << endl;
+          printf("receive_data:: Left the receiving loop \n");
           delete sock;
-          if (!stop_req_) {
-            cout << "Going to start a new socket listening" << endl;
-          }
+          printf("receive_data:: Returning\n");
+          return;
+//          if (!exit_req_.load()) {
+//            cout << "Going to start a new socket listening" << endl;
+//          }
 
         }
-        cout << "Stop request found... should be returning here" << endl;
 
         // -- Don't hang in here. Disconnect the thing
         return;
       }
       catch(SocketException &e) {
-        cout << "Socket exception caught : " << e.what() << endl;
+        printf("receive_data:: Socket exception caught : %s\n",e.what());
       }
       catch(std::exception &e) {
-        cout << "STD exception caught : " << e.what() << endl;
+        printf("receive_data:: STL exception caught : %s\n",e.what());
       }
       catch(...) {
-        cerr << "Something went wrong. " << endl;
+        printf("receive_data:: Something went very wrong\n");
       }
       // Delete the connection
     }
 
     void store_root() {
+      archiver_ready_.store(false);
 
-
-      archiver_id_ = std::this_thread::get_id();
-      printf("send_start:: Archiver thread spawned with ID %u\n",archiver_id_);
+      std::thread::id archiver_id_ = std::this_thread::get_id();
+      printf("store_root:: Archiver thread spawned with ID %u\n",archiver_id_);
       // -- Check if the requested file exists
       unsigned int idx = 2;
       bool file_exists = false;
@@ -390,13 +441,22 @@ class ctb_robot {
           std::ostringstream outf;
           outf << outfilename_ << "_" << idx << ".root";
           outname = outf.str();
+          idx++;
+          outroot_ = TFile::Open(outname.c_str());
         }
+        printf("store_root:: Found a filename that does not yet exist\n");
       }
-      if (file_exists) {
-        printf("ERROR: Output file already exists. Writing output to [%s] instead\n",outname.c_str());
-      }
-      outroot_ = TFile::Open(outname.c_str(),"RECREATE");
 
+      if (file_exists) {
+        printf("store_root:: ERROR: Output file already exists. Writing output to [%s] instead\n",outname.c_str());
+      } else {
+        printf("store_root:: Writing contents to [%s]\n",outname.c_str());
+      }
+      printf("store_root:: Writing contents to [%s]\n",outname.c_str());
+      outroot_ = TFile::Open(outname.c_str(),"RECREATE");
+//      if (!outroot_ || outroot_->IsZombie()) {
+        printf("store_root:: ERROR: Failed to create output file. Writing output to [%s]\n",outname.c_str());
+//      }
       // -- Build the structure for the triggers
       outroot_->cd();
       outtree_ = new TTree("data","CTB output data");
@@ -409,13 +469,22 @@ class ctb_robot {
 
       // -- Now enter the loop to store the data
       buffer word;
-      while(!stop_req_)
+      printf("store_root:: Entering archiving loop\n");
+      bool ret = true;
+      archiver_ready_.store(true);
+
+      while(is_running_.load() && !exit_req_.load())
       {
-        if (!buffer_queue_.pop(word)) {
-          // -- should some sort of wait be put here?
-          // Might hurt since it will require some sort of mutex
+
+        if (buffer_queue_.empty()){
           std::this_thread::sleep_for (std::chrono::microseconds(10));
           continue;
+        }
+        ret = buffer_queue_.pop(word);
+        if (ret == false) {
+          printf("store_root:: Failed to acquire buffer...failure is imminent!\n");
+          // -- should some sort of wait be put here?
+          // Might hurt since it will require some sort of mutex
         }
         // -- If the word came, write it to disk
         ptb::content::word::ch_status_t *chs = NULL;
@@ -423,34 +492,34 @@ class ctb_robot {
         ptb::content::word::timestamp_t *ts = NULL;
         ptb::content::word::trigger_t   *trg = NULL;
         ptb::content::word::word_t      *wrd = NULL;
-        wrd =reinterpret_cast<ptb::content::word::word_t*>(&word.data);
+        wrd =reinterpret_cast<ptb::content::word::word_t*>(word.data);
         switch(wrd->word_type) {
           case ptb::content::word::t_fback:
             printf("store_root:: WARNING:: Feedback word. This is unexpected\n");
             break;
           case ptb::content::word::t_gt:
-            trg = reinterpret_cast<ptb::content::word::trigger_t*>(&word.data);
+            trg = reinterpret_cast<ptb::content::word::trigger_t*>(word.data);
             wtype = trg->word_type;
             tstamp = trg->timestamp;
             payload = trg->trigger_word;
             outtree_->Fill();
             break;
           case ptb::content::word::t_lt:
-            trg = reinterpret_cast<ptb::content::word::trigger_t*>(&word.data);
+            trg = reinterpret_cast<ptb::content::word::trigger_t*>(word.data);
             wtype = trg->word_type;
             tstamp = trg->timestamp;
             payload = trg->trigger_word;
             outtree_->Fill();
             break;
           case ptb::content::word::t_ts:
-            ts = reinterpret_cast<ptb::content::word::timestamp_t*>(&word.data);
+            ts = reinterpret_cast<ptb::content::word::timestamp_t*>(word.data);
             wtype = ts->word_type;
             tstamp = ts->timestamp;
             payload = 0;
             outtree_->Fill();
             break;
           case ptb::content::word::t_ch:
-            chs = reinterpret_cast<ptb::content::word::ch_status_t*>(&word.data);
+            chs = reinterpret_cast<ptb::content::word::ch_status_t*>(word.data);
             wtype = chs->word_type;
             tstamp = chs->timestamp;
             payload = chs->get_pds();
@@ -465,6 +534,7 @@ class ctb_robot {
       outtree_->Write();
       outroot_->Close();
       delete outroot_;
+      archiver_ready_.store(false);
     }
 
     std::string outfilename_;
@@ -473,11 +543,14 @@ class ctb_robot {
     TCPSocket client_sock;
 
     // control variables
-    bool stop_req_;
-    bool is_running_;
-    bool is_conf_;
-    std::thread::id receiver_id_;
-    std::thread::id archiver_id_;
+    std::atomic<bool> exit_req_;
+    std::atomic<bool> is_running_;
+    std::atomic<bool> is_conf_;
+    std::atomic<bool> archiver_ready_;
+    std::thread receiver_;
+    std::thread archiver_;
+//    std::thread::id receiver_id_;
+//    std::thread::id archiver_id_;
     // Aux vars
     char answer_[1024];
 
@@ -518,23 +591,23 @@ int main(int argc, char**argv) {
     auto result = options.parse(argc, argv);
 
     if (result.count("help")) {
-      cout << options.help() << endl;
+      printf("%s",options.help().c_str());
       exit(0);
     }
 
     if (result.count("config")) {
-      cout << "--> Using " << result["config"].as<std::string>() << " config file." << endl;
+      printf("main:: --> Using %s config file\n",result["config"].as<std::string>().c_str());
       cfile = result["config"].as<std::string>();    
     } else {
-      cout << "===> Using default configuration file [" << cfile << "] " << endl;
+      printf("main:: --> Using default config file [%s]\n",cfile.c_str());
     }
 
-    cout << "--> Verbosity level [" << vlvl << "]" << endl;
+    printf("main:: --> Verbosity level [%d]\n",vlvl);
 
     if (result.count("output"))
     {
-      printf("main:: Setting the output file to [%s]\n",result["config"].as<std::string>().c_str());
-      outfname = result["config"].as<std::string>();
+      printf("main:: Setting the output file to [%s]\n",result["output"].as<std::string>().c_str());
+      outfname = result["output"].as<std::string>();
     } else {
       printf("Attempting to use the default output file [ctb_output]\n");
     }
@@ -551,7 +624,7 @@ int main(int argc, char**argv) {
   }
   catch( const cxxopts::OptionException& e) 
   {
-    cout << "** Error parsing options: " << e.what() << endl;
+    printf("main:: ** Error parsing options: %s\n",e.what());
     exit(1);
   }
 
@@ -573,13 +646,13 @@ int main(int argc, char**argv) {
 
   }
   printf("Connecting to the CTB at [%s:%hu]\n",host.c_str(),port);
-  cout << "Starting robot..." << endl;
+  printf("main:: Starting robot...\n");
   //ctb_robot robot("128.91.41.238",8991);
   ctb_robot robot(host.c_str(),port);
   robot.outfilename_ = outfname;
-  cout << "Starting the loop..." << endl;
+  printf("main:: Starting the loop...\n");
   robot.run();
-  cout << "All done" << endl;
+  printf("main:: All done...\n");
 
   return 0;
 }
