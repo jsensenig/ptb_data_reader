@@ -1,0 +1,43 @@
+{
+  "ctb":{
+    "sockets":{
+	"receiver":{
+	    "rollover":50000,
+            "host":"10.73.136.32",
+            "port":8992
+      },
+      "monitor":{
+        "enable" : false,
+        "host": "localhost",
+        "port": 8993
+        },
+      "statistics": {
+        "enable":false,
+        "port":8994,
+        "updt_period": 1
+      }
+    },
+    "randomtrigger":{
+      "enable":true,
+      "frequency":100
+    },
+    "subsystems":{
+      "pds":{
+        "channel_mask":"0xFFFFF",
+        "reshape_length" : 10,
+        "dac_thresholds":[3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,1930,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000],
+        "triggers": [
+          { "id":"LLT_1",
+            "description": "Counting trigger on the PDS",
+            "type" : "0x2",
+            "count" : "0x1"
+          }
+        ]
+      },
+      "crt":{
+        "ch_mask": "0xFFFFFFFF",
+        "reshape_length" : 10
+      }
+    }
+  }
+}
