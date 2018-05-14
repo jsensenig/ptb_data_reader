@@ -251,7 +251,7 @@ class ctb_robot {
             while (bytes_collected != tcp_body_size) {
               bytes_collected += sock->recv(&tcp_data[bytes_collected],(int)(tcp_body_size-bytes_collected));
             }
-	    /*
+	    //HERE
             // cout << "Collected expected bytes. " << endl;
             // for(size_t i = 0; i < bytes_collected; i++) {
             //   printf("%02X ",tcp_data[i]);
@@ -306,7 +306,7 @@ class ctb_robot {
                   break;
                 case ptb::content::word::t_ts:
                   ts = reinterpret_cast<ptb::content::word::timestamp_t *>(word);
-                  //cout << "Received timestamp " << ts->timestamp << endl;
+                  cout << "Received timestamp " << ts->timestamp << endl;
                   pos += ptb::content::word::word_t::size_bytes;
                   break;
                 case ptb::content::word::t_ch:
@@ -322,7 +322,7 @@ class ctb_robot {
                   break;
               }
             }
-	    */
+	    //...to here
           }
           cout << "Left the loop for running..." << endl;
           delete sock;

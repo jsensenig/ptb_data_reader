@@ -78,8 +78,15 @@ public:
   // Passed by copy to keep locally
   void process_config(json & config,json &answers);
 
-  //Resets and configures the dacs
+  //Loads the PDS config into FW regs
   void pds_config(json & pdsconfig, json& feedback);
+
+  //Loads the Beam config into FW regs
+  void beam_config(json & beamconfig);
+
+  //Loads the CRT config into FW regs
+  void crt_config(json & crtconfig);
+
 
   /**
    * Loops over the registers and dum their contents, both in decimal and Hex.

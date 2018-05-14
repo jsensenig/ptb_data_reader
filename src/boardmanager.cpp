@@ -563,7 +563,9 @@ namespace ptb {
     data_socket_port_ = receiver.at("port").get<unsigned short>();
     reader_->set_tcp_port(data_socket_port_);
     Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
-    // -- Grab the PDS configuration
+    // -- Grab the subsystem configurations
+    json beamconf = doc.at("ctb").at("subsystems").at("beam");
+    json crtconf = doc.at("ctb").at("subsystems").at("crt");
     json pdsconf = doc.at("ctb").at("subsystems").at("pds");
     
     // uint32_t duration;
@@ -579,11 +581,19 @@ namespace ptb {
       Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",rtriggerfreq);
       rtriggerfreq = (1<<26)-1;
     }
-    set_bit(6,30,rtrigger_en);
-    set_bit_range_register(28,0,26,rtriggerfreq);
-
-//    uint8_t rtrigger_enable = 0;
-//    if(rtrigger_ena) { rtrigger_enable = 1; }
+    set_bit(27,0,rtrigger_en);
+    set_bit_range_register(25,0,26,rtriggerfreq);
+    //Set pulser frequency
+    json pulserconf = doc.at("ctb").at("pulser");
+    bool pulser_en = pulserconf.at("enable").get<bool>();
+    uint32_t pulserfreq = pulserconf.at("frequency").get<unsigned int>();
+    Log(debug,"Pulser Frequency [%d] (%u) [0x%X][%s]",pulserfreq,pulserfreq,pulserfreq, std::bitset<26>(pulserfreq).to_string().c_str());
+    if (pulserfreq >= (1<<26)) {
+      Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",pulserfreq);
+      pulserfreq = (1<<26)-1;
+    }
+    set_bit(26,31,pulser_en);
+    set_bit_range_register(26,0,26,pulserfreq);
 
     uint32_t duration = receiver.at("rollover").get<unsigned int>();
     // Microslice duration is now a full number...check if it fits into 27 bits
@@ -609,7 +619,13 @@ namespace ptb {
 #ifdef NO_PDS_DAC
     Log(warning,"PDS configuration block was disabled. Not configuring any PDS input");
 #else
-    //Program the DACs with config values
+    
+    //FIXME: Introduce json parse feedback here. 
+    // NFB: We should NEVER, NEVER, NEVER parse a file without properly caught exceptions
+    // Otherwise we have no way to know if the configuration fails
+    beam_config(beamconf);
+    crt_config(crtconf);
+
     strVal.str("");
     json feedback;
     pds_config(pdsconf,feedback);
@@ -617,19 +633,19 @@ namespace ptb {
       Log(debug,"Received %u messages from configuring the PDS",feedback.size());
       answers.insert(std::end(answers),feedback.begin(),feedback.end());
     }
+
+    // 1 ms in a 50MHz clock
+    //  if (duration <= 50000) {
+    //    msgs_ << "<warning>Input value of ["<< duration << "] below recommended limit of 1 ms (50000). ";
+    //    msgs_ << "Will allow but this setting is likely to cause overload of the ethernet connection. </warning>";
+
+    //  }
+
 #endif
 
-//    // 1 ms in a 50MHz clock
-//    //  if (duration <= 50000) {
-//    //    msgs_ << "<warning>Input value of ["<< duration << "] below recommended limit of 1 ms (50000). ";
-//    //    msgs_ << "Will allow but this setting is likely to cause overload of the ethernet connection. </warning>";
-//
-//    //  }
-//
-//
-//    //Program the DACs with config values
-//    //board_manager::pds_config(pdsconf);
-//    pds_config(pdsconf);
+    //Program the DACs with config values
+    //board_manager::pds_config(pdsconf);
+   // pds_config(pdsconf);
 
     // -- Once the configuration is set, dump locally the status of the config registers
     dump_config_registers();
@@ -728,6 +744,7 @@ void board_manager::pds_config(json &pdsconfig, json& feedback){
     std::string s_channelmask = pdsconfig.at("channel_mask").get<std::string>();
     std::string s_trigtype0 = pdsconfig.at("triggers").at(0).at("type").get<std::string>();
     std::string s_count0 = pdsconfig.at("triggers").at(0).at("count").get<std::string>();
+    bool llt11_enable = pdsconfig.at("triggers").at(0).at("enable").get<bool>();
 
     uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
     uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
@@ -773,9 +790,39 @@ void board_manager::pds_config(json &pdsconfig, json& feedback){
     set_bit_range_register(2,0,24,channelmask);
 
     //Configure counting trigger 0
-    uint32_t trig0 = (count0<<27) + (trigtype0<<24);
-    set_bit_range_register(27,0,32,trig0);
+    uint32_t trig0 = (trigtype0<<5) + count0;
+    set_bit_range_register(38,0,9,trig0);
+    set_bit(27,11,llt11_enable);
 
 }
+
+
+void board_manager::crt_config(json &crtconfig){
+
+   // std::vector<uint32_t> dac_values = crtconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
+    std::string s_channelmask = crtconfig.at("channel_mask").get<std::string>();
+    //std::string s_trigtype0 = crtconfig.at("triggers").at(0).at("type").get<std::string>();
+    //std::string s_count0 = crtconfig.at("triggers").at(0).at("count").get<std::string>();
+
+    uint32_t channelmask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
+   // uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
+   // uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
+  //Input channel masks
+  set_bit_range_register(1,0,32,channelmask);
+}
+
+void board_manager::beam_config(json &beamconfig){
+
+   // std::vector<uint32_t> dac_values = beamconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
+    std::string s_channelmask = beamconfig.at("channel_mask").get<std::string>();
+   // std::string s_trigtype0 = beamconfig.at("triggers").at(0).at("type").get<std::string>();
+   // std::string s_count0 = beamconfig.at("triggers").at(0).at("count").get<std::string>();
+
+    uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
+   // uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
+  //  uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
+
+  //Input channel masks
+  set_bit_range_register(3,0,9,channelmask);}
 
 }
