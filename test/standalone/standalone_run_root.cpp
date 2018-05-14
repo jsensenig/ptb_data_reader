@@ -86,8 +86,11 @@ class ctb_robot {
       const char *cmd = "{\"command\":\"HardReset\"}";
       client_sock.send(cmd,28);
       client_sock.recv(answer_,1024);
-      json answer = json::parse(answer_);
-      printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
+      try {
+	json answer = json::parse(answer_);
+	printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
+      }
+      catch(...){}
       std::fill(answer_, answer_+1024, 0);
       //answer_[0]='\0';
 
@@ -119,8 +122,11 @@ class ctb_robot {
       const char *cmd = "{\"command\":\"StartRun\"}";
       client_sock.send(cmd,27);
       client_sock.recv(answer_,1024);
-      json answer = json::parse(answer_);
-      printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
+      try {
+	json answer = json::parse(answer_);
+	printf("send_start:: Received answer [%s]\n",answer.dump(2).c_str());
+      }
+      catch(...){}
 
       //      printf("send_start:: Received answer [%s]\n",answer_);
       std::fill(answer_, answer_+1024, 0);
@@ -132,8 +138,11 @@ class ctb_robot {
       const char *cmd = "{\"command\":\"StopRun\"}";
       client_sock.send(cmd,27);
       client_sock.recv(answer_,1024);
-      json answer = json::parse(answer_);
-      printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
+      try {
+	json answer = json::parse(answer_);
+	printf("send_stop:: Received answer [%s]\n",answer.dump(2).c_str());
+      }
+      catch(...){}
 
       //      printf("send_stop:: Received answer [%s]\n",answer_);
       std::fill(answer_, answer_+1024, 0);
@@ -172,8 +181,11 @@ class ctb_robot {
       send_reset();
       client_sock.send(g_config.c_str(),g_config.size());
       client_sock.recv(answer_,1024);
-      json answer = json::parse(answer_);
-      printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
+      try {
+	json answer = json::parse(answer_);
+	printf("send_config:: Received answer [%s]\n",answer.dump(2).c_str());
+      }
+      catch(...){}
 
       //      printf("send_config:: Received answer [%s]\n",answer_);
       std::fill(answer_, answer_+1024, 0);
@@ -488,8 +500,8 @@ class ctb_robot {
       uint64_t tstamp;
       uint64_t payload;
       outtree_->Branch("type",&wtype);
-      outtree_->Branch("timestamp",&tstamp);
-      outtree_->Branch("payload",&payload);
+      outtree_->Branch("timestamp",&tstamp,"timestamp/l");
+      outtree_->Branch("payload",&payload,"payload/l");
 
       // -- Now enter the loop to store the data
       buffer word;
