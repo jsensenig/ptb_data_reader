@@ -20,8 +20,32 @@
 #include "PracticalSocket.h"
 #include "content.h"
 #include "json.hpp"
-#include "cxxopts.hpp"
+// exclude unsupported compilers
+//#if defined(__clang__)
+//#if (__clang_major__ * 10000 + __clang_minor__ * 100 + __clang_patchlevel__) < 30400
+//#include "optionparser.h"
+//#define USE_OPTIONPARSER 1
+//#undef USE_CXXOPTS
+//#else
+//#include "cxxopts.hpp"
+//#define USE_CXXOPTS 1
+//#undef USE_OPTIONPARSER
+//#endif
+//#elif defined(__GNUC__) && !(defined(__ICC) || defined(__INTEL_COMPILER))
+//#if (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__) < 40900
+//#include "optionparser.h"
+//#define USE_OPTIONPARSER 1
+//#undef USE_CXXOPTS
+//#else
+//#include "cxxopts.hpp"
+//#define USE_CXXOPTS 1
+//#undef USE_OPTIONPARSER
+//#endif
+//#endif
 
+#include "optionparser.h"
+#define USE_OPTIONPARSER 1
+#undef USE_CXXOPTS
 
 // -- ROOT headers (for output)
 #include <TFile.h>
@@ -98,9 +122,9 @@ class ctb_robot {
       json answer = json::parse(answer_);
       printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
 
-//      printf("send_start:: Received answer [%s]\n",answer_);
+      //      printf("send_start:: Received answer [%s]\n",answer_);
       std::fill(answer_, answer_+1024, 0);
-            //answer_[0]='\0';
+      //answer_[0]='\0';
     }
 
     void send_stop() {
@@ -111,9 +135,9 @@ class ctb_robot {
       json answer = json::parse(answer_);
       printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
 
-//      printf("send_stop:: Received answer [%s]\n",answer_);
+      //      printf("send_stop:: Received answer [%s]\n",answer_);
       std::fill(answer_, answer_+1024, 0);
-            //answer_[0]='\0';
+      //answer_[0]='\0';
       is_running_.store(false);
 
       // -- kill the threads
@@ -151,9 +175,9 @@ class ctb_robot {
       json answer = json::parse(answer_);
       printf("send_reset:: Received answer [%s]\n",answer.dump(2).c_str());
 
-//      printf("send_config:: Received answer [%s]\n",answer_);
+      //      printf("send_config:: Received answer [%s]\n",answer_);
       std::fill(answer_, answer_+1024, 0);
-            //answer_[0]='\0';
+      //answer_[0]='\0';
       is_conf_.store(true);
 
     }
@@ -302,7 +326,7 @@ class ctb_robot {
             header = reinterpret_cast<ptb::content::tcp_header *>(tcp_data);
             count++;
             if (!(count%1000)) printf("receive_data:: Counting %u packets received...\n",count);
-	    
+
             // check the number of bytes in this packet
             //cout << "Expecting to receive " << header->word.packet_size << " bytes " << endl;
             tcp_body_size = header->word.packet_size;
@@ -325,7 +349,7 @@ class ctb_robot {
               // advance pointer to the next word
               pos += 16;
             }
-	    /*
+            /*
             // cout << "Collected expected bytes. " << endl;
             // for(size_t i = 0; i < bytes_collected; i++) {
             //   printf("%02X ",tcp_data[i]);
@@ -396,15 +420,15 @@ class ctb_robot {
                   break;
               }
             }
-	    */
+             */
           }
           printf("receive_data:: Left the receiving loop \n");
           delete sock;
           printf("receive_data:: Returning\n");
           return;
-//          if (!exit_req_.load()) {
-//            cout << "Going to start a new socket listening" << endl;
-//          }
+          //          if (!exit_req_.load()) {
+          //            cout << "Going to start a new socket listening" << endl;
+          //          }
 
         }
 
@@ -454,9 +478,9 @@ class ctb_robot {
       }
       printf("store_root:: Writing contents to [%s]\n",outname.c_str());
       outroot_ = TFile::Open(outname.c_str(),"RECREATE");
-//      if (!outroot_ || outroot_->IsZombie()) {
-        printf("store_root:: ERROR: Failed to create output file. Writing output to [%s]\n",outname.c_str());
-//      }
+      //      if (!outroot_ || outroot_->IsZombie()) {
+      printf("store_root:: ERROR: Failed to create output file. Writing output to [%s]\n",outname.c_str());
+      //      }
       // -- Build the structure for the triggers
       outroot_->cd();
       outtree_ = new TTree("data","CTB output data");
@@ -549,8 +573,8 @@ class ctb_robot {
     std::atomic<bool> archiver_ready_;
     std::thread receiver_;
     std::thread archiver_;
-//    std::thread::id receiver_id_;
-//    std::thread::id archiver_id_;
+    //    std::thread::id receiver_id_;
+    //    std::thread::id archiver_id_;
     // Aux vars
     char answer_[1024];
 
@@ -570,23 +594,25 @@ int main(int argc, char**argv) {
   std::cout.setf(std::ios::unitbuf);
   size_t vlvl = 0;
 
-//  cout << "Some debugging..." << endl;
-//  cout << "Size of header : " << sizeof(ptb::content::word::header_t) << endl;
-//  cout << "Body : " << sizeof(ptb::content::word::body_t) << endl;
-//  cout << "Size of channel status : " << sizeof(ptb::content::word::payload::ch_status_t) << endl;
+  //  cout << "Some debugging..." << endl;
+  //  cout << "Size of header : " << sizeof(ptb::content::word::header_t) << endl;
+  //  cout << "Body : " << sizeof(ptb::content::word::body_t) << endl;
+  //  cout << "Size of channel status : " << sizeof(ptb::content::word::payload::ch_status_t) << endl;
 
   std::string outfname = "ctb_output";
   std::string destination = "localhost:8991";
 
+#ifdef USE_CXXOPTS
+
   try {
     cxxopts::Options options(argv[0], " - command line options");
     options.add_options()
-        ("c,config","Configuration file (JSON format)",cxxopts::value<std::string>())
-        ("h,help", "Print help")
-        ("v,verbosity","Verbosity level",cxxopts::value<size_t>(vlvl))
-        ("o,output","Output file (ROOT)",cxxopts::value<std::string>())
-        ("d,destination","CTB location in format <host>:<port> [default: localhost:8991]",cxxopts::value<std::string>())
-        ;
+            ("c,config","Configuration file (JSON format)",cxxopts::value<std::string>())
+            ("h,help", "Print help")
+            ("v,verbosity","Verbosity level",cxxopts::value<size_t>(vlvl))
+            ("o,output","Output file (ROOT)",cxxopts::value<std::string>())
+            ("d,destination","CTB location in format <host>:<port> [default: localhost:8991]",cxxopts::value<std::string>())
+            ;
 
     auto result = options.parse(argc, argv);
 
@@ -627,6 +653,132 @@ int main(int argc, char**argv) {
     printf("main:: ** Error parsing options: %s\n",e.what());
     exit(1);
   }
+
+#elif defined(USE_OPTIONPARSER)
+
+
+  struct Arg: public option::Arg
+  {
+      static void printError(const char* msg1, const option::Option& opt, const char* msg2)
+      {
+        fprintf(stderr, "%s", msg1);
+        fwrite(opt.name, opt.namelen, 1, stderr);
+        fprintf(stderr, "%s", msg2);
+      }
+
+      static option::ArgStatus Unknown(const option::Option& option, bool msg)
+      {
+        if (msg) printError("Unknown option '", option, "'\n");
+        return option::ARG_ILLEGAL;
+      }
+
+      static option::ArgStatus Required(const option::Option& option, bool msg)
+      {
+        if (option.arg != 0)
+          return option::ARG_OK;
+
+        if (msg) printError("Option '", option, "' requires an argument\n");
+        return option::ARG_ILLEGAL;
+      }
+
+      static option::ArgStatus NonEmpty(const option::Option& option, bool msg)
+      {
+        if (option.arg != 0 && option.arg[0] != 0)
+          return option::ARG_OK;
+
+        if (msg) printError("Option '", option, "' requires a non-empty argument\n");
+        return option::ARG_ILLEGAL;
+      }
+
+      static option::ArgStatus Numeric(const option::Option& option, bool msg)
+      {
+        char* endptr = 0;
+        if (option.arg != 0 && strtol(option.arg, &endptr, 10)){};
+        if (endptr != option.arg && *endptr == 0)
+          return option::ARG_OK;
+
+        if (msg) printError("Option '", option, "' requires a numeric argument\n");
+        return option::ARG_ILLEGAL;
+      }
+  };
+
+
+  enum  optionIndex { UNKNOWN, CONFIG, HELP, VERBOSITY, OUTPUT, DESTINATION};
+  const option::Descriptor usage[] =
+  {
+    {UNKNOWN,     0, "","",           Arg::None,        "USAGE: standalone_run_root [options]\n\n"
+    "Options:" },
+    {CONFIG,      0,"c","config",     Arg::Required,    "-c <file>,       --config=<file>          \tConfiguration File."},
+    {HELP,        0,"h","help",       Arg::None,        "-h,              --help                   \tPrint usage and exit." },
+    {VERBOSITY,   0,"v","verbose",    Arg::Numeric,     "-v <number>,     --verbose=<number>       \tSet verbosity level." },
+    {OUTPUT,      0,"o","output",     Arg::Required,    "-o <file>,       --output=<file>          \tSet ROOT output file name (without extension) [default: ctb_output]." },
+    {DESTINATION, 0,"d","destination",Arg::Required,    "-d <host:port>,  --destination=<host:port>\tSet destination host/IP and port [default: localhost:8991]." },
+    {UNKNOWN,     0,"", "",           option::Arg::None,"\nExamples:\n"
+        "  standalone_run_root -o my_output \n"
+        "  standalone_run_root -c ctb_config.json -o output.root\n" },
+        {0,0,0,0,0,0}
+  };
+
+  argc-=(argc>0); argv+=(argc>0); // skip program name argv[0] if present
+  option::Stats  stats(usage, argc, argv);
+  std::vector<option::Option> options(stats.options_max);
+  std::vector<option::Option> buffer(stats.buffer_max);
+  option::Parser parse(usage, argc, argv, &options[0], &buffer[0]);
+
+  if (parse.error())
+  {
+    printf("main:: Failed to parse options.\n");
+    return 1;
+  }
+
+  if (options[HELP] || argc == 0)
+  {
+    int columns = getenv("COLUMNS")? atoi(getenv("COLUMNS")) : 80;
+    option::printUsage(fwrite, stdout, usage, columns);
+    return 0;
+  }
+
+  for (int i = 0; i < parse.optionsCount(); ++i)
+  {
+    option::Option& opt = buffer[i];
+    fprintf(stdout, "Argument #%d is ", i);
+    switch (opt.index())
+    {
+      case HELP:
+        // not possible, because handled further above and exits the program
+      case CONFIG:
+        fprintf(stdout, "main:: Using %s config file\n", opt.arg);
+        cfile = opt.arg;
+        break;
+      case VERBOSITY:
+        fprintf(stdout, "main:: Setting verbosity to '%s'\n", opt.arg);
+        vlvl = atoi(opt.arg);
+        break;
+      case OUTPUT:
+        fprintf(stdout, "main:: Setting output file to '%s'\n", opt.arg);
+        outfname = opt.arg;
+        break;
+      case DESTINATION:
+        fprintf(stdout, "main:: Setting CTB host to '%s'\n", opt.arg);
+        destination = opt.arg;
+        break;
+      case UNKNOWN:
+        // not possible because Arg::Unknown returns ARG_ILLEGAL
+        // which aborts the parse with an error
+        break;
+    }
+  }
+
+  for (option::Option* opt = options[UNKNOWN]; opt; opt = opt->next())
+    std::cout << "Unknown option: " << std::string(opt->name,opt->namelen) << "\n";
+
+  for (int i = 0; i < parse.nonOptionsCount(); ++i)
+    std::cout << "Non-option #" << i << ": " << parse.nonOption(i) << "\n";
+
+#else
+#error "Couldn't find a matching option parser. Program will refuse to compile"
+#endif
+
 
 
   std::string host = "localhost";
