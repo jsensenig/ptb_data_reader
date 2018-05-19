@@ -3,6 +3,11 @@
  *
  *  Created on: May 7, 2018
  *      Author: nbarros
+ *      This code uses the asynchronous IO library from boost to establish a socket
+ *      connection to the CTB and manage the control connection
+ *
+ *      It is grossly cannibalized from the original PTB board reader
+ *
  */
 
 #ifndef TEST_STANDALONE_CTBCLIENT_HH_
@@ -31,25 +36,18 @@ class ctb_client {
     ctb_client();
     virtual ~ctb_client();
     void send_command(std::string const & command);
-    //void send_config(std::string const & config);
     void send_json(json & json_frag);
-    template<class T> void set_param(std::string const & name, T const & value, std::string const & );
 
     bool exception() const {return exception_.load();};
+
   private:
-
-//    std::pair<boost::asio::buffers_iterator<boost::asio::streambuf::const_buffers_type>, bool>
-//      match_json( boost::asio::buffers_iterator<boost::asio::streambuf::const_buffers_type> begin,
-//                        boost::asio::buffers_iterator<boost::asio::streambuf::const_buffers_type> end);
-
 
     std::size_t send(std::string const & send_str);
     std::string receive(void);
-//    void set_param_(std::string const& name, std::string const & encoded_value, std::string const & type);
-//    bool response_is_ack(std::string const & response, std::string const & command);
 
     void set_deadline(void);
     void check_deadline(void);
+    // These static functions are helpful since they are common to any instance of the client
     static void async_connect_handler(const boost::system::error_code& ec, boost::system::error_code* output_ec);
     static void async_completion_handler(
         const boost::system::error_code &error_code, std::size_t length,
@@ -64,10 +62,15 @@ class ctb_client {
     std::atomic<bool>           exception_;
 };
 
-template<class T>
-  void ctb_client::set_param(std::string const & name, T const & value, std::string const & type)
-{
-  set_param_(name, boost::lexical_cast<std::string>(value), type);
-}
+
+// -- A relic from the past. Keeping it here for historical purposes
+// Not needed anywhere else
+//template<class T> void set_param(std::string const & name, T const & value, std::string const & );
+//
+//template<class T>
+//  void set_param(std::string const & name, T const & value, std::string const & type)
+//{
+//  set_param_(name, boost::lexical_cast<std::string>(value), type);
+//}
 
 #endif /* TEST_STANDALONE_CTBCLIENT_HH_ */
