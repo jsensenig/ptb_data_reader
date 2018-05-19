@@ -6,14 +6,10 @@
  */
 
 #include "boardmanager.h"
-
 #include "boardreader.h"
-#include "boardserver.h"
 #include "Logger.h"
-#include "opexception.h"
 #include "PracticalSocket.h"
 #include "util.h"
-
 #include "ptb_registers.h"
 #include "i2conf.h"
 
@@ -52,14 +48,14 @@ namespace ptb {
 
   // Init with a new reader attached
   board_manager::board_manager( ) :
-		        reader_(0),
-		        //cfg_srv_(0),
-		        board_state_(IDLE),
-		        mapped_conf_base_addr_(nullptr),
-		        msgs_str_(""),
-		        error_state_(false),
-		        data_socket_host_("192.168.100.100"),
-		        data_socket_port_(8992) {
+		            reader_(0),
+		            //cfg_srv_(0),
+		            board_state_(IDLE),
+		            mapped_conf_base_addr_(nullptr),
+		            msgs_str_(""),
+		            error_state_(false),
+		            data_socket_host_("192.168.100.100"),
+		            data_socket_port_(8992) {
     reader_ =	new board_reader();
     Log(debug,"Setting up pointers." );
 
@@ -72,12 +68,6 @@ namespace ptb {
     // manager receives something we are ready to deliver.
     setup_registers();
 
-    // This had to occur after setting up the command list
-    //  or we might run into trouble.
-    // cfg_srv_ = socket_server::get();
-    // Register to receive callbacks
-    // cfg_srv_->RegisterDataManager(this);
-
   }
 
   board_manager::~board_manager() {
@@ -87,7 +77,6 @@ namespace ptb {
     commands_.clear();
     Log(debug,"Killing the reader");
     delete reader_;
-    //cfg_srv_ = NULL;
     reader_ = nullptr;
     Log(debug,"Reader destroyed");
   }
@@ -107,7 +96,7 @@ namespace ptb {
       // -- Send the signal to start the run. Should be a register.
       case STARTRUN:
         // Only starts a run if the manager is in IDLE state
-        //Issue a warning and restart a run
+        // Issue a warning and restart a run
         // Otherwise issue a warning
         if (get_board_state() != board_manager::IDLE) {
           Log(warning,"A run is already running. Starting new run." );
@@ -116,11 +105,9 @@ namespace ptb {
           obj["message"] = "Board already taking data. Restarting new run.Might miss the sync pulse.";
           feedback_.push_back(obj);
           stop_run();
-        } else {
-          // Start the run
-          Log(verbose,"Starting a new Run." );
-          //start_run();
         }
+        // Start the run
+        Log(verbose,"Starting a new Run." );
         start_run();
         break;
       case SOFTRESET:
@@ -156,17 +143,9 @@ namespace ptb {
         if (get_board_state() != board_manager::RUNNING) {
           Log(warning,"Called for STOPRUN but there is no run ongoing. Just forcing hardware to stop.." );
           // -- we could still try to stop, no???
-          //FIXME: Check this
-          stop_run();
-          // -- This warning does not need to be reported out
-          // The GLB_EN is located in bin 31 of register 30
-//          set_enable_bit(false);
-//          Log(debug,"GLB_EN unset. Register: 0x%08x ",register_map_[0].value() );
-
-        } else {
-          Log(verbose,"The Run should STOP now" );
-          stop_run();
         }
+        Log(debug,"The Run should STOP now" );
+        stop_run();
         break;
       default:
         json obj;
@@ -189,7 +168,6 @@ namespace ptb {
       obj["message"] = "Command executed.";
       feedback_.push_back(obj);
     }
-
     answers = feedback_;
   }
 
@@ -202,10 +180,10 @@ namespace ptb {
     // Set the GLB_EN register to 1 (start readout in the fabric)
     // Set status flag to RUNNING
     if (!reader_) {
-      Log(warning,"No valid reader availble. Relaunching a new one.");
+      Log(warning,"No valid reader available. Relaunching a new one.");
       json obj;
       obj["type"] = "warning";
-      obj["message"] = "No valid reader availble. Relaunching a new one";
+      obj["message"] = "No valid reader available. Relaunching a new one";
       feedback_.push_back(obj);
 
       reader_ = new board_reader();
@@ -248,16 +226,6 @@ namespace ptb {
       obj["type"] = "error";
       std::string msg = "PTB data socket exception (socket): ";
       msg += e.what();
-      obj["message"] = msg;
-      feedback_.push_back(obj);
-      error_state_ = true;
-      return;
-    }
-    catch(op_exception &e) {
-      std::string msg = "PTB data socket exception (user): ";
-      msg += e.what();
-      json obj;
-      obj["type"] = "error";
       obj["message"] = msg;
       feedback_.push_back(obj);
       error_state_ = true;
@@ -404,6 +372,7 @@ namespace ptb {
     // Using memory mapped registers (specific locations)
 
     Log(info,"Setting up memory mapped registers");
+
 #if !defined(SIMULATION)
     ptb::config::setup_ptb_registers();
     // First get the virtual address for the mapped physical address
@@ -433,15 +402,6 @@ namespace ptb {
 
   void board_manager::free_registers() {
     Log(info,"Cleaning up the allocated configuration registers." );
-#if defined(ARM_XDMA) || defined(ARM_MMAP)
-    size_t range = ptb::config::conf_reg.high_addr-ptb::config::conf_reg.base_addr;
-    munmap(mapped_conf_base_addr_,range);
-    // Close the file
-    Log(info,"Closing /dev/mem");
-    close(ptb::util::g_mem_fd);
-    //    munmap(mapped_time_base_addr_,data_reg.high_addr-data_reg.base_addr);
-#endif /*ARM*/
-    Log(debug,"Configuration registers unmapped.");
 
     Log(debug,"Deleting the cache pointers");
     // Clear and free also the cache registers
@@ -567,12 +527,10 @@ namespace ptb {
     json beamconf = doc.at("ctb").at("subsystems").at("beam");
     json crtconf = doc.at("ctb").at("subsystems").at("crt");
     json pdsconf = doc.at("ctb").at("subsystems").at("pds");
-    
+
     // uint32_t duration;
     std::stringstream strVal;
-    // strVal << receiver.at("rollover").get<std::string>();
-    // strVal >> std::dec >> duration;
-     //Set the random trigger frequency register
+
     json rtrigger = doc.at("ctb").at("randomtrigger");
     bool rtrigger_en = rtrigger.at("enable").get<bool>();
     uint32_t rtriggerfreq = rtrigger.at("frequency").get<unsigned int>();
@@ -616,15 +574,16 @@ namespace ptb {
     Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
     strVal.clear();
 
-#ifdef NO_PDS_DAC
-    Log(warning,"PDS configuration block was disabled. Not configuring any PDS input");
-#else
-    
     //FIXME: Introduce json parse feedback here. 
     // NFB: We should NEVER, NEVER, NEVER parse a file without properly caught exceptions
     // Otherwise we have no way to know if the configuration fails
     beam_config(beamconf);
     crt_config(crtconf);
+
+#ifdef NO_PDS_DAC
+    Log(warning,"PDS configuration block was disabled. Not configuring any PDS input");
+#else
+
 
     strVal.str("");
     json feedback;
@@ -634,18 +593,7 @@ namespace ptb {
       answers.insert(std::end(answers),feedback.begin(),feedback.end());
     }
 
-    // 1 ms in a 50MHz clock
-    //  if (duration <= 50000) {
-    //    msgs_ << "<warning>Input value of ["<< duration << "] below recommended limit of 1 ms (50000). ";
-    //    msgs_ << "Will allow but this setting is likely to cause overload of the ethernet connection. </warning>";
-
-    //  }
-
 #endif
-
-    //Program the DACs with config values
-    //board_manager::pds_config(pdsconf);
-   // pds_config(pdsconf);
 
     // -- Once the configuration is set, dump locally the status of the config registers
     dump_config_registers();
@@ -711,19 +659,6 @@ namespace ptb {
       // After parsing everything (and making sure that all the configuration is set)
       // Store the configuration locally
       config_ = doc;
-      // Log(debug,"Sleeping for 1s prior to init the connection to DAQ upstream.");
-      // // Tell the reader to start the connection
-      // std::this_thread::sleep_for (std::chrono::seconds(1));
-
-      // Log(verbose,"Initializing connection to DAQ upstream." );
-      // //Log(verbose,"Host : " << host << " port " << tcp_port_ << endl;
-      // try {
-      //   reader_->InitConnection(true);
-      // }
-      // catch(SocketException &e) {
-      //   msgs_ << "<warning>Failed to open connection to board reader.</warning>";
-      //   Log(warning,"Connection failed to establish. This might cause troubles later.");
-      // }
 
       json obj;
       obj["type"] = "info";
@@ -732,11 +667,11 @@ namespace ptb {
 
     }
     // Most likely the connection will fail at this point. Not a big problem.
-//    Log(verbose,"Returning from SetConfig with answer [%s]",feedback.c_str());
+    //    Log(verbose,"Returning from SetConfig with answer [%s]",feedback.c_str());
 
   }
 
-void board_manager::pds_config(json &pdsconfig, json& feedback){
+  void board_manager::pds_config(json &pdsconfig, json& feedback){
 
     i2conf* dacsetup;
 
@@ -753,37 +688,37 @@ void board_manager::pds_config(json &pdsconfig, json& feedback){
     // std::vector<uint32_t> dac_values (24, 0);
 
     if (dac_values.size() != (i2conf::nchannels_)*(i2conf::ndacs_)) {
-        Log(warning, "Number of configuration values (%i) doesn't match number of DAC channels (%i)!", dac_values.size(), (i2conf::nchannels_)*(i2conf::ndacs_));
-        std::ostringstream tmp;
-        tmp << "Number of configuration values (" << dac_values.size() << ") doesn't match number of DAC channels (" << (i2conf::nchannels_)*(i2conf::ndacs_) << ")";
+      Log(warning, "Number of configuration values (%i) doesn't match number of DAC channels (%i)!", dac_values.size(), (i2conf::nchannels_)*(i2conf::ndacs_));
+      std::ostringstream tmp;
+      tmp << "Number of configuration values (" << dac_values.size() << ") doesn't match number of DAC channels (" << (i2conf::nchannels_)*(i2conf::ndacs_) << ")";
 
+      json obj;
+      obj["type"] = "warning";
+      obj["message"] = tmp.str();
+      feedback.push_back(obj);
+    }
+    Log(info,"Size of channel values vector %i", dac_values.size());
+    for (int i=0; i<dac_values.size(); i++) {
+      Log(info,"Channel %i value %u", i, dac_values[i]);
+      if (dac_values[i] > 4095) { //Range 0 - 4095
+        Log(warning, "Warning DAC value out of range, will be set to max value.");
+        std::ostringstream tmp;
+        tmp << "DAC value out of range (" << dac_values.at(i) << "). Truncating to maximum (4095)";
         json obj;
         obj["type"] = "warning";
         obj["message"] = tmp.str();
         feedback.push_back(obj);
-    }
-    Log(info,"Size of channel values vector %i", dac_values.size());
-    for (int i=0; i<dac_values.size(); i++) {
-        Log(info,"Channel %i value %u", i, dac_values[i]);
-        if (dac_values[i] > 4095) { //Range 0 - 4095
-            Log(warning, "Warning DAC value out of range, will be set to max value.");
-            std::ostringstream tmp;
-            tmp << "DAC value out of range (" << dac_values.at(i) << "). Truncating to maximum (4095)";
-            json obj;
-            obj["type"] = "warning";
-            obj["message"] = tmp.str();
-            feedback.push_back(obj);
-              dac_values[i] = 4095; 
-        }
+        dac_values[i] = 4095;
+      }
     }
     //Now pass DAC configs to setup
     if (dacsetup->ConfigureDacs(dac_values,false)) {
-        Log(error,"Failed to write configuration values to DACs.");
-        json obj;
-         obj["type"] = "error";
-         obj["message"] = "Failed to write configuration values to DACs";
-         feedback.push_back(obj);
-   }
+      Log(error,"Failed to write configuration values to DACs.");
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = "Failed to write configuration values to DACs";
+      feedback.push_back(obj);
+    }
     Log(info,"Programmed %i DAC channels", dac_values.size());
 
     //Input channel masks
@@ -794,35 +729,35 @@ void board_manager::pds_config(json &pdsconfig, json& feedback){
     set_bit_range_register(38,0,9,trig0);
     set_bit(27,11,llt11_enable);
 
-}
+  }
 
 
-void board_manager::crt_config(json &crtconfig){
+  void board_manager::crt_config(json &crtconfig){
 
-   // std::vector<uint32_t> dac_values = crtconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
+    // std::vector<uint32_t> dac_values = crtconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
     std::string s_channelmask = crtconfig.at("channel_mask").get<std::string>();
     //std::string s_trigtype0 = crtconfig.at("triggers").at(0).at("type").get<std::string>();
     //std::string s_count0 = crtconfig.at("triggers").at(0).at("count").get<std::string>();
 
     uint32_t channelmask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
-   // uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
-   // uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
-  //Input channel masks
-  set_bit_range_register(1,0,32,channelmask);
-}
+    // uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
+    // uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
+    //Input channel masks
+    set_bit_range_register(1,0,32,channelmask);
+  }
 
-void board_manager::beam_config(json &beamconfig){
+  void board_manager::beam_config(json &beamconfig){
 
-   // std::vector<uint32_t> dac_values = beamconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
+    // std::vector<uint32_t> dac_values = beamconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
     std::string s_channelmask = beamconfig.at("channel_mask").get<std::string>();
-   // std::string s_trigtype0 = beamconfig.at("triggers").at(0).at("type").get<std::string>();
-   // std::string s_count0 = beamconfig.at("triggers").at(0).at("count").get<std::string>();
+    // std::string s_trigtype0 = beamconfig.at("triggers").at(0).at("type").get<std::string>();
+    // std::string s_count0 = beamconfig.at("triggers").at(0).at("count").get<std::string>();
 
     uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
-   // uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
-  //  uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
+    // uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
+    //  uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
 
-  //Input channel masks
-  set_bit_range_register(3,0,9,channelmask);}
+    //Input channel masks
+    set_bit_range_register(3,0,9,channelmask);}
 
 }

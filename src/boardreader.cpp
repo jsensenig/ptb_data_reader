@@ -8,7 +8,6 @@
 #include "boardreader.h"
 
 #include "Logger.h"
-#include "opexception.h"
 #include "PracticalSocket.h"
 #include "util.h"
 #include "ptb_registers.h"
@@ -225,7 +224,7 @@ void board_reader::init_data_connection(bool force) {
   // -- reset the state machine
 
   //-- If a connection exists, assume it is correct and continue to use it
-  // FIXME: A ghost connection can exist
+  // NOTE: A ghost connection can exist
   // Try first if the connection is good
   if (data_socket_ != nullptr) {
     bool socket_good = test_socket();
@@ -731,11 +730,10 @@ void board_reader::data_transmitter() {
   // wait for a few moments before deallocating the memory so that the kernel does not go ballistic
   // in case it hans't yet committed all the buffers
   // FIXME: Keep an eye for problems by commenting this out.
-  // this assumes that the send operation holds the execution until the data is sent.
+  // this assumes that the send operation gains ownership over the memory of the data
+  // being sent. This is probably tru, but should be checked
   //  std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-  // Deallocate the memory
-  // delete [] global_eth_buffer;
   // Finish the connection
   Log(info,"Closing data socket.");
   close_data_connection();
