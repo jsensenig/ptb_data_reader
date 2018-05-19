@@ -168,7 +168,7 @@ int32_t i2conf::i2c_write(const device& dac, uint8_t*buffer, const ssize_t& byte
   }
 
   ssize_t wr_bytes;
-  size_t idx = 0;
+  ssize_t idx = 0;
   if (debug) {
     printf("==================================================================\n");
     printf("i2c_write : Writing contents to I2C DAC %u:\n",dac.channel);
@@ -221,7 +221,7 @@ int32_t i2conf::i2c_read(const device& dac, uint8_t reg, uint8_t*&buffer, const 
 
   // -- First set the address
   buffer[0] = reg;
-  size_t nbt = 1;
+  ssize_t nbt = 1;
   if (!i2conf::i2c_write(dac,buffer,nbt,debug)) {
     Log(error,"i2c_read : Failed to set pointer.");
     return 0;
