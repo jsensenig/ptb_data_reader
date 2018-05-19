@@ -160,7 +160,7 @@ int32_t i2conf::i2c_read_smbus(const device &dac, uint8_t reg, uint16_t &value, 
 // Lower level functions, that deal with the I2C devices at a lower level 
 // by writing and reading directly from the file descriptor
 // Does the same as above, but using direct device memory write
-int32_t i2conf::i2c_write(const device& dac, uint8_t*buffer, const size_t& bytes, bool debug) {
+int32_t i2conf::i2c_write(const device& dac, uint8_t*buffer, const ssize_t& bytes, bool debug) {
   // refuse to write to an unopen device
   if (dac.fd < 0) {
     Log(error,"i2c_write : Attempting to write to invalid FD (%i). Aborting.",dac.fd);
@@ -196,7 +196,7 @@ int32_t i2conf::i2c_write(const device& dac, uint8_t*buffer, const size_t& bytes
   return 1;
 }
 
-int32_t i2conf::i2c_read(const device& dac, uint8_t reg, uint8_t*&buffer, const size_t& bytes, bool debug) {
+int32_t i2conf::i2c_read(const device& dac, uint8_t reg, uint8_t*&buffer, const ssize_t& bytes, bool debug) {
   if (dac.fd < 0) {
     Log(error,"i2c_write : Attempting to read from an invalid FD (%i). Aborting.",dac.fd);
     return 0;

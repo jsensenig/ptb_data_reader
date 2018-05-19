@@ -673,6 +673,7 @@ namespace ptb {
 
   void board_manager::pds_config(json &pdsconfig, json& feedback){
 
+    ///FIXME: How can this work? dacsetup is not initialized in this function
     i2conf* dacsetup;
 
     std::vector<uint32_t> dac_values = pdsconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
@@ -697,9 +698,10 @@ namespace ptb {
       obj["message"] = tmp.str();
       feedback.push_back(obj);
     }
+
     Log(info,"Size of channel values vector %i", dac_values.size());
-    for (int i=0; i<dac_values.size(); i++) {
-      Log(info,"Channel %i value %u", i, dac_values[i]);
+    for (size_t i=0; i<dac_values.size(); i++) {
+      Log(info,"Channel %zu value %u", i, dac_values[i]);
       if (dac_values[i] > 4095) { //Range 0 - 4095
         Log(warning, "Warning DAC value out of range, will be set to max value.");
         std::ostringstream tmp;
@@ -719,7 +721,7 @@ namespace ptb {
       obj["message"] = "Failed to write configuration values to DACs";
       feedback.push_back(obj);
     }
-    Log(info,"Programmed %i DAC channels", dac_values.size());
+    Log(info,"Programmed %zu DAC channels", dac_values.size());
 
     //Input channel masks
     set_bit_range_register(2,0,24,channelmask);
