@@ -40,20 +40,19 @@ using namespace ptb;
 //TODO: Get rid of the exceptions... convert everything into return states
 //      and use the respective
 
-board_reader::board_reader() : tcp_port_(0), tcp_host_(""),
+board_reader::board_reader() :
+    tcp_port_(0), tcp_host_(""),
     data_socket_(nullptr),
-#if defined(ENABLE_FRAG_BLOCKS)
-    packet_rollover_(0),fragmented_(false),
-#endif
     client_thread_collector_(0),
     client_thread_transmitter_(0),
     ready_(false),
     s2mm(nullptr),
+    dma_initialized_(false),
+    error_state_(false),
+    reset_dma_engine_(false),
     keep_transmitting_(true),
     keep_collecting_(true),
-    dma_initialized_(false),
     // below this point all these are debugging variables
-    error_state_(false),
     num_eth_fragments_(0),
     num_word_counter_(0),num_word_gtrigger_(0),num_word_ltrigger_(0),num_word_feedback_(0),
     num_word_tstamp_(0),bytes_sent_(0)
