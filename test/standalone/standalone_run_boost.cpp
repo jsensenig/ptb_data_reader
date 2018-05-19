@@ -47,7 +47,7 @@ using json = nlohmann::json;
 
 
 //static std::string g_config;
-std::string cfile = "ctb_config.json";
+//std::string cfile = "ctb_config.json";
 
 
 //static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":50000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018]}}}}";
@@ -56,12 +56,12 @@ std::string cfile = "ctb_config.json";
 class ctb_robot {
   public:
     ctb_robot(const std::string &ptb_host = "localhost",const std::string &ptb_port = "8991",
-              const uint16_t &reader_port = 8992, const int &debug_level = 1,
-              const uint32_t &tick_period_usecs = 5 )
-  : run_receiver_(false),data_timeout_usecs_(1000000),
+        const uint16_t &reader_port = 8992, const int &debug_level = 1,
+        const uint32_t &tick_period_usecs = 5 )
+  : data_timeout_usecs_(100000),
     penn_data_dest_host_("localhost"),penn_data_dest_port_(reader_port),
     penn_client_host_addr_(ptb_host),penn_client_host_port_(ptb_port),
-    is_running_(false), is_conf_(false), stop_req_(false)
+    is_running_(false), is_conf_(false), stop_req_(false),data_receiver_(nullptr)
 
   {
       client_ = std::unique_ptr<ctb_client>(new ctb_client(ptb_host, ptb_port, data_timeout_usecs_));
@@ -70,17 +70,9 @@ class ctb_robot {
       {
         printf("ctb_robot : Caught an exception instantiating the client\n");
       }
-
-      data_receiver_ =
-          std::unique_ptr<ctb_data_receiver>(new ctb_data_receiver(debug_level,
-                                                                   tick_period_usecs,
-                                                                   reader_port));
-
-      data_receiver_->set_stop_delay(1000); //usec
-      // Sleep for a short while to give time for the DataReceiver to be ready to
-      // receive connections
-      usleep(500000);
-
+      config_filename_ = "ctb_config.json";
+      output_filename_ = "ctb_output.root";
+      // -- The data receiver should only be launched when a start run is called
   }
 
 
@@ -99,10 +91,23 @@ class ctb_robot {
         printf("ERROR: Can't start a run without configuring first\n");
         return;
       }
+
+      // -- Launching a receiver
+      printf("Creating a receiver...\n");
+      if (!data_receiver_ ) {
+        data_receiver_ =
+          std::unique_ptr<ctb_data_receiver>(new ctb_data_receiver(1,penn_data_dest_port_));
+
+      data_receiver_->set_stop_delay(1000000); //usec
+      // Sleep for a short while to give time for the DataReceiver to be ready to
+      // receive connections
+      usleep(500000);
+      }
+
       printf("Sending a start run\n");
       // Start the data receiver
-       data_receiver_->start();
-       // Send start command to PENN
+      data_receiver_->start();
+      // Send start command to PENN
 
       client_->send_command("StartRun");
       if (client_->exception()) {
@@ -137,23 +142,23 @@ class ctb_robot {
       json conf;
       cfin.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
       try
-        {
-          cfin.open(cfile);
-          cfin >> conf;
-          // if (vlvl > 0) {
-          //  cout << "Dumping input configuration:"<< endl;
-          //  cout << "===============================" << endl;
-          //  cout << conf.dump(2) << endl;
-          //  cout << "===============================" << endl;
-          // }
-          client_->send_json(conf.dump());
-          cfin.close();
-        }
+      {
+        cfin.open(config_filename_);
+        cfin >> conf;
+        // if (vlvl > 0) {
+        //  cout << "Dumping input configuration:"<< endl;
+        //  cout << "===============================" << endl;
+        //  cout << conf.dump(2) << endl;
+        //  cout << "===============================" << endl;
+        // }
+        client_->send_json(conf);
+        cfin.close();
+      }
       catch (const std::ifstream::failure& e)
-        {
-          cout << "** Failure opening/reading the configuration file: " << e.what() << endl;
-          exit(1);
-        }
+      {
+        cout << "** Failure opening/reading the configuration file: " << e.what() << endl;
+        exit(1);
+      }
       catch( const json::exception& e) {
         cout << "Caught a JSON exception: " << e.what() << endl;
         exit(1);
@@ -221,161 +226,12 @@ class ctb_robot {
 
     }
 
-//    void receive_data() {
-//
-//      // Important to avoid mangling of the output due to race conditions to the
-//      // IO buffers. The trick is to use unbuffered (ie. direct) output
-//      std::cout.setf(std::ios::unitbuf);
-//      cout << "Working in receiving thread!!!" << endl;
-//
-//      receiver_id_ = std::this_thread::get_id();
-//      std::ostringstream stream;
-//      stream << std::hex << receiver_id_ << " " << std::dec << receiver_id_;
-//      cout << "#### Receiving thread: %s" << stream.str() << endl;
-//
-//      // Create a server that is meant to receive the data from the
-//      // PTB and keep dumping the contents into somewhere...like a binary file
-//      try{
-//        // Create a tcp server and listen to the connection
-//        TCPServerSocket servSock(8992);
-//
-//
-//        while (!stop_req_) {
-//          // Accept a client
-//          cout << "Opening the receiver socket" << endl;
-//          TCPSocket *sock = servSock.accept();
-//          cout << "--> Received a client request." << endl;
-//
-//          // just wait for the run to be started
-//          while (!is_running_ && !stop_req_) {
-//            std::this_thread::sleep_for(std::chrono::microseconds(1));
-//          }
-//
-//          cout << "Run started...." << endl;
-//
-//          uint16_t bytes_collected= 0;
-//          ptb::content::tcp_header *header;
-//          ptb::content::word::header_t *hdr;
-//          ptb::content::word::body_t *pld;
-//          ptb::content::word::word_t*word;
-//
-//          //uint32_t header;
-//          uint8_t tcp_data[4096];
-//          size_t count = 0;
-//          bool timeout_reached = false;
-//          size_t tcp_body_size = 0;
-//
-//          // FIXME: Receive the ethernet packets
-//          while (is_running_ && !stop_req_) {
-//
-//            // grab a header
-//            //cout << "Going to receive " << header->word.size_bytes << " bytes" << endl;
-//            bytes_collected = 0;
-//            while ((bytes_collected != header->word.size_bytes) && is_running_) {
-//              bytes_collected += sock->recv(&tcp_data[bytes_collected],header->word.size_bytes-bytes_collected);
-//            }
-//            //printf("Received %u bytes : %X\n",bytes_collected,*(reinterpret_cast<uint32_t*>(&tcp_data[0])));
-//            header = reinterpret_cast<ptb::content::tcp_header *>(tcp_data);
-//            count++;
-//            if (!(count%1000)) cout << "Counting " << count << "packets received..." << endl;
-//            // check the number of bytes in this packet
-//            //cout << "Expecting to receive " << header->word.packet_size << " bytes " << endl;
-//            tcp_body_size = header->word.packet_size;
-//            bytes_collected = 0;
-//            while (bytes_collected != tcp_body_size) {
-//              bytes_collected += sock->recv(&tcp_data[bytes_collected],(int)(tcp_body_size-bytes_collected));
-//            }
-//            // cout << "Collected expected bytes. " << endl;
-//            // for(size_t i = 0; i < bytes_collected; i++) {
-//            //   printf("%02X ",tcp_data[i]);
-//            // }
-//            // printf("\n");
-//            // -- We now should have the whole sent packet
-//            // parse it
-//            uint8_t *data = NULL;
-//            uint32_t pos = 0;
-//            uint32_t val = 0;
-//            ptb::content::word::timestamp_t *ts = NULL;
-//              ptb::content::word::ch_status_t *chs = NULL;
-//            while (pos < tcp_body_size) {
-//              // 1. grab the frame:
-//              word = reinterpret_cast<ptb::content::word::word_t*>(&tcp_data[pos]);
-//              // 2. Grab the header (we know what is its size)
-//              hdr = &(word->wheader); //reinterpret_cast<ptb::content::word::header_t *>(tcp_data[pos]);
-//              pos += hdr->size_bytes;
-//
-//              // -- For now we are assuming that all payloads are of the same size
-//              //cout << "Word: type " << static_cast<uint32_t>(hdr->word_type)
-//              //<< " ts roll " << hdr->ts_rollover << endl;
-//              switch(hdr->word_type) {
-//                case ptb::content::word::t_fback:
-//                  //cout << "Received a warning!!! This is rare! Do something smart to fix the problem" << endl;
-//                  data = reinterpret_cast<uint8_t*>(&(word->wbody));
-//                  for (size_t i = 0; i < 16; ++i) {
-//                    printf("%X ",data[i]);
-//                  }
-//                  printf("\n");
-//
-//                  // advance the pointer by the size of this payload
-//                  pos += ptb::content::word::body_t::size_bytes;
-//                  break;
-//                case ptb::content::word::t_gt:
-//                  cout << "Received a global trigger. Do something here on how to parse it" << endl;
-//                  // advance the pointer by the size of this payload
-//                  pos += ptb::content::word::body_t::size_bytes;
-//                  break;
-//                case ptb::content::word::t_lt:
-//                  cout << "Received a low level trigger. Do something here on how to parse it" << endl;
-//                  // advance the pointer by the size of this payload
-//                  pos += ptb::content::word::body_t::size_bytes;
-//                  break;
-//                case ptb::content::word::t_ts:
-//                  ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(&(word->wbody));
-//                  pld = &(word->wbody);
-//                  ts = reinterpret_cast<ptb::content::word::payload::timestamp_t *>(pld);
-//                  pos += ptb::content::word::body_t::size_bytes;
-//                  break;
-//                case ptb::content::word::t_ch:
-//                  chs = reinterpret_cast<ptb::content::word::payload::ch_status_t *>(&(word->wbody));
-//                  val = chs->pds;
-//                  cout << "CH: " std::bitset<3>() << std::hex << val << std::dec << " " << std::bitset<24>(val) << endl;
-//                  pos += ptb::content::word::body_t::size_bytes;
-//                  break;
-//                default:
-//                  cout << "WARNING: Unknown header" << endl;
-//                  break;
-//              }
-//            }
-//          }
-//          cout << "Left the loop for running..." << endl;
-//          delete sock;
-//          if (!stop_req_) {
-//            cout << "Going to start a new socket listening" << endl;
-//          }
-//
-//        }
-//        cout << "Stop request found... should be returning here" << endl;
-//
-//        // -- Don't hang in here. Disconnect the thing
-//        return;
-//      }
-//      catch(SocketException &e) {
-//        cout << "Socket exception caught : " << e.what() << endl;
-//      }
-//      catch(std::exception &e) {
-//        cout << "STD exception caught : " << e.what() << endl;
-//      }
-//      catch(...) {
-//        cerr << "Something went wrong. " << endl;
-//      }
-//      // Delete the connection
-//    }
-
-
+    std::string output_filename_;
+    std::string config_filename_;
   private:
     std::unique_ptr<ctb_data_receiver> data_receiver_;
     std::unique_ptr<ctb_client> client_;
-    bool run_receiver_;
+    //bool run_receiver_;
     uint32_t data_timeout_usecs_;
 
     std::string penn_data_dest_host_;
@@ -393,47 +249,98 @@ int main(int argc, char**argv) {
 
   std::cout.setf(std::ios::unitbuf);
   size_t vlvl = 0;
-  std::string cfile = "ctb_config.json";
+  //std::string cfile = "ctb_config.json";
+  std::string outfname = "ctb_output";
+  std::string destination = "localhost:8991";
+  std::string confname = "ctb_config.json";
+
+  try {
+    cxxopts::Options options(argv[0], " - command line options");
+    options.add_options()
+            ("c,config","Configuration file (JSON format)",cxxopts::value<std::string>())
+            ("h,help", "Print help")
+            ("v,verbosity","Verbosity level",cxxopts::value<size_t>(vlvl))
+            ("o,output","Output file (ROOT)",cxxopts::value<std::string>())
+            ("d,destination","CTB location in format <host>:<port> [default: localhost:8991]",cxxopts::value<std::string>())
+            ;
+
+    auto result = options.parse(argc, argv);
+
+    if (result.count("help")) {
+      printf("%s",options.help().c_str());
+      exit(0);
+    }
+
+    if (result.count("config")) {
+      printf("main:: --> Using %s config file\n",result["config"].as<std::string>().c_str());
+      confname = result["config"].as<std::string>();
+    } else {
+      printf("main:: --> Using default config file [%s]\n",confname.c_str());
+    }
+
+    printf("main:: --> Verbosity level [%zu]\n",vlvl);
+
+    if (result.count("output"))
+    {
+      printf("main:: Setting the output file to [%s]\n",result["output"].as<std::string>().c_str());
+      outfname = result["output"].as<std::string>();
+    } else {
+      printf("Attempting to use the default output file [ctb_output]\n");
+    }
+
+    if (result.count("destination"))
+    {
+      printf("main:: Setting the CTB location to [%s]\n",result["destination"].as<std::string>().c_str());
+      destination = result["destination"].as<std::string>();
+    } else {
+      printf("Using default CTB destination. This is likely to fail since there is no ROOT on the CTB [localhost:8991]\n");
+    }
 
 
-      try {
-        cxxopts::Options options(argv[0], " - command line options");
-        options.add_options()
-        ("c,config","Configuration file (JSON format)",cxxopts::value<std::string>())
-        ("h,help", "Print help")
-        ("v,verbosity","Verbosity level",cxxopts::value<size_t>(vlvl))
-        ;
-
-        auto result = options.parse(argc, argv);
-
-        if (result.count("help")) {
-          cout << options.help() << endl;
-          exit(0);
-        }
-
-        if (result.count("config")) {
-          cout << "--> Using " << result["config"].as<std::string>() << " config file." << endl;
-          cfile = result["config"].as<std::string>();
-        } else {
-          cout << "===> Using default configuration file [" << cfile << "] " << endl;
-        }
-
-        cout << "--> Verbosity level [" << vlvl << "]" << endl;
-
-      }
-  catch( const cxxopts::OptionException& e) 
+  }
+  catch( const cxxopts::OptionException& e)
   {
-    cout << "** Error parsing options: " << e.what() << endl;
+    printf("main:: ** Error parsing options: %s\n",e.what());
     exit(1);
   }
 
   try {
-  cout << "Starting robot..." << endl;
-  //ctb_robot robot("128.91.41.238",8991);
-  ctb_robot robot("128.91.41.238","8991",8992,1,5);
-  cout << "Starting the loop..." << endl;
-  robot.run();
-  cout << "All done" << endl;
+    std::string host = "localhost";
+//    uint16_t port = 8991;
+    std::string port = "8991";
+    size_t colon_pos = destination.find(':');
+    if(colon_pos != std::string::npos) {
+      host = destination.substr(0,colon_pos);
+      port = destination.substr(colon_pos+1);
+//      std::stringstream parser(portpart);
+//      if( parser >> port )
+//      {
+//        printf("Port set to %hu\n",port);
+//      }
+//      else {
+//        printf("Couldn't understand the port. Setting it to default 8991\n");
+//      }
+
+    }
+    printf("Connecting to the CTB at [%s:%s]\n",host.c_str(),port.c_str());
+    printf("main:: Starting robot...\n");
+    //ctb_robot robot("128.91.41.238",8991);
+    //    ctb_robot robot(host.c_str(),port);
+    ctb_robot robot(host.c_str(),port,8992,1,5);
+    robot.output_filename_ = outfname;
+    robot.config_filename_ = confname;
+    printf("main:: Starting the loop...\n");
+    robot.run();
+    printf("main:: All done...\n");
+
+
+    //  try {
+    //  cout << "Starting robot..." << endl;
+    //  //ctb_robot robot("128.91.41.238",8991);
+    //  ctb_robot robot("128.91.41.238","8991",8992,1,5);
+    //  cout << "Starting the loop..." << endl;
+    //  robot.run();
+    //  cout << "All done" << endl;
   }
   catch(json::exception &e) {
     printf("ERROR: Caught a JSON exception: %s\n",e.what());

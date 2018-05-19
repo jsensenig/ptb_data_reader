@@ -22,13 +22,15 @@
 #include <boost/thread.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/deadline_timer.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
 
 using boost::asio::ip::tcp;
 
 class ctb_data_receiver {
   public:
     //ctb_data_receiver();
-    ctb_data_receiver(int debug_level, uint32_t tick_period_usecs, uint16_t receive_port);
+//    ctb_data_receiver(int debug_level, uint32_t tick_period_usecs, uint16_t receive_port);
+    ctb_data_receiver(int debug_level, uint16_t receive_port);
 
     virtual ~ctb_data_receiver();
 
@@ -53,7 +55,7 @@ class ctb_data_receiver {
     void check_deadline(void);
     void set_exception( bool exception ) { exception_.store( exception ); }  // GBcopy
 
-    bool process_payload(void);
+    void process_received_data(void);
 
     int debug_level_;
 
@@ -66,6 +68,7 @@ class ctb_data_receiver {
     boost::asio::deadline_timer deadline_;
     DeadlineIoObject            deadline_io_object_;
     uint32_t                    tick_period_usecs_;
+    uint32_t                    socket_timeout_us_;
 
     // Port that should be listened for connection from the PTB (conf param)
     uint16_t receive_port_;
@@ -75,13 +78,16 @@ class ctb_data_receiver {
     std::atomic<bool> readout_suspended_;
     std::atomic<bool> exception_;    // GBcopy
 
-    int recv_socket_;
+    //int recv_socket_;
 
     std::unique_ptr<std::thread> receiver_thread_;
+    // -- This is what will store to ROOT
+    std::unique_ptr<std::thread> archiver_thread_;
 
     std::size_t      state_nbytes_recvd_;
 
     std::size_t      total_bytes_recvd_;
+    std::size_t      total_payload_bytes_recvd_;
     std::size_t      total_packets_recvd_;
 
 
@@ -106,9 +112,32 @@ class ctb_data_receiver {
     uint32_t sleep_on_stop_; // time (us) to sleep before stopping
 
 
+    // -- The philosophy here is simple...
+    // The handle_data checks the size
+    // The handle_payload sticks it into a queue with the address and the size
+    // A separate thread to store into a ROOT file grabs from the queue and stores the contents
+
+    typedef struct buffer_t {
+        void* addr;
+        size_t len;
+    } buffer_t;
+
+    // FIXME: Check if these should be void's, instead
+//    uint8_t* current_write_ptr_;
+//    uint8_t* current_read_ptr_;
     void* current_write_ptr_;
+    void* current_read_ptr_;
+
+    static const size_t buffer_n_bytes = 11000;//4194304;
+    static const size_t max_n_buffers = 65535;
     // Keep a buffer of 4MB
-    uint8_t raw_buffer_[4194304];
+    uint8_t raw_buffer_[buffer_n_bytes];
+
+
+    // -- At most one could have buffer_n_bytes/16
+    boost::lockfree::spsc_queue<buffer_t, boost::lockfree::capacity<max_n_buffers> > buffer_queue_;
+
+
     bool sequence_id_initialised_;
     uint8_t last_sequence_id_;
 

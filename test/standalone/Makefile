@@ -9,8 +9,8 @@ BOOST_CFLAGS_LINUX := -I/usr/local/boost/1.66.00/include
 BOOST_LFLAGS_LINUX := /usr/local/boost/1.66.00/lib/libboost_thread.a /usr/local/boost/1.66.00/lib/libboost_system.a
 BOOST_LFLAGS_CTB := /usr/lib/arm-linux-gnueabihf/libboost_thread.a /usr/lib/arm-linux-gnueabihf/libboost_system.a
 BOOST_CFLAGS_CTB := 
-BOOST_CFLAGS_LINUX := 
-BOOST_LFLAGS_LINUX := -lboost_thread -lboost_system
+#BOOST_CFLAGS_LINUX := 
+#BOOST_LFLAGS_LINUX := -lboost_thread -lboost_system
 
 ROOT_CFLAGS := $(shell root-config --cflags)
 ROOT_LFLAGS := $(shell root-config --ldflags --libs)
@@ -50,7 +50,7 @@ boost: standalone_run_boost
 root: standalone_run_root
 
 clean:
-	rm -f standalone_run standalone_run_boost
+	rm -f standalone_run standalone_run_boost standalone_run_root
 
 standalone_run: standalone_run.cpp PracticalSocket.cpp
 	$(CC) -I./ $(CFLAGS) -o $@ $? $(LFLAGS)

@@ -18,6 +18,10 @@
 #include <boost/lexical_cast.hpp>
 #include <atomic>
 
+#include "json.hpp"
+
+using json = nlohmann::json;
+
 using boost::asio::ip::tcp;
 
 class ctb_client {
@@ -28,16 +32,21 @@ class ctb_client {
     virtual ~ctb_client();
     void send_command(std::string const & command);
     //void send_config(std::string const & config);
-    void send_json(std::string const & json_frag);
+    void send_json(json & json_frag);
     template<class T> void set_param(std::string const & name, T const & value, std::string const & );
 
     bool exception() const {return exception_.load();};
   private:
 
+//    std::pair<boost::asio::buffers_iterator<boost::asio::streambuf::const_buffers_type>, bool>
+//      match_json( boost::asio::buffers_iterator<boost::asio::streambuf::const_buffers_type> begin,
+//                        boost::asio::buffers_iterator<boost::asio::streambuf::const_buffers_type> end);
+
+
     std::size_t send(std::string const & send_str);
     std::string receive(void);
-    void set_param_(std::string const& name, std::string const & encoded_value, std::string const & type);
-    bool response_is_ack(std::string const & response, std::string const & command);
+//    void set_param_(std::string const& name, std::string const & encoded_value, std::string const & type);
+//    bool response_is_ack(std::string const & response, std::string const & command);
 
     void set_deadline(void);
     void check_deadline(void);
