@@ -28,9 +28,7 @@ using boost::asio::ip::tcp;
 
 class ctb_data_receiver {
   public:
-    //ctb_data_receiver();
-//    ctb_data_receiver(int debug_level, uint32_t tick_period_usecs, uint16_t receive_port);
-    ctb_data_receiver(int debug_level, uint16_t receive_port);
+    ctb_data_receiver(uint16_t receive_port,int debug_level = 1);
 
     virtual ~ctb_data_receiver();
 
@@ -41,6 +39,12 @@ class ctb_data_receiver {
 
     void set_stop_delay(uint32_t delay_us) {sleep_on_stop_ = delay_us;};
     uint32_t get_stop_delay() {return sleep_on_stop_;};
+
+    void set_enable_root(bool enable) { enable_root_output_ = enable;}
+    bool get_enable_root() {return enable_root_output_;}
+
+    void set_output_file(std::string fname) { root_file_name_ = fname;}
+    const std::string get_output_file() {return root_file_name_;}
 
   private:
     enum DeadlineIoObject { None, Acceptor, DataSocket };
@@ -56,6 +60,7 @@ class ctb_data_receiver {
     void set_exception( bool exception ) { exception_.store( exception ); }  // GBcopy
 
     void process_received_data(void);
+    void store_root(void);
 
     int debug_level_;
 
@@ -83,6 +88,7 @@ class ctb_data_receiver {
     std::unique_ptr<std::thread> receiver_thread_;
     // -- This is what will store to ROOT
     std::unique_ptr<std::thread> archiver_thread_;
+    std::atomic<bool>            archiver_ready_;
 
     std::size_t      state_nbytes_recvd_;
 
@@ -147,6 +153,12 @@ class ctb_data_receiver {
     size_t n_warn_words_;
     size_t n_ts_words_;
     size_t n_words_;
+
+    // -- Output controllers
+    bool          enable_root_output_;
+    std::string   root_file_name_;
+
+
 
 };
 

@@ -220,9 +220,6 @@ class ctb_robot {
       while(!exit_req_.load()) {
         printf("\n\n### Select command : \n 1 : Init\n 2 : Start Run\n 3 : Stop Run\n 4 : Quit\n\n");
 
-        //    cout << " 4 : Soft Reset" << endl;
-        //    cout << " 5 : Hard Reset" << endl;
-
         cin >> rcommand;
         if (!isdigit (rcommand.c_str()[0])) {
           printf("ERROR: Wrong option!\n");
@@ -491,7 +488,7 @@ class ctb_robot {
       printf("store_root:: Writing contents to [%s]\n",outname.c_str());
       outroot_ = TFile::Open(outname.c_str(),"RECREATE");
       //      if (!outroot_ || outroot_->IsZombie()) {
-      printf("store_root:: ERROR: Failed to create output file. Writing output to [%s]\n",outname.c_str());
+      //printf("store_root:: ERROR: Failed to create output file. Writing output to [%s]\n",outname.c_str());
       //      }
       // -- Build the structure for the triggers
       outroot_->cd();

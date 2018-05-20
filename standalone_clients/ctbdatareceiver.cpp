@@ -11,47 +11,49 @@
 #include <cinttypes>
 #include "content.h"
 
-using std::cout;
-using std::endl;
-//ctb_data_receiver::ctb_data_receiver() {
-//  // TODO Auto-generated constructor stub
-//}
 
-ctb_data_receiver::ctb_data_receiver(int debug_level, //uint32_t tick_period_usecs,
-    uint16_t receive_port) :
-                    debug_level_(debug_level),
-                    acceptor_(io_service_, tcp::endpoint(tcp::v4(), (short)receive_port)),
-                    accept_socket_(io_service_),
-                    data_socket_(io_service_),
-                    deadline_(io_service_),
-                    deadline_io_object_(None),
-                    tick_period_usecs_(5),
-                    socket_timeout_us_(500000),
-                    receive_port_(receive_port),
-                    run_receiver_(true),
-                    suspend_readout_(false),
-                    readout_suspended_(false),
-                    exception_(false),  // GBcopy
-                    //recv_socket_(0),
-                    receiver_thread_(nullptr),
-                    archiver_thread_(nullptr),
-                    state_nbytes_recvd_(0),
-                    total_bytes_recvd_(0),
-                    total_payload_bytes_recvd_(0),
-                    total_packets_recvd_(0),
-                    next_receive_state_(ReceiveTCPHeader),
-                    next_receive_size_(0),
-                    sleep_on_stop_(10),
-                    current_write_ptr_(nullptr),
-                    current_read_ptr_(nullptr),
-                    sequence_id_initialised_(false),
-                    last_sequence_id_(0),
-                    n_counter_words_(0),
-                    n_llt_words_(0),
-                    n_hlt_words_(0),
-                    n_warn_words_(0),
-                    n_ts_words_(0),
-                    n_words_(0)
+#include <TFile.h>
+#include <TTree.h>
+
+
+ctb_data_receiver::ctb_data_receiver(uint16_t receive_port,int debug_level) :
+                        debug_level_(debug_level),
+                        acceptor_(io_service_, tcp::endpoint(tcp::v4(), (short)receive_port)),
+                        accept_socket_(io_service_),
+                        data_socket_(io_service_),
+                        deadline_(io_service_),
+                        deadline_io_object_(None),
+                        tick_period_usecs_(5),
+                        socket_timeout_us_(500000),
+                        receive_port_(receive_port),
+                        run_receiver_(true),
+                        suspend_readout_(false),
+                        readout_suspended_(false),
+                        exception_(false),  // GBcopy
+                        //recv_socket_(0),
+                        receiver_thread_(nullptr),
+                        archiver_thread_(nullptr),
+                        archiver_ready_(false),
+                        state_nbytes_recvd_(0),
+                        total_bytes_recvd_(0),
+                        total_payload_bytes_recvd_(0),
+                        total_packets_recvd_(0),
+                        next_receive_state_(ReceiveTCPHeader),
+                        next_receive_size_(0),
+                        sleep_on_stop_(10),
+                        current_write_ptr_(nullptr),
+                        current_read_ptr_(nullptr),
+                        sequence_id_initialised_(false),
+                        last_sequence_id_(0),
+                        n_counter_words_(0),
+                        n_llt_words_(0),
+                        n_hlt_words_(0),
+                        n_warn_words_(0),
+                        n_ts_words_(0),
+                        n_words_(0),
+                        enable_root_output_(false),
+                        root_file_name_("ctb_output.root")
+
 {
   printf("ctb_data_receiver: In constructor. Going to receive on port %hu\n",receive_port);
 
@@ -109,7 +111,14 @@ void ctb_data_receiver::start(void)
 
   printf("ctb_data_receiver::start: Starting archiver_thread_\n");
 
-  //archiver_thread_ = std::unique_ptr<std::thread>(new std::thread(&ctb_data_receiver::process_received_data, this));
+  archiver_thread_ = std::unique_ptr<std::thread>(new std::thread(&ctb_data_receiver::process_received_data, this));
+
+  printf("ctb_data_receiver::start: Waiting archiver to be ready to store data\n");
+  while(!archiver_ready_.load())
+  {
+    usleep(tick_period_usecs_);
+  }
+  printf("ctb_data_receiver::start: Archiver ready\n");
 
   start_time_ = std::chrono::high_resolution_clock::now();
 
@@ -222,6 +231,11 @@ void ctb_data_receiver::stop(void)
 
   printf("ctb_data_receiver::stop : received %zu  packets in %lf seconds, rate %lf Hz\n",total_packets_recvd_,elapsed_secs , rate);
 
+  // -- Join the archiver thread
+  printf("ctb_data_receiver::stop: Joining archiver thread\n");
+  archiver_thread_->join();
+  printf("ctb_data_receiver::stop: Archiver thread joined\n");
+
 }
 
 void ctb_data_receiver::run_service(void)
@@ -259,12 +273,15 @@ void ctb_data_receiver::do_accept(void)
   // O(1000) -- before the connection is made; to reduce clutter, I'm
   // only going to have it display every nth_timeout times
 
-  const size_t print_nth_timeout = 200;
-  static size_t nth_timeout = 0;
+//  const size_t print_nth_timeout = 200;
+//  static size_t nth_timeout = 0;
 
   if (exception())
   {
-    this->stop();
+    printf("ctb_data_receiver::do_accept: Found exception in instance. Stopping data taking.\n");
+    // -- stop should never be called from inside the instance
+    suspend_readout_.store(true);
+    //this->stop();
   }
 
   // Suspend readout and cleanup any incomplete millislices if stop has been called
@@ -310,16 +327,18 @@ void ctb_data_receiver::do_accept(void)
     {
       if (ec == boost::asio::error::operation_aborted)
       {
-        // -- the timeout was reached. Retry again
-        if (nth_timeout % print_nth_timeout == 0) {
-          static bool first_1 = true;
-          if (first_1) {
-            printf("ctb_data_receiver::do_accept: Timeout on async_accept\n");
-            first_1 = false;
-          }
-        }
-
-        nth_timeout++;
+        ;
+        // -- the timeout was reached. Retry again.
+        // No need to print confusing message
+//        if (nth_timeout % print_nth_timeout == 0) {
+//          static bool first_1 = true;
+//          if (first_1) {
+//            printf("ctb_data_receiver::do_accept: Timeout on async_accept\n");
+//            first_1 = false;
+//          }
+//        }
+//
+//        nth_timeout++;
       }
       else
       {
@@ -681,29 +700,6 @@ void ctb_data_receiver::handle_received_data(std::size_t length)
         return;
       }
 
-
-      /*
-      //
-      //      bool success = process_payload();
-      //
-      //      if (!success)
-      //      {
-      //        printf("ctb_data_receiver::handle_received_data: Failed to process received packet.\n");
-      //        set_exception(true);
-      //        break;
-      //      }
-
-      // FIXME: Print local statistics...at some other point
-      //
-      //      cout << "ctb_data_receiver::handle_received_data: Payload contains " << n_words_local_
-      //          << " total words ("    << n_counter_words_local_
-      //          << " counter + "       << n_trigger_words_local_
-      //          << " trigger + "       << n_timestamp_words_local_
-      //          << " timestamp + "     << n_warning_words_local_
-      //          << " warning)" << endl;
-       */
-
-
       next_receive_state_ = ReceiveTCPHeader;
       next_receive_size_ = sizeof(ptb::content::tcp_header_t);
 
@@ -726,17 +722,21 @@ void ctb_data_receiver::handle_received_data(std::size_t length)
 
   // -- advance the write pointer forward
   // but check that the next size does not go beyond the end of the buffer
+  // Here one has to be careful with having the archiver instance running slower than the
+  // data collector. But that is a problem beyond the scope of this example.
+  // In case that happens, blame ROOT.
+  // NOTE: In this case, I turned off the compression on the ROOT file precisely to avoid
+  // the archival to be too slow
 
-  // -- This should be correct, except if the next size surpasses the size
   if ((static_cast<uint8_t*>(&(raw_buffer_[buffer_n_bytes-1])) - static_cast<uint8_t*>(current_write_ptr_)) < next_receive_size_) {
     printf("ctb_data_receiver::handle_received_data: Reached the end of the circular buffer. Starting from the beginning.\n");
     // -- additional check that the current read buffer is not going to be overlapped by the write buffer
     //
     current_write_ptr_ = &(raw_buffer_[0]);
-    printf("ctb_data_receiver::handle_received_data: empty %u %p-%p=%d (next size %u)\n",(!buffer_queue_.empty())?1:0,
+    printf("ctb_data_receiver::handle_received_data: empty %u %p-%p=%ld (next size %zu)\n",(!buffer_queue_.empty())?1:0,
         current_read_ptr_,
         current_write_ptr_,
-        ((static_cast<uint8_t*>(current_read_ptr_) - static_cast<uint8_t*>(current_write_ptr_))),
+        static_cast<long>((static_cast<uint8_t*>(current_read_ptr_) - static_cast<uint8_t*>(current_write_ptr_))),
         next_receive_size_);
     if (!buffer_queue_.empty() && (current_read_ptr_ >= current_write_ptr_) && ((static_cast<uint8_t*>(current_read_ptr_) - static_cast<uint8_t*>(current_write_ptr_)) < next_receive_size_))
     {
@@ -759,118 +759,152 @@ void ctb_data_receiver::handle_received_data(std::size_t length)
 
 void ctb_data_receiver::process_received_data(void)
 {
+  // -- Flag that it is not ready to roll
+  archiver_ready_.store(false);
+
+  bool enable_root_output_ = true;
+  if (enable_root_output_) {
+    store_root();
+  }
+//  else {
+//    // -- Just do some parting?
+//  }
+
   return;
 }
 
-
-/**
-void ctb_data_receiver::process_received_data(void)
+void ctb_data_receiver::store_root(void)
 {
 
-  return;
-  // For now, just print something
+  TFile fout(root_file_name_.c_str(),"RECREATE");
+  fout.SetCompressionLevel(0); // -- no compression
+  fout.cd();
+  TTree tout("data","CTB output data");
 
+  unsigned int word_type;
+  uint64_t timestamp;
+  uint64_t payload;
+  // -- In case the word is a channel_status word, 64 bits of the payload
+  // won't be enough. In that case, the other two variables will come to it's
+  // aid
+  uint32_t beam_status;
+  uint32_t crt_status;
 
-  // -- Start by just showing the contents and incrementing the counters
+  tout.Branch("word_type",&word_type);
+  tout.Branch("timestamp",&timestamp,"timestamp/l");
+  tout.Branch("payload",&payload,"payload/l");
+  tout.Branch("beam_status",&beam_status);
+  tout.Branch("crt_status",&crt_status);
+
+  buffer_t buff;
+
+  // -- Declare all possible types of words
+  // -- If the word came, write it to disk
+  ptb::content::word::ch_status_t *chs = NULL;
+  //ptb::content::word::feedback_t  *fbk = NULL;
+  ptb::content::word::timestamp_t *ts = NULL;
+  ptb::content::word::trigger_t   *tg = NULL;
   ptb::content::word::word_t      *word = NULL;
-  //  ptb::content::word::timestamp_t *ts = NULL;
-  //  ptb::content::word::ch_status_t *chs = NULL;
-  //  ptb::content::word::trigger_t   *trigger = NULL;
-  //  ptb::content::word::feedback_t  *warn = NULL;
 
-
-  size_t pos = 0;
-  //  printf("ctb_data_receiver::process_payload: Current write pointer %p\n",current_write_ptr_);
-  //uint8_t* tcp_data = (uint8_t*)current_write_ptr_;
-
-void ctb_data_receiver::process_received_data(void)
-{
-
-  return;
-
-
-  while(pos < state_nbytes_recvd_)
+  printf("ctb_data_receiver::store_root: Entering archiving loop\n");
+  bool ret = false;
+  archiver_ready_.store(true);
+  // while at least one of these conditions is satisfied, just keep recording the data
+  // Keep in mind that we need a double loop. One to fetch the buffer addresses
+  // and another to loop over the contents of the buffer (size)
+  while ((!buffer_queue_.empty()) || (!suspend_readout_.load()))
   {
-    // -- grab the full frame
-    //    printf("Reinterpreting\n");
-    //    word = reinterpret_cast<ptb::content::word::word_t*>(&(tcp_data[pos]));
-    word = reinterpret_cast<ptb::content::word::word_t*>(current_write_ptr_);
-    //    printf("Reinterpreting done\n");
-    //std::cout << word->timestamp << " " << std::endl;
-    //printf("--> %s \n",std::bitset<3>(word->word_type).to_string().c_str());
-    // -- Print some testing here
-    //    printf("--> %s %" PRIu64 "\n",std::bitset<3>(word->word_type).to_string().c_str(),word->timestamp);
-    pos += word->size_bytes;
-    current_write_ptr_ = static_cast<void*>(static_cast<uint8_t*>(current_write_ptr_) + word->size_bytes);
-    continue;
 
-    switch (word->word_type) {
-      case ptb::content::word::t_fback:
-      {
-        warn = reinterpret_cast<ptb::content::word::feedback_t *>(word);
-        printf("!! --> Received a warning! %s ts %" PRIu64 " SOURCE [0x%X] CODE [0x%X]\n",
-            std::bitset<3>(warn->word_type).to_string().c_str(),
-                warn->timestamp,
-                 warn->source,
-                 warn->code );
-        n_warn_words_++;
-        n_words_++;
-        break;
-      }
-      case ptb::content::word::t_gt:
-      {
-        // -- Receive a global trigger Print TS and mask
-        trigger = reinterpret_cast<ptb::content::word::trigger_t *>(word);
-        printf("HLT : ts %" PRIu64 " mask %s \n",trigger->timestamp,std::bitset<61>(trigger->trigger_word).to_string().c_str());
-        n_hlt_words_++;
-        n_words_++;
-        break;
-      }
-      case ptb::content::word::t_lt:
-      {
-        // -- Receive a low level trigger Print TS and mask
-        trigger = reinterpret_cast<ptb::content::word::trigger_t *>(word);
-        printf("LLT : ts %" PRIu64 " mask %s \n",trigger->timestamp,std::bitset<61>(trigger->trigger_word).to_string().c_str());
-        n_llt_words_++;
-        n_words_++;
-        break;
-      }
-      case ptb::content::word::t_ts:
-      {
-        ts = reinterpret_cast<ptb::content::word::timestamp_t *>(word);
-        printf("TS : ts %" PRIu64 "\n",ts->timestamp );
-        n_ts_words_++;
-        n_words_++;
-        break;
-      }
-      case ptb::content::word::t_ch:
-      {
-        chs = reinterpret_cast<ptb::content::word::ch_status_t *>(word);
-        printf("CHS: ts %" PRIu64 " PDS [0x%X] CRT [0x%X] BI [0x%X]\n",
-            chs->timestamp,
-            chs->get_pds(),
-            chs->get_crt(),
-            chs->get_beam());
-//        cout << "CHS : ts " <<
-//            << " PDS 0x" << std::hex << chs->get_pds()  << std::dec
-//            << " CRT 0x" << std::hex << chs->get_crt()  << std::dec
-//            << " BI  0x" << std::hex << chs->get_beam() << std::dec << endl;
-        n_counter_words_++;
-        n_words_++;
-        break;
-      }
-      default:
-      {
-        printf("ERROR : Unknown word type : %s\n",std::bitset<3>(word->word_type).to_string().c_str());
-        break;
-      }
+    // -- if the queue is empty sleep for a tick and retry
+    if (buffer_queue_.empty())
+    {
+      usleep(tick_period_usecs_);
+      continue;
     }
 
-  }
-  //current_write_ptr_ = &(raw_buffer_[0]);
-}
+    ret = buffer_queue_.pop(buff);
+    if (ret == false) {
+      printf("ctb_data_receiver::store_root: Failed to grab buffer from queue\n");
+      set_exception(true);
+      break;
+    }
 
- **/
+    current_read_ptr_ = buff.addr;
+    //-- Loop over the contents of the buffer
+    // -- we know that each word is 16 bytes long
+    for ( size_t pos = 0; pos < buff.len; pos += ptb::content::word::word_t::size_bytes)
+    {
+
+      word = reinterpret_cast<ptb::content::word::word_t*>(current_read_ptr_);
+      switch(word->word_type)
+      {
+        case ptb::content::word::t_fback:
+        {
+          printf("::store_root: WARNING:: Feedback word. TS: %" PRIX64 " Payload : [%" PRIX64 "]\n",word->timestamp,word->payload);
+          break;
+        }
+        case ptb::content::word::t_gt:
+        case ptb::content::word::t_lt:
+        {
+          tg = reinterpret_cast<ptb::content::word::trigger_t*>(current_read_ptr_);
+          word_type = tg->word_type;
+          timestamp = tg->timestamp;
+          payload = tg->trigger_word;
+          beam_status = 0;
+          crt_status = 0;
+          tout.Fill();
+          break;
+        }
+        case ptb::content::word::t_ts:
+        {
+          // -- Timestamp words are keepalives
+          // There is really no point in storing them
+          // For educational purposes, I also mark here how to interpret them
+          ts = reinterpret_cast<ptb::content::word::timestamp_t*>(current_read_ptr_);
+          word_type = ts->word_type;
+          timestamp = ts->timestamp;
+          payload = 0;
+          beam_status = 0;
+          crt_status = 0;
+          // don't store
+          // tout.Fill();
+          break;
+        }
+        case ptb::content::word::t_ch:
+        {
+          chs = reinterpret_cast<ptb::content::word::ch_status_t*>(current_read_ptr_);
+          word_type = chs->word_type;
+          timestamp = chs->timestamp;
+          payload = chs->get_pds();
+          crt_status = chs->get_crt();
+          beam_status = chs->get_beam();
+          tout.Fill();
+          break;
+        }
+        default:
+        {
+          printf("::store_root: WARNING:: Unknown word type\n");
+          printf("--> TP [%X] TS [%" PRIu64 "] PL [%" PRIx64 "]\n",word->word_type,word->timestamp,word->payload);
+          printf("--> TP [%s] TS [%s] PL [%s]\n",std::bitset<3>(word->word_type).to_string().c_str(),
+              std::bitset<64>(word->timestamp).to_string().c_str(),
+              std::bitset<61>(word->payload).to_string().c_str());
+          break;
+        }
+      }
+
+      // -- advance the pointer
+      current_read_ptr_ = static_cast<void*>(static_cast<uint8_t*>(current_read_ptr_) + ptb::content::word::word_t::size_bytes);
+    } // -- for words in buffer
+
+    // -- Fetch another word
+
+  } // -- while run
+
+  printf("::store_root: Stopping the archiving.Closing file.\n");
+  tout.Write();
+  fout.Close();
+  archiver_ready_.store(false);
+}
 
 
 

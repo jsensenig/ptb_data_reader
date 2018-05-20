@@ -41,29 +41,30 @@ using std::cerr;
 using std::endl;
 using json = nlohmann::json;
 
-//////////////////////////////
-// -- configuration that we are running with for now, either set the DAC values to all 0 or the operation level 1879
-// EDIT here where the IP where you are running, which is where the CTB will attempt to connect to send the data
-
-
-//static std::string g_config;
-//std::string cfile = "ctb_config.json";
-
-
-//static const std::string g_config = "{\"ctb\":{\"sockets\":{\"receiver\":{\"host\":\"localhost\",\"port\":8992,\"rollover\":50000}},\"subsystems\":{\"ssp\":{\"dac_thresholds\":[2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018,2018]}}}}";
-
-
+/** \class ctb_robot Wrapper class to control the execution of the clients
+ * This object does ntot communicate directly with the CTB. Instead it uses the ctb_client and
+ * ctb_data_receiver objects to control and receive data from the CTB
+ *
+ * I use the old fashioned printf instead of cout because cout is not thread safe
+ * due to caching. There are ways around it, but it ends up just being simpler
+ * to use printf that is uncached and therefore far less likely to mangle the output
+ *
+ */
 class ctb_robot {
   public:
     ctb_robot(const std::string &ptb_host = "localhost",const std::string &ptb_port = "8991",
         const uint16_t &reader_port = 8992, const int &debug_level = 1,
         const uint32_t &tick_period_usecs = 5 )
-  : data_timeout_usecs_(100000),
+  : data_receiver_(nullptr),
+    exit_req_(false), is_running_(false),is_conf_(false),
+    data_timeout_usecs_(100000),
     penn_data_dest_host_("localhost"),penn_data_dest_port_(reader_port),
-    penn_client_host_addr_(ptb_host),penn_client_host_port_(ptb_port),
-    is_running_(false), is_conf_(false), stop_req_(false),data_receiver_(nullptr)
+    penn_client_host_addr_(ptb_host),penn_client_host_port_(ptb_port)
+
 
   {
+      // -- Create the client Right at the constructor, since this class is just a wrapper over the
+      // client itself
       client_ = std::unique_ptr<ctb_client>(new ctb_client(ptb_host, ptb_port, data_timeout_usecs_));
       client_->send_command("HardReset");
       if (client_->exception())
@@ -79,7 +80,7 @@ class ctb_robot {
     virtual ~ctb_robot() {};
 
     void send_reset() {
-      printf("Sending a reset\n");
+      printf("ctb_robot::send_reset : Sending a reset\n");
       client_->send_command("HardReset");
 
       is_running_ = false;
@@ -88,37 +89,38 @@ class ctb_robot {
 
     void send_start() {
       if (!is_conf_) {
-        printf("ERROR: Can't start a run without configuring first\n");
+        printf("ctb_robot::send_start : ERROR: Can't start a run without configuring first\n");
         return;
       }
 
       // -- Launching a receiver
-      printf("Creating a receiver...\n");
+      printf("ctb_robot::send_start : Creating a receiver on port %hu...\n",penn_data_dest_port_);
       if (!data_receiver_ ) {
         data_receiver_ =
-          std::unique_ptr<ctb_data_receiver>(new ctb_data_receiver(1,penn_data_dest_port_));
+            std::unique_ptr<ctb_data_receiver>(new ctb_data_receiver(penn_data_dest_port_,1));
 
-      data_receiver_->set_stop_delay(1000000); //usec
-      // Sleep for a short while to give time for the DataReceiver to be ready to
-      // receive connections
-      usleep(500000);
+        data_receiver_->set_stop_delay(1000000); //usec
+        // Sleep for a short while to give time for the DataReceiver to be ready to
+        // receive connections
+        usleep(500000);
       }
 
-      printf("Sending a start run\n");
+      printf("ctb_robot::send_start : Sending a start run\n");
       // Start the data receiver
       data_receiver_->start();
       // Send start command to PENN
 
       client_->send_command("StartRun");
       if (client_->exception()) {
-        printf("ERROR: Exception caught sending a start run\n");
+        printf("ctb_robot::send_start : ERROR: Exception caught sending a start run\n");
+
         exit(1);
       }
       is_running_ = true;
     }
 
     void send_stop() {
-      printf("Sending a stop run\n");
+      printf("ctb_robot::send_stop : Sending a stop run\n");
       client_->send_command("StopRun");
 
       sleep(1);
@@ -130,14 +132,11 @@ class ctb_robot {
     }
 
     void send_config() {
-
-      printf("Sending config\n");
-      if (!is_conf_) {
-        printf("Resetting before configuring\n");
-        send_reset();
-      }
+      bool has_exception = false;
+      printf("ctb_robot::send_config : Resetting before configuring\n");
       send_reset();
 
+      printf("ctb_robot::send_config : Sending config\n");
       std::ifstream cfin;
       json conf;
       cfin.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
@@ -156,12 +155,29 @@ class ctb_robot {
       }
       catch (const std::ifstream::failure& e)
       {
-        cout << "** Failure opening/reading the configuration file: " << e.what() << endl;
-        exit(1);
+        printf("ctb_robot::send_config : ** Failure opening/reading the configuration file: %s\n",e.what());
+        has_exception = true;
       }
       catch( const json::exception& e) {
-        cout << "Caught a JSON exception: " << e.what() << endl;
-        exit(1);
+        printf("ctb_robot::send_config : Caught a JSON exception: %s\n",e.what());
+        has_exception = true;
+      }
+      catch(const std::exception &e)
+      {
+        printf("ctb_robot::send_config : Caught a STL exception: %s\n",e.what());
+        has_exception = true;
+      }
+      catch(...)
+      {
+        printf("ctb_robot::send_config : Caught unknown exception.Aborting and resetting.\n");
+        has_exception = true;
+      }
+      if (has_exception) {
+        printf("ctb_robot::send_config : An exception was caught. Aborting and resetting.\n");
+        send_stop();
+        send_reset();
+        is_conf_ = false;
+        return;
       }
 
       is_conf_ = true;
@@ -174,33 +190,30 @@ class ctb_robot {
         send_stop();
       } else {
         // If we are not, stop execution
-        stop_req_ = true;
-
+        exit_req_ = true;
       }
     }
 
     void run() {
-      enum commands {init=1,start=2,stop=3,quit=4};
+      enum commands {reset=0,init=1,start=2,stop=3,quit=4};
       // Set the stop condition to false to wait for the data
       //std::signal(SIGINT, ctb_robot::static_sig_handler);
-      int command = -1;
-      // Now make the receiving thread
-      cout << "### Launching reader thread" << endl;
-      //std::thread reader(this->receive_data);
-      //std::thread reader(&ctb_robot::receive_data, this);
-      // Now loop for commands
-      while(!stop_req_) {
-        cout << "### Select command : " << endl;
-        cout << " 1 : Init/Config" << endl;
-        cout << " 2 : Start Run" << endl;
-        cout << " 3 : Stop Run" << endl;
-        cout << " 4 : Quit" << endl;
+      std::string rcommand;
+      std::ifstream cfin;
+      json conf;
+      while(!exit_req_) {
+        printf("\n\n### Select command : \n 0: Reset Board\n 1 : Init\n 2 : Start Run\n 3 : Stop Run\n 4 : Quit\n\n");
 
-        //    cout << " 4 : Soft Reset" << endl;
-        //    cout << " 5 : Hard Reset" << endl;
-
-        std::cin >> command;
+        std::cin >> rcommand;
+        if (!isdigit (rcommand.c_str()[0])) {
+          printf("ctb_robot::run : ERROR: Wrong option!\n");
+          continue;
+        }
+        int command = stoi(rcommand);
         switch(command) {
+          case reset:
+            send_reset();
+            break;
           case init:
             send_config();
             break;
@@ -212,16 +225,16 @@ class ctb_robot {
             break;
           case quit:
             process_quit();
-            std::this_thread::sleep_for(std::chrono::seconds(3));
+            std::this_thread::sleep_for(std::chrono::seconds(2));
             //reader.
             //reader.join();
             break;
           default:
-            cout << "Wrong option (" << command << ")." << endl;
+            printf("ctb_robot::run : Wrong option (%d)\n\n",command);
             break;
         }
       }
-      cout << "### Stop requested." << endl;
+      printf("ctb_robot::run : ### Stop requested.\n");
       // Wait for the reading function to return
 
     }
@@ -231,17 +244,18 @@ class ctb_robot {
   private:
     std::unique_ptr<ctb_data_receiver> data_receiver_;
     std::unique_ptr<ctb_client> client_;
-    //bool run_receiver_;
+
+
+    bool exit_req_;
+    bool is_running_;
+    bool is_conf_;
+
     uint32_t data_timeout_usecs_;
 
     std::string penn_data_dest_host_;
     uint16_t penn_data_dest_port_;
     std::string penn_client_host_addr_;
     std::string penn_client_host_port_;
-
-    bool is_running_;
-    bool is_conf_;
-    bool stop_req_;
 
 };
 
@@ -257,12 +271,12 @@ int main(int argc, char**argv) {
   try {
     cxxopts::Options options(argv[0], " - command line options");
     options.add_options()
-            ("c,config","Configuration file (JSON format)",cxxopts::value<std::string>())
-            ("h,help", "Print help")
-            ("v,verbosity","Verbosity level",cxxopts::value<size_t>(vlvl))
-            ("o,output","Output file (ROOT)",cxxopts::value<std::string>())
-            ("d,destination","CTB location in format <host>:<port> [default: localhost:8991]",cxxopts::value<std::string>())
-            ;
+                ("c,config","Configuration file (JSON format)",cxxopts::value<std::string>())
+                ("h,help", "Print help")
+                ("v,verbosity","Verbosity level",cxxopts::value<size_t>(vlvl))
+                ("o,output","Output file (ROOT)",cxxopts::value<std::string>())
+                ("d,destination","CTB location in format <host>:<port> [default: localhost:8991]",cxxopts::value<std::string>())
+                ;
 
     auto result = options.parse(argc, argv);
 
@@ -285,7 +299,7 @@ int main(int argc, char**argv) {
       printf("main:: Setting the output file to [%s]\n",result["output"].as<std::string>().c_str());
       outfname = result["output"].as<std::string>();
     } else {
-      printf("Attempting to use the default output file [ctb_output]\n");
+      printf("main:: Attempting to use the default output file [ctb_output]\n");
     }
 
     if (result.count("destination"))
@@ -293,7 +307,7 @@ int main(int argc, char**argv) {
       printf("main:: Setting the CTB location to [%s]\n",result["destination"].as<std::string>().c_str());
       destination = result["destination"].as<std::string>();
     } else {
-      printf("Using default CTB destination. This is likely to fail since there is no ROOT on the CTB [localhost:8991]\n");
+      printf("main:: Using default CTB destination. This is likely to fail since there is no ROOT on the CTB [localhost:8991]\n");
     }
 
 
@@ -301,32 +315,39 @@ int main(int argc, char**argv) {
   catch( const cxxopts::OptionException& e)
   {
     printf("main:: ** Error parsing options: %s\n",e.what());
+    //printf("%s",options.help().c_str());
+
+    exit(1);
+  }
+  catch(...)
+  {
+    printf("main:: Caught some other unexpected exception.\n");
     exit(1);
   }
 
   try {
     std::string host = "localhost";
-//    uint16_t port = 8991;
+    //    uint16_t port = 8991;
     std::string port = "8991";
     size_t colon_pos = destination.find(':');
     if(colon_pos != std::string::npos) {
       host = destination.substr(0,colon_pos);
       port = destination.substr(colon_pos+1);
-//      std::stringstream parser(portpart);
-//      if( parser >> port )
-//      {
-//        printf("Port set to %hu\n",port);
-//      }
-//      else {
-//        printf("Couldn't understand the port. Setting it to default 8991\n");
-//      }
+      //      std::stringstream parser(portpart);
+      //      if( parser >> port )
+      //      {
+      //        printf("Port set to %hu\n",port);
+      //      }
+      //      else {
+      //        printf("Couldn't understand the port. Setting it to default 8991\n");
+      //      }
 
     }
-    printf("Connecting to the CTB at [%s:%s]\n",host.c_str(),port.c_str());
+    printf("main:: Connecting to the CTB at [%s:%s]\n",host.c_str(),port.c_str());
     printf("main:: Starting robot...\n");
     //ctb_robot robot("128.91.41.238",8991);
     //    ctb_robot robot(host.c_str(),port);
-    ctb_robot robot(host.c_str(),port,8992,1,5);
+    ctb_robot robot(host.c_str(),port,8992,vlvl,5);
     robot.output_filename_ = outfname;
     robot.config_filename_ = confname;
     printf("main:: Starting the loop...\n");

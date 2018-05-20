@@ -92,15 +92,15 @@ namespace ptb {
 
       /// -- Methods have been implemented
 
-      i2conf();
-      virtual ~i2conf();
-      void init();
+      i2conf() { }
+      virtual ~i2conf() { }
+      //void init();
       int32_t i2c_init( int32_t &fd,const std::string &device = "/dev/i2c-0", bool debug = false);
       int32_t i2c_set_device(const device &dac);
       int32_t i2c_write_smbus(const device &dac, uint8_t reg, uint16_t value, bool debug);
       int32_t i2c_read_smbus(const device &dac, uint8_t reg, uint16_t &value, bool debug);
-      int32_t i2c_write(const device& dac, uint8_t*buffer, const size_t& bytes, bool debug);
-      int32_t i2c_read(const device& dac, uint8_t reg, uint8_t*&buffer, const size_t& bytes, bool debug);
+      int32_t i2c_write(const device& dac, uint8_t*buffer, const ssize_t& bytes, bool debug);
+      int32_t i2c_read(const device& dac, uint8_t reg, uint8_t*&buffer, const ssize_t& bytes, bool debug);
       int32_t set_dac_level(const device& dac, const command &cmd, const level &lvl, bool debug);
       int32_t get_dac_level(const device& dac, const command &c, level &lvl,bool debug);
       int32_t ConfigureDacs(std::vector<uint32_t> &dacs, bool debug);

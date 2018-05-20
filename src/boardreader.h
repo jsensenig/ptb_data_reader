@@ -80,17 +80,7 @@ namespace ptb {
         tcp_port_ = tcpPort;
       }
 
-      // FIXME: Implement this along with the fragmented blocks
-#ifdef ENABLE_FRAG_BLOCKS
-      uint32_t get_packet_rollover() const {
-        return packet_rollover_;
-      }
-
-      void set_packet_rollover(uint32_t packetRollover) {
-        packet_rollover_ = packetRollover;
-      }
-#endif
-      /**
+     /**
        * Stop the client threads without touching the mutex.
        * Important in the case that one wants to delete the object
        * without having started a run.
@@ -175,7 +165,7 @@ namespace ptb {
       uint32_t buff_addr_[num_buffs_];
 
 #if defined(BOOST)
-      boost::lockfree::spsc_queue<ptb::content::buffer_t, boost::lockfree::capacity<num_buffs_> >buffer_queue_;
+      boost::lockfree::spsc_queue<ptb::content::buffer_t, boost::lockfree::capacity<num_buffs_> > buffer_queue_;
 #elif defined(LOCKFREE)
       moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
 #else
@@ -183,13 +173,6 @@ namespace ptb {
 #endif
 
 
-      // Frame sequence number
-      //uint32_t seq_num_;
-
-      /// -- Control variables
-      //  bool keep_transmitting_;
-      //  bool keep_collecting_;
-      //uint64_t time_rollover_;
       bool dma_initialized_;
 
       /// -- these are controlled through the weak locks

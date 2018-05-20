@@ -160,7 +160,7 @@ int32_t i2conf::i2c_read_smbus(const device &dac, uint8_t reg, uint16_t &value, 
 // Lower level functions, that deal with the I2C devices at a lower level 
 // by writing and reading directly from the file descriptor
 // Does the same as above, but using direct device memory write
-int32_t i2conf::i2c_write(const device& dac, uint8_t*buffer, const size_t& bytes, bool debug) {
+int32_t i2conf::i2c_write(const device& dac, uint8_t*buffer, const ssize_t& bytes, bool debug) {
   // refuse to write to an unopen device
   if (dac.fd < 0) {
     Log(error,"i2c_write : Attempting to write to invalid FD (%i). Aborting.",dac.fd);
@@ -168,7 +168,7 @@ int32_t i2conf::i2c_write(const device& dac, uint8_t*buffer, const size_t& bytes
   }
 
   ssize_t wr_bytes;
-  size_t idx = 0;
+  ssize_t idx = 0;
   if (debug) {
     printf("==================================================================\n");
     printf("i2c_write : Writing contents to I2C DAC %u:\n",dac.channel);
@@ -196,14 +196,14 @@ int32_t i2conf::i2c_write(const device& dac, uint8_t*buffer, const size_t& bytes
   return 1;
 }
 
-int32_t i2conf::i2c_read(const device& dac, uint8_t reg, uint8_t*&buffer, const size_t& bytes, bool debug) {
+int32_t i2conf::i2c_read(const device& dac, uint8_t reg, uint8_t*&buffer, const ssize_t& bytes, bool debug) {
   if (dac.fd < 0) {
     Log(error,"i2c_write : Attempting to read from an invalid FD (%i). Aborting.",dac.fd);
     return 0;
   }
 
   ssize_t rd_bytes;
-  size_t idx = 0;
+  ssize_t idx = 0;
   if (debug) {
     printf("==================================================================\n");
     printf("i2c_read : Reading contents from I2C DAC %u:\n",dac.channel);
@@ -221,7 +221,7 @@ int32_t i2conf::i2c_read(const device& dac, uint8_t reg, uint8_t*&buffer, const 
 
   // -- First set the address
   buffer[0] = reg;
-  size_t nbt = 1;
+  ssize_t nbt = 1;
   if (!i2conf::i2c_write(dac,buffer,nbt,debug)) {
     Log(error,"i2c_read : Failed to set pointer.");
     return 0;
