@@ -2,36 +2,26 @@
 			A user-space C++ program to deal with a I2C device.
 */
 
+#include "i2conf.h"
+#include <cstdio> // for printf
+#include <cstring>
+#include <cerrno>
+
 extern "C" {
-#include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <linux/i2c-dev.h>
-#include <errno.h>
-#include <inttypes.h>
 };
-#include <cstdint>
-#include <cstdlib>
-#include <ctime>
-#include <string>
-#include <cstring>
-#include <vector>
+
 #include "Logger.h"
 
-#include <i2conf.h>
+
+extern int com_serial;
+extern int failcount;
 
 namespace ptb {
 
 const uint16_t i2conf::dac_addr_[ndacs_] = {0x48,0x4A,0x4C};
-
-//i2conf::i2conf() : dev_("/dev/i2c-0"),init_done_(false)
-
-//i2conf::I2C() {
-
-	//set_dac_level(I2C::device, I2C::command, I2C::levels, false);
-	 //set_dac_level(const device &dac, const command &cmd, const level &levels, bool debug);
-	//set_dac_level(const device dac, const command cmd, const level levels, bool debug);
-//}
 
 uint8_t DACs [3] = {0x48, 0x4A, 0x4C};
 

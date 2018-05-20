@@ -10,21 +10,11 @@
 
 #include <vector>
 #include <string>
+#include <cinttypes>
 
-extern "C" {
-#include <fcntl.h>
-#include <unistd.h>
-#include <linux/i2c-dev.h>
-}
-#include <cstdint>
-#include <cstdlib>
-#include <ctime>
-#include "Logger.h"
 
 using std::string;
 
-extern int com_serial;
-extern int failcount;
 
 namespace ptb {
 
@@ -94,7 +84,6 @@ namespace ptb {
 
       i2conf() { }
       virtual ~i2conf() { }
-      //void init();
       int32_t i2c_init( int32_t &fd,const std::string &device = "/dev/i2c-0", bool debug = false);
       int32_t i2c_set_device(const device &dac);
       int32_t i2c_write_smbus(const device &dac, uint8_t reg, uint16_t value, bool debug);
@@ -110,24 +99,13 @@ namespace ptb {
       void set_dac(size_t ch, uint16_t val);
       uint16_t get_dac(size_t ch);
 
-      void set_dev(const std::string dev);
-      const std::string &get_dev() {return dev_;}
-
 
       static const uint32_t dac_nbytes_ = 3;
       static const uint16_t ndacs_ = 3;
-      //static const uint16_t nchannels_ = 8;
       static const size_t nchannels_ = 8;
       static const uint16_t dac_addr_[ndacs_];// = {0x48,0x4A,0x4C};
 
     protected:
-
-      // -- Variables that have really to be kept here
-      std::vector<size_t> dac_threshold_;
-      std::string dev_;
-      bool init_done_;
-
-      device dac_dev_[ndacs_];
 
   };
 

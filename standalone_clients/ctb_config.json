@@ -18,8 +18,8 @@
       }
     },
     "randomtrigger":{
-      "enable":false,
-      "frequency":10
+      "enable":true,
+      "frequency":100
     },
     "pulser":{
       "enable":true,
