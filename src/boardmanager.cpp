@@ -674,7 +674,7 @@ namespace ptb {
   void board_manager::pds_config(json &pdsconfig, json& feedback){
 
     ///FIXME: How can this work? dacsetup is not initialized in this function
-    i2conf* dacsetup;
+    i2conf dacsetup;
 
     std::vector<uint32_t> dac_values = pdsconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
     std::string s_channelmask = pdsconfig.at("channel_mask").get<std::string>();
@@ -714,7 +714,7 @@ namespace ptb {
       }
     }
     //Now pass DAC configs to setup
-    if (dacsetup->ConfigureDacs(dac_values,false)) {
+    if (dacsetup.ConfigureDacs(dac_values,false)) {
       Log(error,"Failed to write configuration values to DACs.");
       json obj;
       obj["type"] = "error";

@@ -92,9 +92,9 @@ namespace ptb {
 
       /// -- Methods have been implemented
 
-      i2conf();
-      virtual ~i2conf();
-      void init();
+      i2conf() { }
+      virtual ~i2conf() { }
+      //void init();
       int32_t i2c_init( int32_t &fd,const std::string &device = "/dev/i2c-0", bool debug = false);
       int32_t i2c_set_device(const device &dac);
       int32_t i2c_write_smbus(const device &dac, uint8_t reg, uint16_t value, bool debug);
