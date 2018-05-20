@@ -79,7 +79,7 @@ public:
   void process_config(json & config,json &answers);
 
   //Loads the PDS config into FW regs
-  void pds_config(json & pdsconfig);
+  void pds_config(json & pdsconfig, json& feedback);
 
   //Loads the Beam config into FW regs
   void beam_config(json & beamconfig);

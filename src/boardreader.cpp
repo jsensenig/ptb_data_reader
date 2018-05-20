@@ -46,11 +46,13 @@ board_reader::board_reader() : tcp_port_(0), tcp_host_(""),
 #if defined(ENABLE_FRAG_BLOCKS)
     packet_rollover_(0),fragmented_(false),
 #endif
-    client_thread_collector_(0),client_thread_transmitter_(0),ready_(false),
+    client_thread_collector_(0),
+    client_thread_transmitter_(0),
+    ready_(false),
     s2mm(nullptr),
-    seq_num_(0),
     keep_transmitting_(true),
-    keep_collecting_(true),time_rollover_(0),dma_initialized_(false),
+    keep_collecting_(true),
+    dma_initialized_(false),
     // below this point all these are debugging variables
     error_state_(false),
     num_eth_fragments_(0),
@@ -70,11 +72,11 @@ board_reader::~board_reader() {
 
 void board_reader::get_feedback(bool &error, json &msgs, const bool reset)
 {
-  error = error_state_.load();
+  error = error_state_.load(std::memory_order_acquire);
   msgs = feedback_messages_;
 
   if (reset) {
-    error_state_.store(false);
+    error_state_.store(false,std::memory_order_relaxed);
     feedback_messages_.clear();
   }
 }
@@ -95,7 +97,7 @@ void board_reader::reset_counters() {
 void board_reader::clear_threads() {
   Log(debug,"Killing the daughter threads.\n");
   // First stop the loops
-  keep_collecting_ = false;
+  keep_collecting_.store(false,std::memory_order_relaxed);
   std::this_thread::sleep_for (std::chrono::milliseconds(100));
   Log(info,"Joining collector thread.");
   // Kill the collector thread first
@@ -110,7 +112,7 @@ void board_reader::clear_threads() {
 
   // Occasionally there seems to be memory corruption between these two steps
   Log(info,"Telling transmitter thread to stop.");
-  keep_transmitting_ = false;
+  keep_transmitting_.store(false,std::memory_order_relaxed);
   std::this_thread::sleep_for (std::chrono::milliseconds(200));
   // -- Apparently this is a bit of a problem since the transmitting thread never leaves cleanly
   Log(info,"Killing transmitter thread.");
@@ -132,7 +134,7 @@ void board_reader::stop_data_taking() {
   clear_threads();
   // Prepare everything so that the PTB gets ready again
 
-  Log(warning,"Shutting down the DMA engine.");
+  Log(info,"Shutting down the DMA engine.");
   clean_and_shutdown_dma();
 
   Log(info,"Resetting existing buffers");
@@ -144,17 +146,14 @@ void board_reader::stop_data_taking() {
 /// -- This lives in the main thread (same as manager)
 /// NOTE: Any state reset should be done here
 void board_reader::start_data_taking() {
-//  error_state_.store(false);
-//  error_messages_.clear();
+
   if (ready_) {
 
     init_dma();
 
-
-
     // We are ready to do business. Start reading the DMA into the queue.
     Log(verbose, "==> Creating collector thread\n" );
-    keep_collecting_ = true;
+    keep_collecting_.store(true,std::memory_order_relaxed);
     client_thread_collector_ = new std::thread(&board_reader::data_collector,this);
     if (client_thread_collector_ == nullptr) {
       Log(error,"Unable to create collector thread . Failing..." );
@@ -162,7 +161,7 @@ void board_reader::start_data_taking() {
       obj["type"] = "error";
       obj["message"] = "Unable to create collector thread";
       feedback_messages_.push_back(obj);
-      error_state_.store(true);
+      error_state_.store(true,std::memory_order_relaxed);
     }
     // We are ready to do business. Start reading the DMA into the queue.
     Log(verbose, "==> Creating transmitter\n" );
@@ -174,24 +173,24 @@ void board_reader::start_data_taking() {
       obj["type"] = "error";
       obj["message"] = "Unable to create transmitter thread";
       feedback_messages_.push_back(obj);
-      error_state_.store(true);
+      error_state_.store(true,std::memory_order_relaxed);
     }
 
 
   } else {
-    Log(error,"Calling to start data taking but connection is not ready yet." );
+    Log(error,"Calling to start data taking but connection is not ready yet" );
     json obj;
     obj["type"] = "error";
     obj["message"] = "Calling to start data taking but data connection is not ready yet";
     feedback_messages_.push_back(obj);
-    error_state_.store(true);
+    error_state_.store(true,std::memory_order_relaxed);
   }
 }
 
 void board_reader::reset_buffers() {
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
-  //bool has_data = true;
+
   while(buffer_queue_.pop()) {
     counter++;
   }
@@ -267,7 +266,7 @@ void board_reader::init_data_connection(bool force) {
       ready_ = true;
 
     }
-    // -- Catch and rethrow the exceptions so that they can be dealt with at higher level.
+    // -- Catch and convert the exceptions into meaningful returnable messages
     catch(SocketException &e) {
       Log(error,"Socket exception caught : %s",e.what() );
       json obj;
@@ -276,7 +275,7 @@ void board_reader::init_data_connection(bool force) {
       emsg += e.what();
       obj["message"] =  emsg;
       feedback_messages_.push_back(obj);
-      error_state_.store(true);
+      error_state_.store(true,std::memory_order_relaxed);
       ready_ = false;
       if (data_socket_) delete data_socket_;
       data_socket_ = nullptr;
@@ -292,7 +291,7 @@ void board_reader::init_data_connection(bool force) {
       emsg += e.what();
       obj["message"] =  emsg;
       feedback_messages_.push_back(obj);
-      error_state_.store(true);
+      error_state_.store(true,std::memory_order_relaxed);
     }
     catch(...) {
       ready_ = false;
@@ -303,7 +302,7 @@ void board_reader::init_data_connection(bool force) {
       obj["type"] = "error";
       obj["message"] = "Unknown exception caught creating data connection";
       feedback_messages_.push_back(obj);
-      error_state_.store(true);
+      error_state_.store(true,std::memory_order_relaxed);
     }
   } else {
     Log(error,"Calling to start connection without defining connection parameters." );
@@ -311,14 +310,14 @@ void board_reader::init_data_connection(bool force) {
     obj["type"] = "error";
     obj["message"] = "Calling to start connection without defining connection parameters";
     feedback_messages_.push_back(obj);
-    error_state_.store(true);
+    error_state_.store(true,std::memory_order_relaxed);
 
     ready_ = false;
     if (data_socket_) delete data_socket_;
     data_socket_ = nullptr;
   }
 
-  if (error_state_.load()) {
+  if (error_state_.load(std::memory_order_acquire)) {
     Log(error,"Data connection failed to be established. See previous messages.");
   } else {
     Log(debug,"Connection opened successfully");
@@ -328,16 +327,13 @@ void board_reader::init_data_connection(bool force) {
 
 
 void board_reader::data_collector() {
-  Log(info, "Starting data collector\n" );
-
+  Log(info, "Starting data collector");
 
   static size_t len;
-  //static int handle;
-  ptb::content::buffer_t dma_buffer;
-  std::ostringstream err_msg;
+  static ptb::content::buffer_t dma_buffer;
   size_t counter = 0;
-  while(keep_collecting_) {
-    if (!keep_collecting_) {
+  while(keep_collecting_.load(std::memory_order_acquire)) {
+    if (!keep_collecting_.load(std::memory_order_acquire)) {
       Log(warning,"Received signal to stop acquiring data. Cleaning out...");
       break;
     }
@@ -346,20 +342,17 @@ void board_reader::data_collector() {
     // Deal with the case that there is no data transferred yet
     if (dma_buffer.handle < 0)
     {
-      // Failed because there are no complete
-      // transactions in RAM yet
+      // Failed because there are no complete transactions in RAM yet
       // -- This is not really a failure
-      // Could avoid it by implementing a kernel
-      // signaling to be caught here
+      // Could avoid it by implementing a kernel signaling to be caught here
       if (dma_buffer.handle == PZDUD_ERROR_COMPLETE) {
         // -- Set the system to sit for a few usec
+        // -- This should be configurable, but for now it is alright
         pzdud_wait(s2mm,5);
         continue;
       }
-      // Failed because it timed out
-      // (meaning that the DMA didn't answer back)
-      // This is dangerous and usually means that
-      // something crapped out
+      // Failed because it timed out (meaning that the DMA didn't answer back)
+      // This is dangerous and usually means that something crapped out
       if (dma_buffer.handle == PZDUD_ERROR_TIMEOUT) {
         Log(error,"Failed to acquire data with timeout on iteration %u . Returned %i",counter,dma_buffer.handle);
         json obj;
@@ -375,37 +368,58 @@ void board_reader::data_collector() {
         feedback_messages_.push_back(obj);
       }
       Log(error,"Failed to acquire data. Returned %i [iteration %u]",dma_buffer.handle,counter);
-      err_msg  << "Failed to acquire data. Returned " << dma_buffer.handle;
+      std::ostringstream err_msg;
+      err_msg  << "Failed to acquire data. Returned " << dma_buffer.handle
+               << " [iteration " << counter << "]" ;
       json obj;
       obj["type"] = "error";
       obj["message"] = err_msg.str();
       feedback_messages_.push_back(obj);
-      error_state_.store(true);
+      error_state_.store(true,std::memory_order_relaxed);
       keep_collecting_ = false;
       break;
     }
     // -- Push the transfer to the queue
-    //dma_buffer.handle = handle;
-    Log(verbose,"Acquired %u (%u bytes) on %u iterations",dma_buffer.handle,dma_buffer.len,counter);
+
+    //Log(verbose,"Acquired %u (%u bytes) on %u iterations",dma_buffer.handle,dma_buffer.len,counter);
     dma_buffer.len = len;
     buffer_queue_.push(dma_buffer);
   }
   Log(info,"Stopping the data collection");
-
 }
 
 
 void board_reader::clean_and_shutdown_dma() {
   if (!dma_initialized_) {
-    Log(warning,"Asking to shutdown an uninitialized DMA ");
+    Log(warning,"Asking to shutdown an uninitialized DMA");
+    json obj;
+    obj["type"] = "warning";
+    obj["message"] = "Received DMA shutdown request on uninitialized DMA";
+    feedback_messages_.push_back(obj);
     return;
   }
   Log(debug,"Halting the S2MM transition stream");
-  pzdud_halt(s2mm);
+  static int ret = 0;
+  ret = pzdud_halt(s2mm);
+  if (ret != PZDUD_OK) {
+    Log(warning,"Failed to halt the DMA. Forcing a reset");
+    json obj;
+    obj["type"] = "warning";
+    obj["message"] = "Failed to halt the DMA. Forcing a reset";
+    feedback_messages_.push_back(obj);
+
+  }
   Log(debug,"Freeing allocated buffers associated with the S2MM transition stream");
   pzdud_free(s2mm);
+
+  if (reset_dma_engine_.load(std::memory_order_acquire)) {
+    pzdud_reset(s2mm);
+    reset_dma_engine_.store(false,std::memory_order_relaxed);
+  }
+
   Log(debug,"Destroying the handle over the S2MM channel of the DMA engine");
   pzdud_destroy(s2mm);
+
   dma_initialized_ = false;
   Log(info,"DMA engine shut down");
 }
@@ -432,7 +446,7 @@ void board_reader::init_dma() {
     obj["type"] = "error";
     obj["message"] = "Failed to establish connection to DMA device";
     feedback_messages_.push_back(obj);
-    error_state_.store(true);
+    error_state_.store(true, std::memory_order_relaxed);
     return;
   }
   Log(debug,"Allocating DMA buffers");
@@ -444,9 +458,16 @@ void board_reader::init_dma() {
     obj["type"] = "error";
     obj["message"] = "Failed to allocate DMA buffers";
     feedback_messages_.push_back(obj);
-    error_state_.store(true);
+    error_state_.store(true, std::memory_order_relaxed);
 
-    pzdud_destroy(s2mm);
+    retstat = pzdud_destroy(s2mm);
+    if (retstat != PZDUD_OK) {
+      Log(error,"Failed to destroy DMA engine");
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = "Failed to destroy DMA engine";
+      feedback_messages_.push_back(obj);
+    }
     return;
   }
   Log(debug,"Initializing buffer table");
@@ -463,10 +484,28 @@ void board_reader::init_dma() {
     obj["type"] = "error";
     obj["message"] = "Failed to initialize DMA engine";
     feedback_messages_.push_back(obj);
-    error_state_.store(true);
+    error_state_.store(true, std::memory_order_relaxed);
 
-    pzdud_free(s2mm);
-    pzdud_destroy(s2mm);
+    retstat = pzdud_free(s2mm);
+    if (retstat != PZDUD_OK) {
+      Log(error,"Failed to free DMA buffers");
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = "Failed to destroy DMA engine";
+      feedback_messages_.push_back(obj);
+      reset_dma_engine_.store(true, std::memory_order_relaxed);
+    }
+
+    retstat = pzdud_destroy(s2mm);
+    if (retstat != PZDUD_OK) {
+      Log(error,"Failed to destroy DMA engine");
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = "Failed to destroy DMA engine";
+      feedback_messages_.push_back(obj);
+      reset_dma_engine_.store(true, std::memory_order_relaxed);
+    }
+
     return;
   }
   dma_initialized_ = true;
@@ -476,22 +515,22 @@ void board_reader::init_dma() {
 void board_reader::data_transmitter() {
   Log(debug, "Starting data transmitter\n");
 
-  // Allocate a memory buffer to build eth packets.
-
   //FIXME: Implement fragmentation
   // this builds an array of 64k ints = 256 kbytes
   // Should correspond to several ethernet packets in worst case scenario
-  uint32_t *global_eth_buffer = new uint32_t[eth_buffer_size_u32]();
+  //uint32_t *global_eth_buffer = new uint32_t[eth_buffer_size_u32_]();
+  static uint32_t global_eth_buffer[eth_buffer_size_u32_];
+
 
   // Local pointer that is effectively used to build the eth packet
+  // It is just an auxiliary moving pointer
   uint32_t *eth_buffer = nullptr;
   // pointer that keeps track of the offset within the global buffer
+  //FIXME: Is this needed?
   uint32_t global_eth_pos = 0;
 
-  /** Statistics collection variables
-   */
-  error_state_ = false;
-  feedback_messages_.clear();
+  /// Statistics collection variables
+  /// FIXME: SHould the counters be reset here?
   // Debugging information that is passed down in the end of the run
   num_eth_fragments_ = 0;
   num_word_counter_ = 0;
@@ -505,25 +544,29 @@ void board_reader::data_transmitter() {
   // In the end the size of the buffer will be ipck*sizeof(uint32_t);
   static uint32_t n_u32_words = 0;
   static uint32_t n_bytes_sent = 0;
-
+  static uint32_t seq_num_ = 0;
+  static bool first_message = true;
   // Temporary variables that will end up making part of the eth packet
   //  static uint32_t packet_size = 0;
 
   // pointer to a new word
   ptb::content::buffer_t dma_buffer;
-  seq_num_ = 1;
 
-  // Assign the skelleton packet header
-  // This would be nice to go out of the loop but it
+
+  /// -- Initialize the sequence number to 1 (first packet)
+  seq_num_ = 1;
+  first_message = true;
+  /// Assign the skeleton packet header
+  /// This would be nice to go out of the loop but it
   ptb::content::tcp_header eth_header;
   eth_header.word.format_version = (ptb::content::format_version << 4) | ((~ptb::content::format_version) & 0xF);
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
   ptb::content::word::word_t *frame;
-  while(keep_transmitting_) {
+  while(keep_transmitting_.load(std::memory_order_acquire)) {
 
-    // Set the local pointer to the place pointer by the global pointer
+    // Set the local pointer to the place pointed by the global pointer
     eth_buffer = &global_eth_buffer[global_eth_pos];
 
     /**
@@ -553,21 +596,25 @@ void board_reader::data_transmitter() {
     if (!buffer_queue_.pop(dma_buffer)) {
       // -- should some sort of wait be put here?
       // Might hurt since it will require some sort of mutex
-      std::this_thread::sleep_for (std::chrono::microseconds(1000));
+      std::this_thread::sleep_for (std::chrono::microseconds(10));
       continue;
     }
 
     // -- at this point there is a buffer available
     // Assign the size to the header
     eth_header.word.packet_size = dma_buffer.len & 0xFFFF;
-    //Log(debug,"Header : [%X]",eth_header.value);
+
+    /// -- NFB : Using memcpy as I am sure that there is no memory
+    ///          overlap, therefore can use the faster version
+
+    // -- copy the header
     std::memcpy(&(eth_buffer[0]),&eth_header,sizeof(eth_header));
-    //Log(debug,"Header (xcheck) : [%X]",*(&eth_buffer[0]));
+
     // -- copy the whole buffer
     std::memcpy(&(eth_buffer[1]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
 
-
     // -- loop over the buffer to collect word statistics
+    //FIXME: Might want to do this at the FPGA level
     size_t tpos = 0;
     while (tpos < dma_buffer.len) {
        frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]+tpos);
@@ -587,7 +634,20 @@ void board_reader::data_transmitter() {
          case ptb::content::word::t_ch:
            num_word_counter_++;
            break;
-
+         default:
+           // -- A dangerous situation was found...the header has an unexpected type
+           if (first_message) {
+             first_message = false;
+             std::ostringstream msg;
+             msg << "Found a word header with an unexpected type : "
+                 << std::bitset<3>(frame->word_type);
+             Log(error,"%s",msg.str().c_str());
+             json obj;
+             obj["type"]="error";
+             obj["message"]=msg.str();
+             feedback_messages_.push_back(obj);
+           }
+           break;
        }
        // Advance the pointer
        tpos += ptb::content::word::word_t::size_bytes;
@@ -597,17 +657,18 @@ void board_reader::data_transmitter() {
     try {
       //Log(debug,"%X",eth_buffer[0]);
       n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
-      // -- release the memory buffer
-
       n_u32_words = n_bytes_sent/sizeof(uint32_t);
+
       data_socket_->send(eth_buffer,n_bytes_sent);
       //Log(debug,"Releasing buffer %u",dma_buffer.handle);
+
+      // -- release the memory buffer
       pzdud_release(s2mm, dma_buffer.handle, 0);
 
       global_eth_pos += (n_u32_words+4);
       // add 4 bytes of padding just to make sure that there are no overlaps
       // for occasional small packets troubles could happen.
-      if ((global_eth_pos+(3*n_u32_words)) > eth_buffer_size_u32) {
+      if ((global_eth_pos+(4*n_u32_words)) > eth_buffer_size_u32_) {
         // reset the pointer to the beginning
         global_eth_pos = 0;
       }
@@ -617,9 +678,9 @@ void board_reader::data_transmitter() {
     }
     catch(SocketException &e) {
       Log(error,"Socket exception : %s",e.what() );
-      error_state_.store(true);
+      error_state_.store(true, std::memory_order_relaxed);
       std::string err_msg;
-      err_msg = "ERROR: Data socket exception [";
+      err_msg = "Data socket exception [";
       std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
       std::time_t now_c = std::chrono::system_clock::to_time_t(now);
       std::tm now_tm = *std::localtime(&now_c);
@@ -632,9 +693,28 @@ void board_reader::data_transmitter() {
       obj["type"] = "error";
       obj["message"] = err_msg;
       feedback_messages_.push_back(obj);
-      keep_collecting_ = false;
-      keep_transmitting_ = false;
-      error_state_.store(true);
+      keep_collecting_.store(false,std::memory_order_relaxed);
+      keep_transmitting_.store(false,std::memory_order_relaxed);
+    }
+    catch(...) {
+      Log(error,"Unknown exception caught sending data");
+      error_state_.store(true, std::memory_order_relaxed);
+      std::string err_msg;
+      err_msg = "Unknown exception [";
+      std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+      std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+      std::tm now_tm = *std::localtime(&now_c);
+      char date[128];
+      strftime(date, sizeof(date), "%A %c", &now_tm);
+      err_msg += date;
+      err_msg += "]";
+      json obj;
+      obj["type"] = "error";
+      obj["message"] = err_msg;
+      feedback_messages_.push_back(obj);
+      keep_collecting_.store(false,std::memory_order_relaxed);
+      keep_transmitting_.store(false,std::memory_order_relaxed);
+
     }
 
     // increment the sequence number
@@ -650,9 +730,12 @@ void board_reader::data_transmitter() {
 
   // wait for a few moments before deallocating the memory so that the kernel does not go ballistic
   // in case it hans't yet committed all the buffers
-  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  // FIXME: Keep an eye for problems by commenting this out.
+  // this assumes that the send operation holds the execution until the data is sent.
+  //  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
   // Deallocate the memory
-  delete [] global_eth_buffer;
+  // delete [] global_eth_buffer;
   // Finish the connection
   Log(info,"Closing data socket.");
   close_data_connection();
