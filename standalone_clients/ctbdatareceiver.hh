@@ -134,7 +134,7 @@ class ctb_data_receiver {
     void* current_write_ptr_;
     void* current_read_ptr_;
 
-    static const size_t buffer_n_bytes = 11000;//4194304;
+    static const size_t buffer_n_bytes = 4194304;
     static const size_t max_n_buffers = 65535;
     // Keep a buffer of 4MB
     uint8_t raw_buffer_[buffer_n_bytes];

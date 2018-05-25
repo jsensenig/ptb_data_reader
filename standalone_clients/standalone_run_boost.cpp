@@ -17,7 +17,10 @@
 
 #include "content.h"
 #include "json.hpp"
-#include "cxxopts.hpp"
+//#include "cxxopts.hpp"
+#include "optionparser.h"
+#define USE_OPTIONPARSER 1
+#undef USE_CXXOPTS
 
 
 
@@ -99,7 +102,8 @@ class ctb_robot {
         data_receiver_ =
             std::unique_ptr<ctb_data_receiver>(new ctb_data_receiver(penn_data_dest_port_,1));
 
-        data_receiver_->set_stop_delay(1000000); //usec
+        data_receiver_->set_output_file(output_filename_);
+	data_receiver_->set_stop_delay(1000000); //usec
         // Sleep for a short while to give time for the DataReceiver to be ready to
         // receive connections
         usleep(500000);
@@ -268,6 +272,8 @@ int main(int argc, char**argv) {
   std::string destination = "localhost:8991";
   std::string confname = "ctb_config.json";
 
+#ifdef USE_CXXOPTS
+
   try {
     cxxopts::Options options(argv[0], " - command line options");
     options.add_options()
@@ -324,6 +330,131 @@ int main(int argc, char**argv) {
     printf("main:: Caught some other unexpected exception.\n");
     exit(1);
   }
+
+#elif defined(USE_OPTIONPARSER)
+
+
+  struct Arg: public option::Arg
+  {
+      static void printError(const char* msg1, const option::Option& opt, const char* msg2)
+      {
+        fprintf(stderr, "%s", msg1);
+        fwrite(opt.name, opt.namelen, 1, stderr);
+        fprintf(stderr, "%s", msg2);
+      }
+
+      static option::ArgStatus Unknown(const option::Option& option, bool msg)
+      {
+        if (msg) printError("Unknown option '", option, "'\n");
+        return option::ARG_ILLEGAL;
+      }
+
+      static option::ArgStatus Required(const option::Option& option, bool msg)
+      {
+        if (option.arg != 0)
+          return option::ARG_OK;
+
+        if (msg) printError("Option '", option, "' requires an argument\n");
+        return option::ARG_ILLEGAL;
+      }
+
+      static option::ArgStatus NonEmpty(const option::Option& option, bool msg)
+      {
+        if (option.arg != 0 && option.arg[0] != 0)
+          return option::ARG_OK;
+
+        if (msg) printError("Option '", option, "' requires a non-empty argument\n");
+        return option::ARG_ILLEGAL;
+      }
+
+      static option::ArgStatus Numeric(const option::Option& option, bool msg)
+      {
+        char* endptr = 0;
+        if (option.arg != 0 && strtol(option.arg, &endptr, 10)){};
+        if (endptr != option.arg && *endptr == 0)
+          return option::ARG_OK;
+
+        if (msg) printError("Option '", option, "' requires a numeric argument\n");
+        return option::ARG_ILLEGAL;
+      }
+  };
+
+
+  enum  optionIndex { UNKNOWN, CONFIG, HELP, VERBOSITY, OUTPUT, DESTINATION};
+  const option::Descriptor usage[] =
+  {
+    {UNKNOWN,     0, "","",           Arg::None,        "USAGE: standalone_run_root [options]\n\n"
+    "Options:" },
+    {CONFIG,      0,"c","config",     Arg::Required,    "-c <file>,       --config=<file>          \tConfiguration File."},
+    {HELP,        0,"h","help",       Arg::None,        "-h,              --help                   \tPrint usage and exit." },
+    {VERBOSITY,   0,"v","verbose",    Arg::Numeric,     "-v <number>,     --verbose=<number>       \tSet verbosity level." },
+    {OUTPUT,      0,"o","output",     Arg::Required,    "-o <file>,       --output=<file>          \tSet ROOT output file name (without extension) [default: ctb_output]." },
+    {DESTINATION, 0,"d","destination",Arg::Required,    "-d <host:port>,  --destination=<host:port>\tSet destination host/IP and port [default: localhost:8991]." },
+    {UNKNOWN,     0,"", "",           option::Arg::None,"\nExamples:\n"
+        "  standalone_run_root -o my_output \n"
+        "  standalone_run_root -c ctb_config.json -o output.root\n" },
+        {0,0,0,0,0,0}
+  };
+
+  argc-=(argc>0); argv+=(argc>0); // skip program name argv[0] if present
+  option::Stats  stats(usage, argc, argv);
+  std::vector<option::Option> options(stats.options_max);
+  std::vector<option::Option> buffer(stats.buffer_max);
+  option::Parser parse(usage, argc, argv, &options[0], &buffer[0]);
+
+  if (parse.error())
+  {
+    printf("main:: Failed to parse options.\n");
+    return 1;
+  }
+
+  if (options[HELP] || argc == 0)
+  {
+    int columns = getenv("COLUMNS")? atoi(getenv("COLUMNS")) : 80;
+    option::printUsage(fwrite, stdout, usage, columns);
+    return 0;
+  }
+
+  for (int i = 0; i < parse.optionsCount(); ++i)
+  {
+    option::Option& opt = buffer[i];
+    fprintf(stdout, "Argument #%d is ", i);
+    switch (opt.index())
+    {
+      case HELP:
+        // not possible, because handled further above and exits the program
+      case CONFIG:
+        fprintf(stdout, "main:: Using %s config file\n", opt.arg);
+	confname = opt.arg;
+        break;
+      case VERBOSITY:
+        fprintf(stdout, "main:: Setting verbosity to '%s'\n", opt.arg);
+        vlvl = atoi(opt.arg);
+        break;
+      case OUTPUT:
+        fprintf(stdout, "main:: Setting output file to '%s'\n", opt.arg);
+        outfname = opt.arg;
+        break;
+      case DESTINATION:
+        fprintf(stdout, "main:: Setting CTB host to '%s'\n", opt.arg);
+        destination = opt.arg;
+        break;
+      case UNKNOWN:
+        // not possible because Arg::Unknown returns ARG_ILLEGAL
+        // which aborts the parse with an error
+        break;
+    }
+  }
+
+  for (option::Option* opt = options[UNKNOWN]; opt; opt = opt->next())
+    std::cout << "Unknown option: " << std::string(opt->name,opt->namelen) << "\n";
+
+  for (int i = 0; i < parse.nonOptionsCount(); ++i)
+    std::cout << "Non-option #" << i << ": " << parse.nonOption(i) << "\n";
+
+#else
+#error "Couldn't find a matching option parser. Program will refuse to compile"
+#endif
 
   try {
     std::string host = "localhost";

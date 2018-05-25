@@ -18,8 +18,8 @@
       }
     },
     "randomtrigger":{
-      "enable":false,
-      "frequency":10
+      "enable":true,
+      "frequency":25
     },
     "pulser":{
       "enable":false,
@@ -29,7 +29,7 @@
       "pds":{
         "channel_mask":"0xFFFFFF",
         "reshape_length" : 10,
-        "dac_thresholds":[2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250],
+        "dac_thresholds":[2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185,2185],
         "triggers": [
           { "id":"LLT_1",
             "description": "Counting trigger on the PDS",

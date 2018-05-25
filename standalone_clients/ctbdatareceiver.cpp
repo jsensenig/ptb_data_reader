@@ -504,7 +504,7 @@ void ctb_data_receiver::do_read(void)
       {
     if (!ec)
     {
-      printf("ctb_data_receiver::do_read: Received %zu bytes on socket\n",length);
+      //printf("ctb_data_receiver::do_read: Received %zu bytes on socket\n",length);
 
       this->handle_received_data(length);
 
@@ -548,10 +548,10 @@ void ctb_data_receiver::do_read(void)
 void ctb_data_receiver::handle_received_data(std::size_t length)
 {
 
-  printf("ctb_data_receiver::handle_received_data: Handling data with size %zu at state %u on addr %p\n",length,
-      next_receive_state_ ,current_write_ptr_);
 
 #ifdef __PTB_BOARD_READER_DEVEL_MODE__
+  printf("ctb_data_receiver::handle_received_data: Handling data with size %zu at state %u on addr %p\n",length,
+      next_receive_state_ ,current_write_ptr_);
   display_bits(current_write_ptr_, length, "PennDataReceiver");
 #endif
 
@@ -651,7 +651,7 @@ void ctb_data_receiver::handle_received_data(std::size_t length)
       // update states ready for next call.
       // Since this was a header we don't really need anything else
       next_receive_state_ = ReceiveTCPPayload;
-      printf("ctb_data_receiver::handle_received_data: Next receive size : %zu bytes\n",next_receive_size_);
+      //printf("ctb_data_receiver::handle_received_data: Next receive size : %zu bytes\n",next_receive_size_);
       // -- This is really the only relevant thing in this whole block
       next_receive_size_ = next_size;
 
@@ -668,10 +668,10 @@ void ctb_data_receiver::handle_received_data(std::size_t length)
       total_payload_bytes_recvd_ += length;
       //got a full microslice (complete size checks already done)
       total_packets_recvd_++;
-      printf("ctb_data_receiver::handle_received_data: Complete payload received making a total %zu TCP packets with length %zu bytes (total %zu)\n",
-          total_packets_recvd_,
-          state_nbytes_recvd_,
-          total_payload_bytes_recvd_);
+      // printf("ctb_data_receiver::handle_received_data: Complete payload received making a total %zu TCP packets with length %zu bytes (total %zu)\n",
+      //     total_packets_recvd_,
+      //     state_nbytes_recvd_,
+      //     total_payload_bytes_recvd_);
 
 
 
@@ -733,11 +733,11 @@ void ctb_data_receiver::handle_received_data(std::size_t length)
     // -- additional check that the current read buffer is not going to be overlapped by the write buffer
     //
     current_write_ptr_ = &(raw_buffer_[0]);
-    printf("ctb_data_receiver::handle_received_data: empty %u %p-%p=%ld (next size %zu)\n",(!buffer_queue_.empty())?1:0,
-        current_read_ptr_,
-        current_write_ptr_,
-        static_cast<long>((static_cast<uint8_t*>(current_read_ptr_) - static_cast<uint8_t*>(current_write_ptr_))),
-        next_receive_size_);
+    // printf("ctb_data_receiver::handle_received_data: empty %u %p-%p=%ld (next size %zu)\n",(!buffer_queue_.empty())?1:0,
+    //     current_read_ptr_,
+    //     current_write_ptr_,
+    //     static_cast<long>((static_cast<uint8_t*>(current_read_ptr_) - static_cast<uint8_t*>(current_write_ptr_))),
+    //     next_receive_size_);
     if (!buffer_queue_.empty() && (current_read_ptr_ >= current_write_ptr_) && ((static_cast<uint8_t*>(current_read_ptr_) - static_cast<uint8_t*>(current_write_ptr_)) < next_receive_size_))
     {
       printf("ERROR: No room left on buffer. You might consider increasing it\n");
