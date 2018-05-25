@@ -98,9 +98,14 @@ ctb_data_receiver::~ctb_data_receiver() {
   // Cancel any currently pending IO object deadlines and terminate timer
   deadline_.expires_at(boost::asio::deadline_timer::traits_type::now());
 
+  try {
   // Wait for thread running receiver IO service to terminate
   receiver_thread_->join();
-
+  }
+  catch(std::exception &e)
+  {
+    printf("ctb_data_receiver::destructor: Caught STL exception : %s\n",e.what());
+  }
   printf("ctb_data_receiver::destructor: receiver thread joined OK\n");
 }
 
@@ -200,6 +205,9 @@ void ctb_data_receiver::start(void)
 void ctb_data_receiver::stop(void)
 {
   printf("ctb_data_receiver::stop called\n");
+
+  // -- readout is already suspended.
+  if (suspend_readout_.load()) return;
 
   // Suspend readout and wait for receiver thread to respond accordingly
   suspend_readout_.store(true);
@@ -564,6 +572,7 @@ void ctb_data_receiver::handle_received_data(std::size_t length)
   state_nbytes_recvd_    += length;
   total_bytes_recvd_     += length;
 
+  static uint32_t n_pkt = 0;
 
   /// no need for this. We will store straight away...or just print.
   // now we can update the current_write_ptr_
@@ -591,6 +600,15 @@ void ctb_data_receiver::handle_received_data(std::size_t length)
     {
       // Just testing that it does not go belly up
       // validate_microslice_header();
+      n_pkt++;
+
+      if ((n_pkt%1000)==0)
+      {
+        auto elapsed_msecs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start_time_).count();
+        double elapsed_secs = ((double)elapsed_msecs) / 1000.0;
+
+        printf("ctb_data_receiver::handle_received_data: %u packets received after %lf s.\n",n_pkt,elapsed_secs);
+      }
 
       tcp_header = reinterpret_cast<ptb::content::tcp_header_t *>(current_write_ptr_);
       ptb::content::tcp_header_t::ver_size_t data_version = tcp_header->format_version;

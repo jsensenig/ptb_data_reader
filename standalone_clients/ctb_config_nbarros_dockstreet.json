@@ -3,7 +3,7 @@
     "sockets":{
 	"receiver":{
 	    "rollover":50000,
-            "host":"128.91.41.110",
+            "host":"128.91.41.149",
             "port":8992
       },
       "monitor":{
