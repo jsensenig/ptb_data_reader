@@ -29,3 +29,12 @@ The header `content.h` is copied from the `ptbreader` source and is meant only a
 ## Known issues
 
 Due to issues with the TCP socket library being used, the example terminates abnormally. This socket library is flawed by the use of static objects, which causes the receiver thread (in this example) to never becoming joinable.
+
+
+# Example commands
+
+### Run standalone example with ROOT output and using the more reliable boost socket library
+
+* In this case the target board is the prototype carrier with a MZ
+* __NOTE__: Be sure to edit the IP and port of the data receiver in the configuration file.
+./standalone_run_boost -d 10.73.138.22:8991 -o test_prototype_standalone.root -c ctb_config_standalone.json
