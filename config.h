@@ -18,20 +18,12 @@
 //#define NO_PDS_DAC  1
 #undef NO_PDS_DAC
 
-// To enable parsing and status word awareness.
-#undef CHANNEL_STATUS_WORD
-#undef OLD_WORDS
-/// -- Some extra debug operations. Add significant overhead and verbosity to code
+#define PDUNE_COMPILATION 1
+#undef SBND_COMPILATION
+
 //#define DEBUG 1
 #undef DEBUG
 
-/// -- Add data collection statistics.
-#define DATA_STATISTICS 1
-//#undef DATA_STATISTICS
-
-/// -- Measure data transfer times.
-//#define MEASURE_PERFORMANCE 1
-#undef MEASURE_PERFORMANCE
 
 /// -- Define whether a standard mutex base code should be used, or
 /// -- the contributed moodycamel lock-free implementation
@@ -68,14 +60,5 @@
 /// to deal with the timestamp calculations.
 //#define ENABLE_FRAG_BLOCKS 1
 #undef ENABLE_FRAG_BLOCKS
-///
-///
-/// OTHER OPTIONS. These are not documented and will require further investigation
-/// THey affect contributed code
-///
-///
-//#define PUGIXML_NO_EXCEPTIONS 1
-//#define AE_USE_STD_ATOMIC_FOR_WEAK_ATOMIC 1
-//#define PUGIXML_HAS_LONG_LONG
 
 #endif /* COMPILEROPTIONS_H_ */
