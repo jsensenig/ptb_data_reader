@@ -7,6 +7,7 @@
 
 #include "boardmanager.h"
 #include "boardreader.h"
+#include "ctbconfig.h"
 #include "Logger.h"
 #include "PracticalSocket.h"
 #include "util.h"
@@ -524,13 +525,13 @@ namespace ptb {
     reader_->set_tcp_port(data_socket_port_);
     Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
     // -- Grab the subsystem configurations
-    json beamconf = doc.at("ctb").at("subsystems").at("beam");
-    json crtconf = doc.at("ctb").at("subsystems").at("crt");
-    json pdsconf = doc.at("ctb").at("subsystems").at("pds");
+    //json beamconf = doc.at("ctb").at("subsystems").at("beam");
+    //json crtconf = doc.at("ctb").at("subsystems").at("crt");
+    //json pdsconf = doc.at("ctb").at("subsystems").at("pds");
 
     // uint32_t duration;
     std::stringstream strVal;
-
+/*
     json rtrigger = doc.at("ctb").at("randomtrigger");
     bool rtrigger_en = rtrigger.at("enable").get<bool>();
     uint32_t rtriggerfreq = rtrigger.at("frequency").get<unsigned int>();
@@ -552,7 +553,7 @@ namespace ptb {
     }
     set_bit(26,31,pulser_en);
     set_bit_range_register(26,0,26,pulserfreq);
-
+*/
     uint32_t duration = receiver.at("rollover").get<unsigned int>();
     // Microslice duration is now a full number...check if it fits into 27 bits
     Log(debug,"MicroSlice Duration [%d] (%u) [0x%X][%s]",duration,duration,duration, std::bitset<29>(duration).to_string().c_str());
@@ -574,11 +575,40 @@ namespace ptb {
     Log(debug,"Register 6 : [0x%08X]", register_map_[6].value() );
     strVal.clear();
 
+//////////////////////////////////////
+//Add preprocessor block below for CTB/PTB config use
+
+    // -- Grab the subsystem & Misc configurations
+    json miscconf = doc.at("ctb").at("misc");
+    json beamconf = doc.at("ctb").at("subsystems").at("beam");
+    json crtconf = doc.at("ctb").at("subsystems").at("crt");
+    json pdsconf = doc.at("ctb").at("subsystems").at("pds");
+
     //FIXME: Introduce json parse feedback here. 
     // NFB: We should NEVER, NEVER, NEVER parse a file without properly caught exceptions
     // Otherwise we have no way to know if the configuration fails
-    beam_config(beamconf);
-    crt_config(crtconf);
+
+    json mfeedback;
+    ctbconfig::misc_config(miscconf, mfeedback);
+    if (!mfeedback.empty()) {
+      Log(debug,"Received %u messages from configuring the Misc Configs",mfeedback.size());
+      answers.insert(std::end(answers),mfeedback.begin(),mfeedback.end());
+    }
+
+    json bfeedback;
+    ctbconfig::beam_config(beamconf, bfeedback);
+    if (!bfeedback.empty()) {
+      Log(debug,"Received %u messages from configuring the Beam",bfeedback.size());
+      answers.insert(std::end(answers),bfeedback.begin(),bfeedback.end());
+    }
+
+    json cfeedback;
+    ctbconfig::crt_config(crtconf, cfeedback);
+    if (!cfeedback.empty()) {
+      Log(debug,"Received %u messages from configuring the CRT",cfeedback.size());
+      answers.insert(std::end(answers),cfeedback.begin(),cfeedback.end());
+    }
+
 
 #ifdef NO_PDS_DAC
     Log(warning,"PDS configuration block was disabled. Not configuring any PDS input");
@@ -587,7 +617,7 @@ namespace ptb {
 
     strVal.str("");
     json feedback;
-    pds_config(pdsconf,feedback);
+    ctbconfig::pds_config(pdsconf,feedback);
     if (!feedback.empty()) {
       Log(debug,"Received %u messages from configuring the PDS",feedback.size());
       answers.insert(std::end(answers),feedback.begin(),feedback.end());
@@ -670,6 +700,8 @@ namespace ptb {
     //    Log(verbose,"Returning from SetConfig with answer [%s]",feedback.c_str());
 
   }
+//-----------------------------------------
+/* -- Moved configs to ctbconfigs.cpp
 
   void board_manager::pds_config(json &pdsconfig, json& feedback){
 
@@ -760,6 +792,7 @@ namespace ptb {
     //  uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
 
     //Input channel masks
-    set_bit_range_register(3,0,9,channelmask);}
-
+    set_bit_range_register(3,0,9,channelmask);
+  }
+*/
 }

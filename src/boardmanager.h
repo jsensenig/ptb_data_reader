@@ -79,14 +79,30 @@ public:
   void process_config(json & config,json &answers);
 
   //Loads the PDS config into FW regs
-  void pds_config(json & pdsconfig, json& feedback);
+  //void pds_config(json & pdsconfig, json& feedback);
 
   //Loads the Beam config into FW regs
-  void beam_config(json & beamconfig);
+  //void beam_config(json & beamconfig);
 
   //Loads the CRT config into FW regs
-  void crt_config(json & crtconfig);
+  //void crt_config(json & crtconfig);
 
+  /**
+   * Overwrites a range of bits in a register with the contents of another variable.
+   * @param reg The register to be modified
+   * @param pos The edge of the range to be modified (LSB)
+   * @param len The size of the mask to be created in number of bits.
+   * @param value The contents to be overwritten
+   */
+  void set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value);
+
+  /**
+   * Generic bit setter.
+   * @param reg register number
+   * @param idx Bit index
+   * @param status status to set
+   */
+  void set_bit(const uint32_t reg, const uint32_t bit, bool status);
 
   /**
    * Loops over the registers and dum their contents, both in decimal and Hex.
@@ -133,7 +149,7 @@ private:
    * @param idx Bit index
    * @param status status to set
    */
-  void set_bit(const uint32_t reg, const uint32_t bit, bool status);
+  //void set_bit(const uint32_t reg, const uint32_t bit, bool status);
 
 
     ///!
@@ -179,7 +195,7 @@ private:
    * @param len The size of the mask to be created in number of bits.
    * @param value The contents to be overwritten
    */
-  void set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value);
+  //void set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value);
 
 
   // The class responsible for the data reading.
