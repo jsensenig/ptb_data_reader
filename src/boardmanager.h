@@ -78,6 +78,29 @@ public:
   // Passed by copy to keep locally
   void process_config(json & config,json &answers);
 
+#if defined(PDUNE_COMPILATION)
+
+  // Wrapper unction that calls all others
+  void configure_ctb(json& doc, json& feedback);
+
+  //Misc configs such as timing, pulser, etc
+  void misc_config(json & miscconfig, json& feedback);
+
+  void pds_config(json & pdsconfig, json& feedback);
+
+  //Loads the Beam config into FW regs
+  void beam_config(json & beamconfig, json& feedback);
+
+  //Loads the CRT config into FW regs
+  void crt_config(json & crtconfig, json& feedback);
+
+
+#elif defined(SBND_COMPILATION)
+#error "Configuration functions for SBND are not yet in place"
+#else
+#error "Unknown compilation mode. Check config.h file in repository head"
+#endif
+
   //Loads the PDS config into FW regs
   //void pds_config(json & pdsconfig, json& feedback);
 
@@ -86,23 +109,23 @@ public:
 
   //Loads the CRT config into FW regs
   //void crt_config(json & crtconfig);
-
-  /**
-   * Overwrites a range of bits in a register with the contents of another variable.
-   * @param reg The register to be modified
-   * @param pos The edge of the range to be modified (LSB)
-   * @param len The size of the mask to be created in number of bits.
-   * @param value The contents to be overwritten
-   */
-  void set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value);
-
-  /**
-   * Generic bit setter.
-   * @param reg register number
-   * @param idx Bit index
-   * @param status status to set
-   */
-  void set_bit(const uint32_t reg, const uint32_t bit, bool status);
+//
+//  /**
+//   * Overwrites a range of bits in a register with the contents of another variable.
+//   * @param reg The register to be modified
+//   * @param pos The edge of the range to be modified (LSB)
+//   * @param len The size of the mask to be created in number of bits.
+//   * @param value The contents to be overwritten
+//   */
+//  void set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value);
+//
+//  /**
+//   * Generic bit setter.
+//   * @param reg register number
+//   * @param idx Bit index
+//   * @param status status to set
+//   */
+//  void set_bit(const uint32_t reg, const uint32_t bit, bool status);
 
   /**
    * Loops over the registers and dum their contents, both in decimal and Hex.
@@ -149,7 +172,7 @@ private:
    * @param idx Bit index
    * @param status status to set
    */
-  //void set_bit(const uint32_t reg, const uint32_t bit, bool status);
+  void set_bit(const uint32_t reg, const uint32_t bit, bool status);
 
 
     ///!
@@ -195,7 +218,7 @@ private:
    * @param len The size of the mask to be created in number of bits.
    * @param value The contents to be overwritten
    */
-  //void set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value);
+  void set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value);
 
 
   // The class responsible for the data reading.

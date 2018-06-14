@@ -7,7 +7,6 @@
 
 #include "boardmanager.h"
 #include "boardreader.h"
-#include "ctbconfig.h"
 #include "Logger.h"
 #include "PracticalSocket.h"
 #include "util.h"
@@ -20,6 +19,14 @@
 #include <bitset>
 #include <cmath>
 #include <cinttypes>
+
+#if defined(PDUNE_COMPILATION)
+#include "ctb_config_funcs.hpp"
+#elif defined(SBND_COMPILATION)
+#error "Configuration functions for SBND are not yet in place"
+#else
+#error "Unknown compilation mode. Check config.h file in repository head"
+#endif
 
 #include "json.hpp"
 
@@ -578,53 +585,19 @@ namespace ptb {
 //////////////////////////////////////
 //Add preprocessor block below for CTB/PTB config use
 
-    // -- Grab the subsystem & Misc configurations
-    json miscconf = doc.at("ctb").at("misc");
-    json beamconf = doc.at("ctb").at("subsystems").at("beam");
-    json crtconf = doc.at("ctb").at("subsystems").at("crt");
-    json pdsconf = doc.at("ctb").at("subsystems").at("pds");
-
-    //FIXME: Introduce json parse feedback here. 
-    // NFB: We should NEVER, NEVER, NEVER parse a file without properly caught exceptions
-    // Otherwise we have no way to know if the configuration fails
-
-    json mfeedback;
-    ctbconfig::misc_config(miscconf, mfeedback);
-    if (!mfeedback.empty()) {
-      Log(debug,"Received %u messages from configuring the Misc Configs",mfeedback.size());
-      answers.insert(std::end(answers),mfeedback.begin(),mfeedback.end());
-    }
-
-    json bfeedback;
-    ctbconfig::beam_config(beamconf, bfeedback);
-    if (!bfeedback.empty()) {
-      Log(debug,"Received %u messages from configuring the Beam",bfeedback.size());
-      answers.insert(std::end(answers),bfeedback.begin(),bfeedback.end());
-    }
-
-    json cfeedback;
-    ctbconfig::crt_config(crtconf, cfeedback);
-    if (!cfeedback.empty()) {
-      Log(debug,"Received %u messages from configuring the CRT",cfeedback.size());
-      answers.insert(std::end(answers),cfeedback.begin(),cfeedback.end());
-    }
-
-
-#ifdef NO_PDS_DAC
-    Log(warning,"PDS configuration block was disabled. Not configuring any PDS input");
-#else
-
-
-    strVal.str("");
+#if defined(PDUNE_COMPILATION)
     json feedback;
-    ctbconfig::pds_config(pdsconf,feedback);
+    configure_ctb(doc, feedback);
     if (!feedback.empty()) {
-      Log(debug,"Received %u messages from configuring the PDS",feedback.size());
+      Log(debug,"Received %u messages from configuring the CTB",feedback.size());
       answers.insert(std::end(answers),feedback.begin(),feedback.end());
     }
 
+#elif defined(SBND_COMPILATION)
+#error "SBND specific configuration not in place yet"
+#else
+#error "Unknown compilation mode. Check config.h"
 #endif
-
     // -- Once the configuration is set, dump locally the status of the config registers
     dump_config_registers();
 
