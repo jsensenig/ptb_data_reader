@@ -531,36 +531,10 @@ namespace ptb {
     data_socket_port_ = receiver.at("port").get<unsigned short>();
     reader_->set_tcp_port(data_socket_port_);
     Log(debug,"Setting data transmission channel to [%s:%hu]",data_socket_host_.c_str(),data_socket_port_);
-    // -- Grab the subsystem configurations
-    //json beamconf = doc.at("ctb").at("subsystems").at("beam");
-    //json crtconf = doc.at("ctb").at("subsystems").at("crt");
-    //json pdsconf = doc.at("ctb").at("subsystems").at("pds");
 
     // uint32_t duration;
     std::stringstream strVal;
-/*
-    json rtrigger = doc.at("ctb").at("randomtrigger");
-    bool rtrigger_en = rtrigger.at("enable").get<bool>();
-    uint32_t rtriggerfreq = rtrigger.at("frequency").get<unsigned int>();
-    Log(debug,"Random Trigger Frequency [%d] (%u) [0x%X][%s]",rtriggerfreq,rtriggerfreq,rtriggerfreq, std::bitset<26>(rtriggerfreq).to_string().c_str());
-    if (rtriggerfreq >= (1<<26)) {
-      Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",rtriggerfreq);
-      rtriggerfreq = (1<<26)-1;
-    }
-    set_bit(27,0,rtrigger_en);
-    set_bit_range_register(25,0,26,rtriggerfreq);
-    //Set pulser frequency
-    json pulserconf = doc.at("ctb").at("pulser");
-    bool pulser_en = pulserconf.at("enable").get<bool>();
-    uint32_t pulserfreq = pulserconf.at("frequency").get<unsigned int>();
-    Log(debug,"Pulser Frequency [%d] (%u) [0x%X][%s]",pulserfreq,pulserfreq,pulserfreq, std::bitset<26>(pulserfreq).to_string().c_str());
-    if (pulserfreq >= (1<<26)) {
-      Log(warning,"Input value of [%u] above maximum rollover [26]. Truncating to maximum.",pulserfreq);
-      pulserfreq = (1<<26)-1;
-    }
-    set_bit(26,31,pulser_en);
-    set_bit_range_register(26,0,26,pulserfreq);
-*/
+
     uint32_t duration = receiver.at("rollover").get<unsigned int>();
     // Microslice duration is now a full number...check if it fits into 27 bits
     Log(debug,"MicroSlice Duration [%d] (%u) [0x%X][%s]",duration,duration,duration, std::bitset<29>(duration).to_string().c_str());
@@ -673,99 +647,8 @@ namespace ptb {
     //    Log(verbose,"Returning from SetConfig with answer [%s]",feedback.c_str());
 
   }
+
 //-----------------------------------------
-/* -- Moved configs to ctbconfigs.cpp
+// -- Moved configs to ctb_config_funcs.hpp
 
-  void board_manager::pds_config(json &pdsconfig, json& feedback){
-
-    ///FIXME: How can this work? dacsetup is not initialized in this function
-    i2conf dacsetup;
-
-    std::vector<uint32_t> dac_values = pdsconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
-    std::string s_channelmask = pdsconfig.at("channel_mask").get<std::string>();
-    std::string s_trigtype0 = pdsconfig.at("triggers").at(0).at("type").get<std::string>();
-    std::string s_count0 = pdsconfig.at("triggers").at(0).at("count").get<std::string>();
-    bool llt11_enable = pdsconfig.at("triggers").at(0).at("enable").get<bool>();
-
-    uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
-    uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
-    uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
-
-    // std::vector<uint32_t> dac_values (24, 0);
-
-    if (dac_values.size() != (i2conf::nchannels_)*(i2conf::ndacs_)) {
-      Log(warning, "Number of configuration values (%i) doesn't match number of DAC channels (%i)!", dac_values.size(), (i2conf::nchannels_)*(i2conf::ndacs_));
-      std::ostringstream tmp;
-      tmp << "Number of configuration values (" << dac_values.size() << ") doesn't match number of DAC channels (" << (i2conf::nchannels_)*(i2conf::ndacs_) << ")";
-
-      json obj;
-      obj["type"] = "warning";
-      obj["message"] = tmp.str();
-      feedback.push_back(obj);
-    }
-
-    Log(info,"Size of channel values vector %i", dac_values.size());
-    for (size_t i=0; i<dac_values.size(); i++) {
-      Log(info,"Channel %zu value %u", i, dac_values[i]);
-      if (dac_values[i] > 4095) { //Range 0 - 4095
-        Log(warning, "Warning DAC value out of range, will be set to max value.");
-        std::ostringstream tmp;
-        tmp << "DAC value out of range (" << dac_values.at(i) << "). Truncating to maximum (4095)";
-        json obj;
-        obj["type"] = "warning";
-        obj["message"] = tmp.str();
-        feedback.push_back(obj);
-        dac_values[i] = 4095;
-      }
-    }
-    //Now pass DAC configs to setup
-    if (dacsetup.ConfigureDacs(dac_values,false)) {
-      Log(error,"Failed to write configuration values to DACs.");
-      json obj;
-      obj["type"] = "error";
-      obj["message"] = "Failed to write configuration values to DACs";
-      feedback.push_back(obj);
-    }
-    Log(info,"Programmed %zu DAC channels", dac_values.size());
-
-    //Input channel masks
-    set_bit_range_register(2,0,24,channelmask);
-
-    //Configure counting trigger 0
-    uint32_t trig0 = (trigtype0<<5) + count0;
-    set_bit_range_register(38,0,9,trig0);
-    set_bit(27,11,llt11_enable);
-
-  }
-
-
-  void board_manager::crt_config(json &crtconfig){
-
-    // std::vector<uint32_t> dac_values = crtconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
-    std::string s_channelmask = crtconfig.at("channel_mask").get<std::string>();
-    //std::string s_trigtype0 = crtconfig.at("triggers").at(0).at("type").get<std::string>();
-    //std::string s_count0 = crtconfig.at("triggers").at(0).at("count").get<std::string>();
-
-    uint32_t channelmask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
-    // uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
-    // uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
-    //Input channel masks
-    set_bit_range_register(1,0,32,channelmask);
-  }
-
-  void board_manager::beam_config(json &beamconfig){
-
-    // std::vector<uint32_t> dac_values = beamconfig.at("dac_thresholds").get<std::vector<uint32_t>>();
-    std::string s_channelmask = beamconfig.at("channel_mask").get<std::string>();
-    // std::string s_trigtype0 = beamconfig.at("triggers").at(0).at("type").get<std::string>();
-    // std::string s_count0 = beamconfig.at("triggers").at(0).at("count").get<std::string>();
-
-    uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
-    // uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
-    //  uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
-
-    //Input channel masks
-    set_bit_range_register(3,0,9,channelmask);
-  }
-*/
 }

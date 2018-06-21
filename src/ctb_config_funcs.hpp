@@ -109,7 +109,7 @@ namespace ptb {
         Log(warning,"%s", oss0.str());
       }
       tmp[0] = std::make_pair("warning", oss0.str());
-      //Mask type triggers (inclusive & exclusive)
+      //Mask type triggers, inclusive & exclusive
       bool llt3_enable = trigs.at(0).at("enable").get<bool>();
       std::string s_llt3mask = trigs.at(0).at("mask").get<std::string>();
       uint32_t llt3mask = (int)strtol(s_llt3mask.c_str(),NULL,0);
@@ -144,8 +144,10 @@ namespace ptb {
       std::ostringstream oss4;
       if (llt6mask == 0) { 
         oss4 << "Trigger " << trigs.at(3).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled."; 
-        tmp[4] = std::make_pair("warning", oss4.str());
+        Log(warning,"%s", oss4.str());
       }
+      tmp[4] = std::make_pair("warning", oss4.str());
+      
       //Counting triggers
        bool llt12_enable = trigs.at(4).at("enable").get<bool>();
        std::string s_llt12mask = trigs.at(4).at("mask").get<std::string>();
@@ -155,14 +157,21 @@ namespace ptb {
        uint8_t llt12count = (int)strtol(s_llt12count.c_str(),NULL,0);
        uint8_t llt12type = (int)strtol(s_llt12type.c_str(),NULL,0);
        std::ostringstream oss5;
-       if ((llt12count < 2 && llt12type == 0) || (llt12count < 1 && llt12type == 1)) { oss5 << "Trigger " << trigs.at(4).at("id").get<std::string>() << ", with count (" << (int)llt12count << ") amd type (" << (int)llt12type << ") will result in always asserted condition.";}
+       if ((llt12count < 2 && llt12type == 0) || (llt12count < 1 && llt12type == 1)) { 
+         oss5 << "Trigger " << trigs.at(4).at("id").get<std::string>() << ", with count (" << (int)llt12count << ") amd type (" << (int)llt12type << ") will result in always asserted condition.";
+         Log(warning,"%s", oss5.str());
+       }
        tmp[5] = std::make_pair("warning", oss5.str());
        std::ostringstream oss6;
-       if (llt12mask == 0) { oss6 << "Trigger " << trigs.at(4).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; }
+       if (llt12mask == 0) { 
+        oss6 << "Trigger " << trigs.at(4).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
+        Log(warning,"%s", oss6.str());
+       }
        tmp[6] = std::make_pair("warning", oss6.str());
        std::ostringstream oss7;
        if (llt12type > 4 || llt12type == 3) {
          oss7 << "Trigger " << trigs.at(4).at("id").get<std::string>() << " type (" << (int)llt12type << ") logic type undefined! Setting to '==' (0x1). ";
+         Log(warning,"%s", oss7.str());
          llt12type = 0;  //Double check this is actually "=="
        }
        tmp[7] = std::make_pair("warning", oss7.str());
@@ -226,7 +235,10 @@ namespace ptb {
       std::vector<uint32_t> delays = crtconfig.at("delays").get<std::vector<uint32_t>>();
       uint32_t channelmask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
       std::ostringstream oss0;
-      if (channelmask == 0) { oss0 << "CRT channel mask set for 0x0."; }
+      if (channelmask == 0) { 
+        oss0 << "CRT channel mask set for 0x0."; 
+        Log(warning,"%s", oss0.str());
+      }
       tmp[0] = std::make_pair("warning", oss0.str());
 
       //Mask type triggers (inclusive & exclusive)
@@ -234,13 +246,19 @@ namespace ptb {
       std::string s_llt2mask = trigs.at(0).at("mask").get<std::string>();
       uint32_t llt2mask = (int)strtol(s_llt2mask.c_str(),NULL,0);
       std::ostringstream oss1;
-      if (llt2mask == 0) { oss1 << "Trigger " << trigs.at(0).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled!"; }
+      if (llt2mask == 0) { 
+        oss1 << "Trigger " << trigs.at(0).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled!"; 
+        Log(warning,"%s", oss1.str());
+      }
       tmp[1] = std::make_pair("warning", oss1.str());
       bool llt7_enable = trigs.at(1).at("enable").get<bool>();
       std::string s_llt7mask = trigs.at(1).at("mask").get<std::string>();
       uint32_t llt7mask = (int)strtol(s_llt7mask.c_str(),NULL,0);
       std::ostringstream oss2;
-      if (llt7mask == 0) { oss2 << "Trigger " << trigs.at(1).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled!"; }
+      if (llt7mask == 0) { 
+        oss2 << "Trigger " << trigs.at(1).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled!"; 
+        Log(warning,"%s", oss2.str());
+      }
       tmp[2] = std::make_pair("warning", oss2.str());
 
       //Input channel masks
@@ -296,48 +314,47 @@ namespace ptb {
       uint8_t trigtype0 = (int)strtol(s_trigtype0.c_str(),NULL,0);
       uint8_t count0 = (int)strtol(s_count0.c_str(),NULL,0);
 
+      std::ostringstream oss0;
       if (delays.size() != NPDS_CH) {
-        Log(warning, "Number of configuration values (%i) doesn't match number of PDS channels (%i)!", delays.size(), NPDS_CH);
-        std::ostringstream oss0;
         oss0 << "Number of configuration values " << delays.size() << " doesn't match number of PDS channels " << NPDS_CH << " !";
-        tmp[0] = std::make_pair("warning", oss0.str());
+        Log(warning,"%s", oss0.str());
       }
+      tmp[0] = std::make_pair("warning", oss0.str());
 
        for (size_t i=0; i<delays.size(); i++) {
          if (delays[i] > std::pow(2,7)) { //Range 0 - 2^7 -1
-           Log(warning, "Warning delay value out of range, will be set to max value.");
            std::ostringstream oss1;
            oss1 << "Delay value out of range (" << delays.at(i) << "). Truncating to maximum (127)";
+           Log(warning,"%s", oss1.str());
            tmp[1] = std::make_pair("warning", oss1.str());
          }
        }
 
+      std::ostringstream oss2;
       if (dac_values.size() != (i2conf::nchannels_)*(i2conf::ndacs_)) {
-        Log(warning, "Number of configuration values (%i) doesn't match number of DAC channels (%i)!", dac_values.size(), (i2conf::nchannels_)*(i2conf::ndacs_));
-        std::ostringstream oss2;
         oss2 << "Number of configuration values (" << dac_values.size() << ") doesn't match number of DAC channels (" << (i2conf::nchannels_)*(i2conf::ndacs_) << ")";
-        tmp[2] = std::make_pair("warning", oss2.str());
-
+        Log(warning,"%s", oss2.str());
       }
+      tmp[2] = std::make_pair("warning", oss2.str());
 
       Log(info,"Size of channel values vector %i", dac_values.size());
       for (size_t i=0; i<dac_values.size(); i++) {
         Log(info,"Channel %zu value %u", i, dac_values[i]);
         if (dac_values[i] > 4095) { //Range 0 - 4095
-          Log(warning, "Warning DAC value out 3of range, will be set to max value.");
           std::ostringstream oss3;
           oss3 << "DAC value out of range (" << dac_values.at(i) << "). Truncating to maximum (4095)";
           tmp[3] = std::make_pair("warning", oss3.str());
+          Log(warning,"%s", oss3.str());
           dac_values[i] = 4095;
         }
       }
       //Now pass DAC configs to setup
+      std::ostringstream oss4;
       if (dacsetup.ConfigureDacs(dac_values,false)) {
-        Log(error,"Failed to write configuration values to DACs.");
-        std::ostringstream oss4;
         oss4 << "Failed to write configuration values to DACs.";
-        tmp[4] = std::make_pair("error", oss4.str());
+        Log(warning,"%s", oss4.str());
       }
+      tmp[4] = std::make_pair("error", oss4.str());
       Log(info,"Programmed %zu DAC channels", dac_values.size());
 
       //Input channel masks
@@ -384,10 +401,10 @@ namespace ptb {
       uint32_t rtriggerfreq = rtrigger.at("frequency").get<unsigned int>();
       Log(debug,"Random Trigger Frequency [%d] (%u) [0x%X][%s]",rtriggerfreq,rtriggerfreq,rtriggerfreq, std::bitset<26>(rtriggerfreq).to_string().c_str());
       if (rtriggerfreq >= (1<<26)) {
-        Log(warning,"Random trigger value of [%u] above maximum rollover [2^26 - 1]. Truncating to maximum.",rtriggerfreq);
         std::ostringstream oss0;
         oss0 << "Random trigger value of " << rtriggerfreq << " above maximum rollover [2^26 - 1]. Truncating to maximum.";
         tmp[0] = std::make_pair("warning", oss0.str());
+        Log(warning,"%s", oss0.str());
         rtriggerfreq = (1<<26)-1;
       }
       set_bit(27,0,rtrigger_en);
@@ -398,11 +415,11 @@ namespace ptb {
       uint32_t pulserfreq = pulserconf.at("frequency").get<unsigned int>();
       Log(debug,"Pulser Frequency [%d] (%u) [0x%X][%s]",pulserfreq,pulserfreq,pulserfreq, std::bitset<26>(pulserfreq).to_string().c_str());
       if (pulserfreq >= (1<<26)) {
-        Log(warning,"Pulser value of [%u] above maximum rollover [2^26 - 1]. Truncating to maximum.",pulserfreq);
         pulserfreq = (1<<26)-1;
         std::ostringstream oss1;
         oss1 << "Pulser value of " << pulserfreq << " above maximum rollover [2^26 - 1]. Truncating to maximum.";
         tmp[1] = std::make_pair("warning", oss1.str());
+        Log(warning,"%s", oss1.str());
       }
       set_bit(26,31,pulser_en);
       set_bit_range_register(26,0,26,pulserfreq);
