@@ -20,10 +20,12 @@
 #include <cmath>
 #include <cinttypes>
 
+#include "boost/date_time/posix_time/posix_time.hpp"
+
 #if defined(PDUNE_COMPILATION)
 #include "ctb_config_funcs.hpp"
 #elif defined(SBND_COMPILATION)
-#error "Configuration functions for SBND are not yet in place"
+#include "ptbmk2_config_funcs.hpp"
 #else
 #error "Unknown compilation mode. Check config.h file in repository head"
 #endif
@@ -568,7 +570,28 @@ namespace ptb {
     }
 
 #elif defined(SBND_COMPILATION)
-#error "SBND specific configuration not in place yet"
+
+    //Used to determine the global time
+    using namespace boost::gregorian;
+    using namespace boost::posix_time;
+
+    ptime t_now(second_clock::universal_time());
+    ptime time_t_epoch(date(1970,1,1));
+    time_duration diff = t_now - time_t_epoch;
+    uint32_t t_offset_s = diff.total_seconds();
+    Log(debug,"Input offset time = %s seconds since the epoch", std::bitset<32>(t_offset_s).to_string().c_str());
+
+    set_bit_range_register(7,0,32,t_offset_s);
+    Log(debug,"Register 7: [0x%8x]", register_map_[7].value() );
+
+
+    json feedback;
+    configure_ptbmk2(doc, feedback);
+    if (!feedback.empty()) {
+      Log(debug,"Received %u messages from configuring the PTB",feedback.size());
+      answers.insert(std::end(answers),feedback.begin(),feedback.end());
+    }
+
 #else
 #error "Unknown compilation mode. Check config.h"
 #endif
@@ -649,6 +672,6 @@ namespace ptb {
   }
 
 //-----------------------------------------
-// -- Moved configs to ctb_config_funcs.hpp
+// -- Moved configs to ctb_config_funcs.hpp and ptbmk2_config_funcs.hpp
 
 }

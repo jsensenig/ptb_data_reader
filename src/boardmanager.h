@@ -96,7 +96,27 @@ public:
 
 
 #elif defined(SBND_COMPILATION)
-#error "Configuration functions for SBND are not yet in place"
+
+  // Wrapper unction that calls all others
+  void configure_ptbmk2(json& doc, json& feedback);
+
+  //Misc configs such as timing, pulser, etc
+  void misc_config(json & miscconfig, json& feedback);
+
+  void pds_config(json & pdsconfig, json& feedback);
+
+  //Loads the Beam config into FW regs
+  void beam_config(json & beamconfig, json& feedback);
+
+  //Loads the CRT config into FW regs
+  void crt_config(json & crtconfig, json& feedback);
+
+  //Loads the MTC/A config into FW regs
+  void mtca_config(json & mtcaconfig, json& feedback);
+
+  //Loads the NIM config into FW regs
+  void nim_config(json & nimconfig, json& feedback);
+
 #else
 #error "Unknown compilation mode. Check config.h file in repository head"
 #endif
