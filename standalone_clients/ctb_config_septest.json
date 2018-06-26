@@ -3,7 +3,7 @@
     "sockets":{
 	"receiver":{
 	    "rollover":50000,
-            "host":"localhost",
+            "host":"128.91.189.247",
             "port":8992
       },
       "monitor":{
@@ -20,26 +20,64 @@
     "misc":{
       "randomtrigger":{
         "enable":true,
-        "frequency":5000000
+        "frequency":50000
       },
       "pulser":{
         "enable":true,
         "frequency":100
+      },
+      "timing":{
+        "address":"0x0",
+        "group":"0x0"
       }
+    },
+    "HLT":{
+      "trigger": [                                        
+        { "id":"HLT_0",
+          "description": "Beam trigger w/ CRT veto around beam pipe",
+          "enable":true,
+          "minc" : "0x31",
+          "mexc" : "0x0"
+        },
+        { "id":"HLT_1",
+          "description": "Beam trigger w/ CRT veto around beam pipe", 
+          "enable":true,
+          "minc" : "0x31",
+          "mexc" : "0x31"
+        },
+        { "id":"HLT_2",
+          "description": "Beam trigger w/ CRT veto around beam pipe and Cherenkov PId",
+          "enable":true,
+          "minc" : "0x31",
+          "mexc" : "0x31"
+        },
+        { "id":"HLT_3",
+          "description": "Muon halo with CRT and PDS",
+          "enable":true,
+          "minc" : "0x31",
+          "mexc" : "0x31"
+        },
+        { "id":"HLT_4",
+          "description": "Cosmic through-going muon on Jura side",
+          "enable":true,
+          "minc" : "0x0",
+          "mexc" : "0x31"
+        }
+      ]
     },
     "subsystems":{
       "pds":{
         "channel_mask":"0xFFFFFF",
         "reshape_length" : 10,
         "delays":[100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100],
-        "dac_thresholds":[2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250],
+        "dac_thresholds":[2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250, 2250],
         "triggers": [
-          { "id":"LLT_50",
+          { "id":"LLT_14",
             "description": "Counting trigger on the PDS",
             "enable":true,
-            "mask" : "0xF",
-            "type" : "0x2",
-            "count" : "0x1"
+            "mask" : "0x31",
+            "type" : "0x4",
+            "count" : "0x5"
           }
         ]
       },
@@ -48,15 +86,40 @@
         "reshape_length" : 10,
         "delays":[100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100],
         "triggers": [
-          { "id":"LLT_2",
-            "description":"CRT halo muon trigger.",
+          { "id":"LLT_11",
+            "description": "Counting trigger on the PDS",
             "enable":true,
-            "mask": "0x1"
+            "mask" : "0x31",
+            "type" : "0x4",
+            "count" : "0x5"
           },
-          { "id":"LLT_7",
-            "description":"CRT halo muon trigger.",
+          { "id":"LLT_12",
+            "description": "Counting trigger on the PDS",
             "enable":true,
-            "mask": "0xFFFF"
+            "mask" : "0x31",
+            "type" : "0x4",
+            "count" : "0x5"
+          },
+          { "id":"LLT_13",                                
+            "description": "Counting trigger on the PDS",
+            "enable":true,
+            "mask" : "0x31",
+            "type" : "0x4",
+            "count" : "0x5"
+          },
+          { "id":"LLT_15",
+            "description": "Counting trigger on the PDS",
+            "enable":true,
+            "mask" : "0x31",
+            "type" : "0x4",
+            "count" : "0x5"
+          },
+          { "id":"LLT_16",
+            "description": "Counting trigger on the PDS",
+            "enable":true,
+            "mask" : "0x31",
+            "type" : "0x4",
+            "count" : "0x5"
           }
         ]
       },
@@ -65,6 +128,11 @@
         "reshape_length" : 10,
         "delays":[100,100,100,100,100,100,100,100,100],
         "triggers": [
+          { "id":"LLT_1",                           
+            "description": "Beam particle trigger",
+            "enable":true,
+            "mask" : "0x4"
+          },
           { "id":"LLT_3",
             "description": "Beam particle trigger",
             "enable":true,
@@ -84,13 +152,6 @@
             "description": "Beam particle trigger",
             "enable":true,
             "mask" : "0x2"
-          },
-          { "id":"LLT_12",
-            "description": "Beam particle trigger",
-            "enable":true,
-            "mask" : "0x9",
-            "type" : "0x1",
-            "count" : "0x2"
           }
         ]
       }

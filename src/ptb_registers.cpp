@@ -15,7 +15,7 @@ void setup_ptb_registers() {
   conf_reg.dev_id = 0;
   conf_reg.base_addr = 0x43C00000;
   conf_reg.high_addr = 0x43C0FFFF;
-  conf_reg.n_registers = 40;
+  conf_reg.n_registers = 62;
   conf_reg.addr_offset = new uint32_t[conf_reg.n_registers];
   unsigned int i = 0;
   for (i = 0; i < conf_reg.n_registers; ++i) {

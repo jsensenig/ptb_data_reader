@@ -80,11 +80,14 @@ public:
 
 #if defined(PDUNE_COMPILATION)
 
-  // Wrapper unction that calls all others
+  // Wrapper function that calls all others
   void configure_ctb(json& doc, json& feedback);
 
   //Misc configs such as timing, pulser, etc
   void misc_config(json & miscconfig, json& feedback);
+
+  //HLT configs 
+  void hlt_config(json & hltconfig, json& feedback);
 
   void pds_config(json & pdsconfig, json& feedback);
 
@@ -255,7 +258,7 @@ private:
 
   state board_state_;
 
-  static const uint8_t num_registers_ = 40;
+  static const uint8_t num_registers_ = 62;
   //static const char *default_config_;
   json config_;
   void *mapped_conf_base_addr_;
