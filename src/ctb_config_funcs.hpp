@@ -99,7 +99,7 @@ namespace ptb {
 
     void board_manager::beam_config(json& beamconfig, json& feedback) {
 
-      size_t err_msgs = 6;
+      size_t err_msgs = 7;
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
 
       json trigs = beamconfig.at("triggers"); //Array of trigger configs
@@ -107,6 +107,17 @@ namespace ptb {
       std::string s_channelmask = beamconfig.at("channel_mask").get<std::string>();
       std::vector<uint32_t> delays = beamconfig.at("delays").get<std::vector<uint32_t>>();
       uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
+
+      uint32_t reshape_len = beamconfig.at("reshape_length").get<unsigned int>();
+      Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
+      if (reshape_len >= (1<<6)) {
+        std::ostringstream oss6;
+        oss6 << "Random trigger value of " << reshape_len << " above maximum rollover [2^6 - 1]. Truncating to maximum.";
+        tmp[6] = std::make_pair("warning", oss6.str());
+        Log(warning,"%s", oss6.str());
+        reshape_len = (1<<6)-1;
+      }
+
       std::ostringstream oss0;
       if (channelmask == 0) { 
         oss0 <<  "Beam channel mask set for 0x0.";
@@ -164,6 +175,8 @@ namespace ptb {
       
       //Input channel masks
       set_bit_range_register(3,0,9,channelmask);
+      set_bit_range_register(24,26,6,0);
+
       //Trigger enables
       set_bit(27,1,llt1_enable);
       set_bit(27,3,llt3_enable);
@@ -210,7 +223,7 @@ namespace ptb {
 
     void board_manager::crt_config(json& crtconfig, json& feedback) {
 
-      size_t err_msgs = 31;
+      size_t err_msgs = 32;
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
 
       json trigs = crtconfig.at("triggers"); //Array of trigger configs
@@ -224,7 +237,17 @@ namespace ptb {
         Log(warning,"%s", oss0.str());
       }
       tmp[0] = std::make_pair("warning", oss0.str());
- 
+
+     uint32_t reshape_len = crtconfig.at("reshape_length").get<unsigned int>();
+      Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
+      if (reshape_len >= (1<<6)) {
+        std::ostringstream oss31;
+        oss31 << "Random trigger value of " << reshape_len << " above maximum rollover [2^6 - 1]. Truncating to maximum.";
+        tmp[31] = std::make_pair("warning", oss31.str());
+        Log(warning,"%s", oss31.str());
+        reshape_len = (1<<6)-1;
+      }
+
        //Counting triggers
        bool llt11_enable = trigs.at(0).at("enable").get<bool>();
        std::string s_llt11mask = trigs.at(0).at("mask").get<std::string>();
@@ -459,6 +482,7 @@ namespace ptb {
 
       //Input channel masks
       set_bit_range_register(1,0,32,channelmask);
+      set_bit_range_register(24,20,6,0);
 
       //Trigger enables
       set_bit(27,11,llt11_enable);
@@ -515,7 +539,7 @@ namespace ptb {
       ///FIXME: How can this work? dacsetup is not initialized in this function
       i2conf dacsetup;
 
-      size_t err_msgs = 11;
+      size_t err_msgs = 12;
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
 
       json trigs = pdsconfig.at("triggers"); //Array of trigger configs
@@ -532,6 +556,18 @@ namespace ptb {
       uint8_t llt14type = (int)strtol(s_llt14type.c_str(),NULL,0);
       uint8_t llt14count = (int)strtol(s_llt14count.c_str(),NULL,0);
       uint32_t llt14mask = (int)strtol(s_llt14mask.c_str(),NULL,0);
+
+      uint32_t reshape_len = pdsconfig.at("reshape_length").get<unsigned int>();
+      Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
+      if (reshape_len >= (1<<6)) {
+         std::ostringstream oss11;
+         oss11 << "Random trigger value of " << reshape_len << " above maximum rollover [2^6 - 1]. Truncating to maximum.";
+         tmp[11] = std::make_pair("warning", oss11.str());
+         Log(warning,"%s", oss11.str());
+         reshape_len = (1<<6)-1;
+      }
+
+
 
        std::ostringstream oss0;
        if (llt14type > 4 || llt14type == 3 || llt14type == 0) {
@@ -616,6 +652,8 @@ namespace ptb {
 
       //Input channel masks
       set_bit_range_register(2,0,24,channelmask);
+
+      set_bit_range_register(24,14,6,0);
 
       //Configure counting trigger(s)
       set_bit(27,11,llt14_enable);
