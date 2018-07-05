@@ -175,7 +175,7 @@ namespace ptb {
       
       //Input channel masks
       set_bit_range_register(3,0,9,channelmask);
-      set_bit_range_register(24,26,6,0);
+      set_bit_range_register(24,0,6,reshape_len);
 
       //Trigger enables
       set_bit(27,1,llt1_enable);
@@ -192,7 +192,7 @@ namespace ptb {
       set_bit_range_register(33,0,32,llt6mask);
 
       uint8_t dbits = 7;
-      // PDS delays 24ch * 7b = 168b --> 6 regs
+      // Beam delays 9ch * 7b = 63b --> 3 regs
       for(size_t i=0; i<(size_t)(delays.size()/4); i++) {
 
         int j = i * 4;
@@ -482,7 +482,7 @@ namespace ptb {
 
       //Input channel masks
       set_bit_range_register(1,0,32,channelmask);
-      set_bit_range_register(24,20,6,0);
+      set_bit_range_register(25,0,6,reshape_len);
 
       //Trigger enables
       set_bit(27,11,llt11_enable);
@@ -510,7 +510,7 @@ namespace ptb {
       set_bit_range_register(49,0,32,llt16mask);
 
       uint8_t dbits = 7;
-      // PDS delays 24ch * 7b = 168b --> 6 regs
+      // PDS delays 32ch * 7b = 224b --> 8 regs
       for(size_t i=0; i<delays.size()/4; i++) {
 
         int j = i * 4;
@@ -653,7 +653,7 @@ namespace ptb {
       //Input channel masks
       set_bit_range_register(2,0,24,channelmask);
 
-      set_bit_range_register(24,14,6,0);
+      set_bit_range_register(26,0,6,reshape_len);
 
       //Configure counting trigger(s)
       set_bit(27,11,llt14_enable);
@@ -691,16 +691,17 @@ namespace ptb {
 
       size_t err_msgs = 2;
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
+      std::ostringstream oss;
      
       json rtrigger = miscconfig.at("randomtrigger");
       bool rtrigger_en = rtrigger.at("enable").get<bool>();
       uint32_t rtriggerfreq = rtrigger.at("frequency").get<unsigned int>();
       Log(debug,"Random Trigger Frequency [%d] (%u) [0x%X][%s]",rtriggerfreq,rtriggerfreq,rtriggerfreq, std::bitset<26>(rtriggerfreq).to_string().c_str());
       if (rtriggerfreq >= (1<<26)) {
-        std::ostringstream oss0;
-        oss0 << "Random trigger value of " << rtriggerfreq << " above maximum rollover [2^26 - 1]. Truncating to maximum.";
-        tmp[0] = std::make_pair("warning", oss0.str());
-        Log(warning,"%s", oss0.str());
+        //std::ostringstream oss0;
+        oss << "Random trigger value of " << rtriggerfreq << " above maximum rollover [2^26 - 1]. Truncating to maximum.";
+        tmp[0] = std::make_pair("warning", oss.str());
+        Log(warning,"%s", oss.str());
         rtriggerfreq = (1<<26)-1;
       }
       
@@ -711,10 +712,10 @@ namespace ptb {
       Log(debug,"Pulser Frequency [%d] (%u) [0x%X][%s]",pulserfreq,pulserfreq,pulserfreq, std::bitset<26>(pulserfreq).to_string().c_str());
       if (pulserfreq >= (1<<26)) {
         pulserfreq = (1<<26)-1;
-        std::ostringstream oss1;
-        oss1 << "Pulser value of " << pulserfreq << " above maximum rollover [2^26 - 1]. Truncating to maximum.";
-        tmp[1] = std::make_pair("warning", oss1.str());
-        Log(warning,"%s", oss1.str());
+        //std::ostringstream oss1;
+        oss << "Pulser value of " << pulserfreq << " above maximum rollover [2^26 - 1]. Truncating to maximum.";
+        tmp[1] = std::make_pair("warning", oss.str());
+        Log(warning,"%s", oss.str());
       }
 
       //Timing endpoint parameters
@@ -726,10 +727,10 @@ namespace ptb {
 
 
       set_bit(27,0,rtrigger_en);
-      set_bit(26,31,pulser_en);
+      set_bit(5,31,pulser_en);
 
-      set_bit_range_register(25,0,26,rtriggerfreq);
-      set_bit_range_register(26,0,26,pulserfreq);
+      set_bit_range_register(4,0,26,rtriggerfreq);
+      set_bit_range_register(5,0,26,pulserfreq);
 
       uint32_t t_param = (t_group<<8) + t_addr;
 
@@ -837,7 +838,6 @@ namespace ptb {
       set_bit_range_register(56,0,32,hlt2);
       set_bit_range_register(57,0,32,hlt3);
       set_bit_range_register(58,0,32,hlt4);
-
 
       //Place warnings into json feedback obj
       json obj;

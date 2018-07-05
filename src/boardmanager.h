@@ -258,7 +258,7 @@ private:
 
   state board_state_;
 
-  static const uint8_t num_registers_ = 62;
+  static const uint8_t num_registers_ = 67;
   //static const char *default_config_;
   json config_;
   void *mapped_conf_base_addr_;
@@ -285,7 +285,7 @@ private:
 inline void board_manager::set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value) {
   // Create a mask based on pos and len
   uint32_t mask = (((uint32_t)1 << len)-1) << pos;
-  register_map_[reg].value() = (register_map_[reg].value() & ~mask) | (value & mask);
+  register_map_[reg].value() = (register_map_[reg].value() & ~mask) | (mask & value);
 }
 
 inline void board_manager::set_bit(const uint32_t reg, const uint32_t bit, bool status) {

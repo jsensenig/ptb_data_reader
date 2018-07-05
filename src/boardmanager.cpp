@@ -569,6 +569,26 @@ namespace ptb {
       answers.insert(std::end(answers),feedback.begin(),feedback.end());
     }
 
+    //Read the timing status 
+    uint32_t timing_reg = 65; //reg_out_1[31:28]
+    uint32_t evt_ctr_reg = 66; //reg_out_2[31:0]
+    uint32_t timing_stat = register_map_[timing_reg].value();
+    uint32_t evt_ctr = register_map_[evt_ctr_reg].value();
+    Log(debug,"Received %X timing status: ",(timing_stat >> 28));
+    Log(debug,"Received %X events: ", evt_ctr);
+    std::ostringstream oss0;
+    std::ostringstream oss1;
+    oss0 << "Recieved timing status: " << (timing_stat >> 28);
+    oss1 << "Event counter: " << evt_ctr;
+    json obj1;
+    obj1["type"] = "info";
+    obj1["message"] = oss0.str();
+    answers.push_back(obj1);
+    json obj2;
+    obj2["type"] = "info";
+    obj2["message"] = oss1.str();
+    answers.push_back(obj2);
+
 #elif defined(SBND_COMPILATION)
 
     //Used to determine the global time
