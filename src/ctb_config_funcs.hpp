@@ -106,7 +106,7 @@ namespace ptb {
 
       std::string s_channelmask = beamconfig.at("channel_mask").get<std::string>();
       std::vector<uint32_t> delays = beamconfig.at("delays").get<std::vector<uint32_t>>();
-      uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
+      uint32_t channelmask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
 
       uint32_t reshape_len = beamconfig.at("reshape_length").get<unsigned int>();
       Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
@@ -127,7 +127,7 @@ namespace ptb {
       //Mask type triggers, inclusive & exclusive
       bool llt1_enable = trigs.at(0).at("enable").get<bool>();
       std::string s_llt1mask = trigs.at(0).at("mask").get<std::string>();
-      uint32_t llt1mask = (int)strtol(s_llt1mask.c_str(),NULL,0);
+      uint32_t llt1mask = (uint32_t)strtoul(s_llt1mask.c_str(),NULL,0);
       //if (llt1_enable) { tmpi[0] << "Trigger " << trigs.at(0).at("id").get<std::string>() << " " << trigs.at(0).at("description").get<std::string>() << " configured"; }
       std::ostringstream oss1;
       if (llt1mask == 0) { 
@@ -137,7 +137,7 @@ namespace ptb {
       tmp[1] = std::make_pair("warning", oss1.str());
       bool llt3_enable = trigs.at(1).at("enable").get<bool>();
       std::string s_llt3mask = trigs.at(1).at("mask").get<std::string>();
-      uint32_t llt3mask = (int)strtol(s_llt3mask.c_str(),NULL,0);
+      uint32_t llt3mask = (uint32_t)strtoul(s_llt3mask.c_str(),NULL,0);
       //if (llt3_enable) { tmpi[0] << "Trigger " << trigs.at(0).at("id").get<std::string>() << " " << trigs.at(0).at("description").get<std::string>() << " configured"; }
       std::ostringstream oss2;
       if (llt3mask == 0) { 
@@ -147,7 +147,7 @@ namespace ptb {
       tmp[2] = std::make_pair("warning", oss2.str());
       bool llt4_enable = trigs.at(2).at("enable").get<bool>();
       std::string s_llt4mask = trigs.at(2).at("mask").get<std::string>();
-      uint32_t llt4mask = (int)strtol(s_llt4mask.c_str(),NULL,0);
+      uint32_t llt4mask = (uint32_t)strtoul(s_llt4mask.c_str(),NULL,0);
       std::ostringstream oss3;
       if (llt4mask == 0) { 
         oss3 << "Trigger " << trigs.at(2).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled."; 
@@ -156,7 +156,7 @@ namespace ptb {
       tmp[3] = std::make_pair("warning", oss3.str());
       std::string s_llt5mask = trigs.at(3).at("mask").get<std::string>();
       bool llt5_enable = trigs.at(3).at("enable").get<bool>();
-      uint32_t llt5mask = (int)strtol(s_llt5mask.c_str(),NULL,0);
+      uint32_t llt5mask = (uint32_t)strtoul(s_llt5mask.c_str(),NULL,0);
       std::ostringstream oss4;
       if (llt5mask == 0) { 
         oss4 << "Trigger " << trigs.at(3).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled."; 
@@ -165,7 +165,7 @@ namespace ptb {
       tmp[4] = std::make_pair("warning", oss4.str());
       bool llt6_enable = trigs.at(4).at("enable").get<bool>();
       std::string s_llt6mask = trigs.at(4).at("mask").get<std::string>();
-      uint32_t llt6mask = (int)strtol(s_llt6mask.c_str(),NULL,0);
+      uint32_t llt6mask = (uint32_t)strtoul(s_llt6mask.c_str(),NULL,0);
       std::ostringstream oss5;
       if (llt6mask == 0) { 
         oss5 << "Trigger " << trigs.at(4).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled."; 
@@ -253,7 +253,7 @@ namespace ptb {
        std::string s_llt11mask = trigs.at(0).at("mask").get<std::string>();
        std::string s_llt11count = trigs.at(0).at("count").get<std::string>();
        std::string s_llt11type = trigs.at(0).at("type").get<std::string>();
-       uint32_t llt11mask = (int)strtol(s_llt11mask.c_str(),NULL,0);
+       uint32_t llt11mask = (uint32_t)strtoul(s_llt11mask.c_str(),NULL,0);
        uint8_t llt11count = (int)strtol(s_llt11count.c_str(),NULL,0);
        uint8_t llt11type = (int)strtol(s_llt11type.c_str(),NULL,0);
                                                                                                                                                                                                          
@@ -300,7 +300,7 @@ namespace ptb {
        std::string s_llt12mask = trigs.at(1).at("mask").get<std::string>();         
        std::string s_llt12count = trigs.at(1).at("count").get<std::string>();                                                                           
        std::string s_llt12type = trigs.at(1).at("type").get<std::string>();                                                                                       
-       uint32_t llt12mask = (int)strtol(s_llt12mask.c_str(),NULL,0);                                                                                                                      
+       uint32_t llt12mask = (uint32_t)strtoul(s_llt12mask.c_str(),NULL,0);                                                                                                                      
        uint8_t llt12count = (int)strtol(s_llt12count.c_str(),NULL,0);                                                                                                      
        uint8_t llt12type = (int)strtol(s_llt12type.c_str(),NULL,0);                                                                                                            
                                                                                                                                                                               
@@ -346,7 +346,7 @@ namespace ptb {
         std::string s_llt13mask = trigs.at(2).at("mask").get<std::string>();
         std::string s_llt13count = trigs.at(2).at("count").get<std::string>();
         std::string s_llt13type = trigs.at(2).at("type").get<std::string>();
-        uint32_t llt13mask = (int)strtol(s_llt13mask.c_str(),NULL,0);
+        uint32_t llt13mask = (uint32_t)strtoul(s_llt13mask.c_str(),NULL,0);
         uint8_t llt13count = (int)strtol(s_llt13count.c_str(),NULL,0);
         uint8_t llt13type = (int)strtol(s_llt13type.c_str(),NULL,0);
                                                                                                                                                                                                           
@@ -392,7 +392,7 @@ namespace ptb {
         std::string s_llt15mask = trigs.at(3).at("mask").get<std::string>();
         std::string s_llt15count = trigs.at(3).at("count").get<std::string>();
         std::string s_llt15type = trigs.at(3).at("type").get<std::string>();
-        uint32_t llt15mask = (int)strtol(s_llt15mask.c_str(),NULL,0);
+        uint32_t llt15mask = (uint32_t)strtoul(s_llt15mask.c_str(),NULL,0);
         uint8_t llt15count = (int)strtol(s_llt15count.c_str(),NULL,0);
         uint8_t llt15type = (int)strtol(s_llt15type.c_str(),NULL,0);
                                                                                                                                                                                                           
@@ -438,7 +438,7 @@ namespace ptb {
         std::string s_llt16mask = trigs.at(4).at("mask").get<std::string>();
         std::string s_llt16count = trigs.at(4).at("count").get<std::string>();
         std::string s_llt16type = trigs.at(4).at("type").get<std::string>();
-        uint32_t llt16mask = (int)strtol(s_llt16mask.c_str(),NULL,0);
+        uint32_t llt16mask = (uint32_t)strtoul(s_llt16mask.c_str(),NULL,0);
         uint8_t llt16count = (int)strtol(s_llt16count.c_str(),NULL,0);
         uint8_t llt16type = (int)strtol(s_llt16type.c_str(),NULL,0);
                                                                                                                                                                                                           
@@ -552,10 +552,10 @@ namespace ptb {
       std::string s_llt14mask = trigs.at(0).at("mask").get<std::string>();
       bool llt14_enable = trigs.at(0).at("enable").get<bool>();
 
-      uint32_t channelmask = (int)strtol(s_channelmask.c_str(),NULL,0);
+      uint32_t channelmask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
       uint8_t llt14type = (int)strtol(s_llt14type.c_str(),NULL,0);
       uint8_t llt14count = (int)strtol(s_llt14count.c_str(),NULL,0);
-      uint32_t llt14mask = (int)strtol(s_llt14mask.c_str(),NULL,0);
+      uint32_t llt14mask = (uint32_t)strtoul(s_llt14mask.c_str(),NULL,0);
 
       uint32_t reshape_len = pdsconfig.at("reshape_length").get<unsigned int>();
       Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
@@ -722,8 +722,8 @@ namespace ptb {
       json timingconf = miscconfig.at("timing");
       std::string s_t_addr = timingconf.at("address").get<std::string>();
       std::string s_t_group = timingconf.at("group").get<std::string>();
-      uint32_t t_addr = (int)strtol(s_t_addr.c_str(),NULL,0);
-      uint32_t t_group = (int)strtol(s_t_group.c_str(),NULL,0);
+      uint32_t t_addr = (uint32_t)strtoul(s_t_addr.c_str(),NULL,0);
+      uint32_t t_group = (uint32_t)strtoul(s_t_group.c_str(),NULL,0);
 
 
       set_bit(27,0,rtrigger_en);
@@ -761,8 +761,8 @@ namespace ptb {
       bool hlt0_enable = trigs.at(0).at("enable").get<bool>();
       std::string s_hlt0minc = trigs.at(0).at("minc").get<std::string>();
       std::string s_hlt0mexc = trigs.at(0).at("mexc").get<std::string>();
-      uint32_t hlt0minc = (int)strtol(s_hlt0minc.c_str(),NULL,0);
-      uint32_t hlt0mexc = (int)strtol(s_hlt0mexc.c_str(),NULL,0);
+      uint32_t hlt0minc = (uint32_t)strtoul(s_hlt0minc.c_str(),NULL,0);
+      uint32_t hlt0mexc = (uint32_t)strtoul(s_hlt0mexc.c_str(),NULL,0);
       std::ostringstream oss0;
       if (hlt0minc == 0) { 
         oss0 << trigs.at(0).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
@@ -773,8 +773,8 @@ namespace ptb {
       bool hlt1_enable = trigs.at(1).at("enable").get<bool>();                                                         
       std::string s_hlt1minc = trigs.at(1).at("minc").get<std::string>();
       std::string s_hlt1mexc = trigs.at(1).at("mexc").get<std::string>();
-      uint32_t hlt1minc = (int)strtol(s_hlt1minc.c_str(),NULL,0);
-      uint32_t hlt1mexc = (int)strtol(s_hlt1mexc.c_str(),NULL,0);
+      uint32_t hlt1minc = (uint32_t)strtoul(s_hlt1minc.c_str(),NULL,0);
+      uint32_t hlt1mexc = (uint32_t)strtoul(s_hlt1mexc.c_str(),NULL,0);
       std::ostringstream oss1;
       if (hlt1minc == 0) { 
         oss1 << trigs.at(1).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
@@ -785,8 +785,8 @@ namespace ptb {
       bool hlt2_enable = trigs.at(2).at("enable").get<bool>();
       std::string s_hlt2minc = trigs.at(2).at("minc").get<std::string>();
       std::string s_hlt2mexc = trigs.at(2).at("mexc").get<std::string>();
-      uint32_t hlt2minc = (int)strtol(s_hlt2minc.c_str(),NULL,0);
-      uint32_t hlt2mexc = (int)strtol(s_hlt2mexc.c_str(),NULL,0);
+      uint32_t hlt2minc = (uint32_t)strtoul(s_hlt2minc.c_str(),NULL,0);
+      uint32_t hlt2mexc = (uint32_t)strtoul(s_hlt2mexc.c_str(),NULL,0);
       std::ostringstream oss2;
       if (hlt2minc == 0) { 
         oss2 << trigs.at(2).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
@@ -797,8 +797,8 @@ namespace ptb {
       bool hlt3_enable = trigs.at(3).at("enable").get<bool>();                                                         
       std::string s_hlt3minc = trigs.at(3).at("minc").get<std::string>();
       std::string s_hlt3mexc = trigs.at(3).at("mexc").get<std::string>();
-      uint32_t hlt3minc = (int)strtol(s_hlt3minc.c_str(),NULL,0);
-      uint32_t hlt3mexc = (int)strtol(s_hlt3mexc.c_str(),NULL,0);
+      uint32_t hlt3minc = (uint32_t)strtoul(s_hlt3minc.c_str(),NULL,0);
+      uint32_t hlt3mexc = (uint32_t)strtoul(s_hlt3mexc.c_str(),NULL,0);
       std::ostringstream oss3;
       if (hlt3minc == 0) { 
         oss3 << trigs.at(3).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
@@ -809,8 +809,8 @@ namespace ptb {
       bool hlt4_enable = trigs.at(4).at("enable").get<bool>();
       std::string s_hlt4minc = trigs.at(4).at("minc").get<std::string>();
       std::string s_hlt4mexc = trigs.at(4).at("mexc").get<std::string>();
-      uint32_t hlt4minc = (int)strtol(s_hlt4minc.c_str(),NULL,0);
-      uint32_t hlt4mexc = (int)strtol(s_hlt4mexc.c_str(),NULL,0);
+      uint32_t hlt4minc = (uint32_t)strtoul(s_hlt4minc.c_str(),NULL,0);
+      uint32_t hlt4mexc = (uint32_t)strtoul(s_hlt4mexc.c_str(),NULL,0);
       std::ostringstream oss4;
       if (hlt4minc == 0) { 
         oss4 << trigs.at(4).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
