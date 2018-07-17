@@ -231,6 +231,7 @@ namespace ptb {
       std::string s_channelmask = crtconfig.at("channel_mask").get<std::string>();
       std::vector<uint32_t> delays = crtconfig.at("delays").get<std::vector<uint32_t>>();
       uint32_t channelmask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
+      bool crt_mapping_ena = crtconfig.at("pixelate").get<bool>();
       std::ostringstream oss0;
       if (channelmask == 0) { 
         oss0 << "CRT channel mask set for 0x0."; 
@@ -482,6 +483,7 @@ namespace ptb {
 
       //Input channel masks
       set_bit_range_register(1,0,32,channelmask);
+      set_bit(62,1,crt_mapping_ena);
       set_bit_range_register(25,0,6,reshape_len);
 
       //Trigger enables
@@ -692,9 +694,12 @@ namespace ptb {
       size_t err_msgs = 2;
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
       std::ostringstream oss;
-     
+      
+      bool ch_status_ena = miscconfig.at("ch_status").get<bool>();
+
       json rtrigger = miscconfig.at("randomtrigger");
       bool rtrigger_en = rtrigger.at("enable").get<bool>();
+      bool rtrig_fixed_freq = rtrigger.at("fixed_freq").get<bool>();
       uint32_t rtriggerfreq = rtrigger.at("frequency").get<unsigned int>();
       Log(debug,"Random Trigger Frequency [%d] (%u) [0x%X][%s]",rtriggerfreq,rtriggerfreq,rtriggerfreq, std::bitset<26>(rtriggerfreq).to_string().c_str());
       if (rtriggerfreq >= (1<<26)) {
@@ -724,17 +729,21 @@ namespace ptb {
       std::string s_t_group = timingconf.at("group").get<std::string>();
       uint32_t t_addr = (uint32_t)strtoul(s_t_addr.c_str(),NULL,0);
       uint32_t t_group = (uint32_t)strtoul(s_t_group.c_str(),NULL,0);
+      bool trigger_ena = timingconf.at("triggers").get<bool>();
 
+
+      set_bit(62,0,ch_status_ena);
 
       set_bit(27,0,rtrigger_en);
+      set_bit(62,2,rtrig_fixed_freq);
       set_bit(5,31,pulser_en);
 
       set_bit_range_register(4,0,26,rtriggerfreq);
       set_bit_range_register(5,0,26,pulserfreq);
 
       uint32_t t_param = (t_group<<8) + t_addr;
-
       set_bit_range_register(61,0,10,t_param);
+      set_bit(61,10,trigger_ena);
 
       //Place warnings into json feedback obj
       json obj;

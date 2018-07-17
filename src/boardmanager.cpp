@@ -324,8 +324,12 @@ namespace ptb {
 
     // Build a statistics object
     if (get_board_state() == board_manager::RUNNING) {
+     // uint32_t evtctr = register_map_[65].value();
+      std::ostringstream evts; 
+      evts << "num_events: " << register_map_[66].value();
       json stat;
       stat["type"] = "statistics";
+      stat["message"] = evts.str();
       stat["num_eth_packets"] = reader_->get_n_sent_frags();
       stat["num_eth_bytes"] = reader_->get_sent_bytes();
       stat["num_word_counter"] = reader_->get_n_status();
@@ -568,26 +572,26 @@ namespace ptb {
       Log(debug,"Received %u messages from configuring the CTB",feedback.size());
       answers.insert(std::end(answers),feedback.begin(),feedback.end());
     }
-
+    //Sleep for a bit to allow the timing endpoint to cycle through it's state machine
+    usleep(900000);
     //Read the timing status 
     uint32_t timing_reg = 65; //reg_out_1[31:28]
-    uint32_t evt_ctr_reg = 66; //reg_out_2[31:0]
     uint32_t timing_stat = register_map_[timing_reg].value();
-    uint32_t evt_ctr = register_map_[evt_ctr_reg].value();
     Log(debug,"Received %X timing status: ",(timing_stat >> 28));
-    Log(debug,"Received %X events: ", evt_ctr);
     std::ostringstream oss0;
-    std::ostringstream oss1;
     oss0 << "Recieved timing status: " << (timing_stat >> 28);
-    oss1 << "Event counter: " << evt_ctr;
     json obj1;
     obj1["type"] = "info";
     obj1["message"] = oss0.str();
     answers.push_back(obj1);
-    json obj2;
-    obj2["type"] = "info";
-    obj2["message"] = oss1.str();
-    answers.push_back(obj2);
+    if ((timing_stat >> 28) != 0x8) {
+      json obj;
+      std::ostringstream oss;
+      oss << "Timing not initialized! Timing status: " << (timing_stat >> 28);
+      obj["type"] = "Warning";
+      obj["message"] = oss.str();
+      answers.push_back(obj);
+    }
 
 #elif defined(SBND_COMPILATION)
 
