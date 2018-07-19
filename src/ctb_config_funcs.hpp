@@ -99,7 +99,7 @@ namespace ptb {
 
     void board_manager::beam_config(json& beamconfig, json& feedback) {
 
-      size_t err_msgs = 7;
+      size_t err_msgs = 9;
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
 
       json trigs = beamconfig.at("triggers"); //Array of trigger configs
@@ -111,10 +111,10 @@ namespace ptb {
       uint32_t reshape_len = beamconfig.at("reshape_length").get<unsigned int>();
       Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
       if (reshape_len >= (1<<6)) {
-        std::ostringstream oss6;
-        oss6 << "Random trigger value of " << reshape_len << " above maximum rollover [2^6 - 1]. Truncating to maximum.";
-        tmp[6] = std::make_pair("warning", oss6.str());
-        Log(warning,"%s", oss6.str());
+        std::ostringstream oss8;
+        oss8 << "Random trigger value of " << reshape_len << " above maximum rollover [2^6 - 1]. Truncating to maximum.";
+        tmp[8] = std::make_pair("warning", oss8.str());
+        Log(warning,"%s", oss8.str());
         reshape_len = (1<<6)-1;
       }
 
@@ -172,6 +172,26 @@ namespace ptb {
         Log(warning,"%s", oss5.str());
       }
       tmp[5] = std::make_pair("warning", oss5.str());
+      bool llt7_enable = trigs.at(5).at("enable").get<bool>();
+      std::string s_llt7mask = trigs.at(5).at("mask").get<std::string>();
+      uint32_t llt7mask = (uint32_t)strtoul(s_llt7mask.c_str(),NULL,0);
+      std::ostringstream oss6;
+      if (llt7mask == 0) { 
+        oss6 << "Trigger " << trigs.at(5).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled."; 
+        Log(warning,"%s", oss6.str());
+      }
+      tmp[6] = std::make_pair("warning", oss6.str());
+      bool llt8_enable = trigs.at(6).at("enable").get<bool>();
+      std::string s_llt8mask = trigs.at(6).at("mask").get<std::string>();
+      uint32_t llt8mask = (uint32_t)strtoul(s_llt8mask.c_str(),NULL,0);
+      std::ostringstream oss7;
+      if (llt8mask == 0) { 
+        oss7 << "Trigger " << trigs.at(6).at("id").get<std::string>() << " set to 0x0. Equivalent to disabled."; 
+        Log(warning,"%s", oss7.str());
+      }
+      tmp[7] = std::make_pair("warning", oss7.str());
+
+
       
       //Input channel masks
       set_bit_range_register(3,0,9,channelmask);
@@ -183,6 +203,8 @@ namespace ptb {
       set_bit(27,4,llt4_enable);
       set_bit(27,5,llt5_enable);
       set_bit(27,6,llt6_enable);
+      set_bit(27,7,llt7_enable);
+      set_bit(27,8,llt8_enable);
 
       //Trigger parameters
       set_bit_range_register(28,0,32,llt1mask);
@@ -190,6 +212,8 @@ namespace ptb {
       set_bit_range_register(31,0,32,llt4mask);
       set_bit_range_register(32,0,32,llt5mask);
       set_bit_range_register(33,0,32,llt6mask);
+      set_bit_range_register(34,0,32,llt7mask);
+      set_bit_range_register(35,0,32,llt8mask);
 
       uint8_t dbits = 7;
       // Beam delays 9ch * 7b = 63b --> 3 regs
@@ -762,91 +786,119 @@ namespace ptb {
                                                                                                                               
     void board_manager::hlt_config(json& hltconfig, json& feedback) {
                                                                                                                                                             
-      size_t err_msgs = 5;
+      size_t err_msgs = 7;
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
      
       json trigs = hltconfig.at("trigger");
 
-      bool hlt0_enable = trigs.at(0).at("enable").get<bool>();
-      std::string s_hlt0minc = trigs.at(0).at("minc").get<std::string>();
-      std::string s_hlt0mexc = trigs.at(0).at("mexc").get<std::string>();
-      uint32_t hlt0minc = (uint32_t)strtoul(s_hlt0minc.c_str(),NULL,0);
-      uint32_t hlt0mexc = (uint32_t)strtoul(s_hlt0mexc.c_str(),NULL,0);
+      bool hlt1_enable = trigs.at(0).at("enable").get<bool>();
+      std::string s_hlt1minc = trigs.at(0).at("minc").get<std::string>();
+      std::string s_hlt1mexc = trigs.at(0).at("mexc").get<std::string>();
+      uint32_t hlt1minc = (uint32_t)strtoul(s_hlt1minc.c_str(),NULL,0);
+      uint32_t hlt1mexc = (uint32_t)strtoul(s_hlt1mexc.c_str(),NULL,0);
       std::ostringstream oss0;
-      if (hlt0minc == 0) { 
+      if (hlt1minc == 0) { 
         oss0 << trigs.at(0).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss0.str());
       }
       tmp[0] = std::make_pair("warning", oss0.str());
  
-      bool hlt1_enable = trigs.at(1).at("enable").get<bool>();                                                         
-      std::string s_hlt1minc = trigs.at(1).at("minc").get<std::string>();
-      std::string s_hlt1mexc = trigs.at(1).at("mexc").get<std::string>();
-      uint32_t hlt1minc = (uint32_t)strtoul(s_hlt1minc.c_str(),NULL,0);
-      uint32_t hlt1mexc = (uint32_t)strtoul(s_hlt1mexc.c_str(),NULL,0);
+      bool hlt2_enable = trigs.at(1).at("enable").get<bool>();                                                         
+      std::string s_hlt2minc = trigs.at(1).at("minc").get<std::string>();
+      std::string s_hlt2mexc = trigs.at(1).at("mexc").get<std::string>();
+      uint32_t hlt2minc = (uint32_t)strtoul(s_hlt2minc.c_str(),NULL,0);
+      uint32_t hlt2mexc = (uint32_t)strtoul(s_hlt2mexc.c_str(),NULL,0);
       std::ostringstream oss1;
-      if (hlt1minc == 0) { 
+      if (hlt2minc == 0) { 
         oss1 << trigs.at(1).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss1.str());
       }
       tmp[1] = std::make_pair("warning", oss1.str());
 
-      bool hlt2_enable = trigs.at(2).at("enable").get<bool>();
-      std::string s_hlt2minc = trigs.at(2).at("minc").get<std::string>();
-      std::string s_hlt2mexc = trigs.at(2).at("mexc").get<std::string>();
-      uint32_t hlt2minc = (uint32_t)strtoul(s_hlt2minc.c_str(),NULL,0);
-      uint32_t hlt2mexc = (uint32_t)strtoul(s_hlt2mexc.c_str(),NULL,0);
+      bool hlt3_enable = trigs.at(2).at("enable").get<bool>();
+      std::string s_hlt3minc = trigs.at(2).at("minc").get<std::string>();
+      std::string s_hlt3mexc = trigs.at(2).at("mexc").get<std::string>();
+      uint32_t hlt3minc = (uint32_t)strtoul(s_hlt3minc.c_str(),NULL,0);
+      uint32_t hlt3mexc = (uint32_t)strtoul(s_hlt3mexc.c_str(),NULL,0);
       std::ostringstream oss2;
-      if (hlt2minc == 0) { 
+      if (hlt3minc == 0) { 
         oss2 << trigs.at(2).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss2.str());
       }
       tmp[2] = std::make_pair("warning", oss2.str());
 
-      bool hlt3_enable = trigs.at(3).at("enable").get<bool>();                                                         
-      std::string s_hlt3minc = trigs.at(3).at("minc").get<std::string>();
-      std::string s_hlt3mexc = trigs.at(3).at("mexc").get<std::string>();
-      uint32_t hlt3minc = (uint32_t)strtoul(s_hlt3minc.c_str(),NULL,0);
-      uint32_t hlt3mexc = (uint32_t)strtoul(s_hlt3mexc.c_str(),NULL,0);
+      bool hlt4_enable = trigs.at(3).at("enable").get<bool>();                                                         
+      std::string s_hlt4minc = trigs.at(3).at("minc").get<std::string>();
+      std::string s_hlt4mexc = trigs.at(3).at("mexc").get<std::string>();
+      uint32_t hlt4minc = (uint32_t)strtoul(s_hlt4minc.c_str(),NULL,0);
+      uint32_t hlt4mexc = (uint32_t)strtoul(s_hlt4mexc.c_str(),NULL,0);
       std::ostringstream oss3;
-      if (hlt3minc == 0) { 
+      if (hlt4minc == 0) { 
         oss3 << trigs.at(3).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss3.str());
       }
       tmp[3] = std::make_pair("warning", oss3.str());
 
-      bool hlt4_enable = trigs.at(4).at("enable").get<bool>();
-      std::string s_hlt4minc = trigs.at(4).at("minc").get<std::string>();
-      std::string s_hlt4mexc = trigs.at(4).at("mexc").get<std::string>();
-      uint32_t hlt4minc = (uint32_t)strtoul(s_hlt4minc.c_str(),NULL,0);
-      uint32_t hlt4mexc = (uint32_t)strtoul(s_hlt4mexc.c_str(),NULL,0);
+      bool hlt5_enable = trigs.at(4).at("enable").get<bool>();
+      std::string s_hlt5minc = trigs.at(4).at("minc").get<std::string>();
+      std::string s_hlt5mexc = trigs.at(4).at("mexc").get<std::string>();
+      uint32_t hlt5minc = (uint32_t)strtoul(s_hlt5minc.c_str(),NULL,0);
+      uint32_t hlt5mexc = (uint32_t)strtoul(s_hlt5mexc.c_str(),NULL,0);
       std::ostringstream oss4;
-      if (hlt4minc == 0) { 
+      if (hlt5minc == 0) { 
         oss4 << trigs.at(4).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss4.str());
       }
       tmp[4] = std::make_pair("warning", oss4.str());
+      bool hlt6_enable = trigs.at(5).at("enable").get<bool>();
+      std::string s_hlt6minc = trigs.at(5).at("minc").get<std::string>();
+      std::string s_hlt6mexc = trigs.at(5).at("mexc").get<std::string>();
+      uint32_t hlt6minc = (uint32_t)strtoul(s_hlt6minc.c_str(),NULL,0);
+      uint32_t hlt6mexc = (uint32_t)strtoul(s_hlt6mexc.c_str(),NULL,0);
+      std::ostringstream oss5;
+      if (hlt4minc == 0) { 
+        oss5 << trigs.at(5).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
+        Log(warning,"%s", oss5.str());
+      }
+      tmp[5] = std::make_pair("warning", oss5.str());
+      bool hlt7_enable = trigs.at(6).at("enable").get<bool>();
+      std::string s_hlt7minc = trigs.at(6).at("minc").get<std::string>();
+      std::string s_hlt7mexc = trigs.at(6).at("mexc").get<std::string>();
+      uint32_t hlt7minc = (uint32_t)strtoul(s_hlt7minc.c_str(),NULL,0);
+      uint32_t hlt7mexc = (uint32_t)strtoul(s_hlt7mexc.c_str(),NULL,0);
+      std::ostringstream oss6;
+      if (hlt7minc == 0) { 
+        oss6 << trigs.at(6).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
+        Log(warning,"%s", oss6.str());
+      }
+      tmp[6] = std::make_pair("warning", oss6.str());
 
       //HLT enables
-      set_bit(27,19,hlt0_enable);
-      set_bit(27,20,hlt1_enable);
-      set_bit(27,21,hlt2_enable);
-      set_bit(27,22,hlt3_enable);
-      set_bit(27,23,hlt4_enable);
+      set_bit(27,19,hlt1_enable);
+      set_bit(27,20,hlt2_enable);
+      set_bit(27,21,hlt3_enable);
+      set_bit(27,22,hlt4_enable);
+      set_bit(27,23,hlt5_enable);
+      set_bit(27,24,hlt6_enable);
+      set_bit(27,25,hlt7_enable);
 
       //The exclusive mask goes in 16 upper bits while the inclusive mask goes in the 16 lower bits
-      uint32_t hlt0 = (hlt0mexc<<16) + hlt0minc;
       uint32_t hlt1 = (hlt1mexc<<16) + hlt1minc;
       uint32_t hlt2 = (hlt2mexc<<16) + hlt2minc;
       uint32_t hlt3 = (hlt3mexc<<16) + hlt3minc;
       uint32_t hlt4 = (hlt4mexc<<16) + hlt4minc;
+      uint32_t hlt5 = (hlt5mexc<<16) + hlt5minc;
+      uint32_t hlt6 = (hlt6mexc<<16) + hlt6minc;
+      uint32_t hlt7 = (hlt7mexc<<16) + hlt7minc;
 
       //HLT parameters
-      set_bit_range_register(54,0,32,hlt0);
-      set_bit_range_register(55,0,32,hlt1);
-      set_bit_range_register(56,0,32,hlt2);
-      set_bit_range_register(57,0,32,hlt3);
-      set_bit_range_register(58,0,32,hlt4);
+      set_bit_range_register(54,0,32,hlt1);
+      set_bit_range_register(55,0,32,hlt2);
+      set_bit_range_register(56,0,32,hlt3);
+      set_bit_range_register(57,0,32,hlt4);
+      set_bit_range_register(58,0,32,hlt5);
+      set_bit_range_register(59,0,32,hlt6);
+      set_bit_range_register(60,0,32,hlt7);
 
       //Place warnings into json feedback obj
       json obj;

@@ -21,7 +21,7 @@
       "randomtrigger":{
         "enable":true,
         "fixed_freq":false,
-        "frequency":1650000
+        "frequency":1000000
       },
       "pulser":{
         "enable":true,
@@ -37,34 +37,46 @@
     "HLT":{
       "trigger": [                                        
         { "id":"HLT_1",
-          "description": "Beam trigger w/ CRT veto around beam pipe (for now BI test HLT)",
+          "description": "Beam trigger, veto with high-rate muon CRT around beam pipe",
           "enable":true,
           "minc" : "0x1",
           "mexc" : "0x2"
         },
         { "id":"HLT_2",
-          "description": "Beam trigger w/ CRT veto around beam pipe", 
+          "description": "Reconstructable track beam trigger, high-rate muon veto with CRT around beam pipe", 
           "enable":true,
           "minc" : "0x1",
           "mexc" : "0x2"
         },
         { "id":"HLT_3",
-          "description": "Beam trigger w/ CRT veto around beam pipe and Cherenkov PId",
+          "description": "Medium beam energy pion trigger, cherenkov particle selection, high-rate muon CRT veto around beam pipe, no PDS",
           "enable":true,
           "minc" : "0x1",
           "mexc" : "0x6"
         },
         { "id":"HLT_4",
-          "description": "Muon halo with CRT and PDS",
+          "description": "Muon halo trigger, with PDS",
           "enable":true,
           "minc" : "0xF",
           "mexc" : "0x0"
         },
         { "id":"HLT_5",
-          "description": "Cosmic through-going muon on Jura side",
+          "description": "Cosmic trigger, high to lower, up to down stream muon on Jura-side CRT and PDS (no Beam)",
           "enable":true,
           "minc" : "0xE",
           "mexc" : "0x1"
+        },
+        { "id":"HLT_6",
+          "description": "Low beam energy electron trigger, high-rate muon veto with CRT around beam pipe, no PDS",
+          "enable":true,
+          "minc" : "0x1",
+          "mexc" : "0x2"
+        },
+        { "id":"HLT_7",
+          "description": "Low beam energy hadron trigger, veto with high-rate muon CRT around beam pipe, no PDS",
+          "enable":true,
+          "minc" : "0x1",
+          "mexc" : "0x6"
         }
       ]
     },
@@ -138,24 +150,34 @@
             "mask" : "0x67"
           },
           { "id":"LLT_3",
-            "description": "Beam particle trigger",
+            "description": "Mask in all BI, except Cherenkov detector",
             "enable":true,
             "mask" : "0x7F"
           },
           { "id":"LLT_4",                           
-            "description": "Beam particle trigger",
+            "description": "Mask in all BI except C1",
+            "enable":true,
+            "mask" : "0x17F"
+          },
+          { "id":"LLT_5",
+            "description": "Mask in C1",
+            "enable":true,
+            "mask" : "0x80"
+          },
+          { "id":"LLT_6",
+            "description": "Beam gate selection",
+            "enable":true,
+            "mask" : "0x1"
+          },
+          { "id":"LLT_7",
+            "description": "Mask in all BI for trigger inclusion",
             "enable":true,
             "mask" : "0xFF"
           },
-          { "id":"LLT_5",
-            "description": "Beam particle trigger",
+          { "id":"LLT_8",
+            "description": "Select only the Cherenkov detectors",
             "enable":true,
-            "mask" : "0x100"
-          },
-          { "id":"LLT_6",
-            "description": "Beam particle trigger",
-            "enable":true,
-            "mask" : "0x1"
+            "mask" : "0x180"
           }
         ]
       }
