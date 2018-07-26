@@ -81,11 +81,14 @@ public:
 
 #if defined(PDUNE_COMPILATION)
 
-  // Wrapper unction that calls all others
+  // Wrapper function that calls all others
   void configure_ctb(json& doc, json& feedback);
 
   //Misc configs such as timing, pulser, etc
   void misc_config(json & miscconfig, json& feedback);
+
+  //HLT configs 
+  void hlt_config(json & hltconfig, json& feedback);
 
   void pds_config(json & pdsconfig, json& feedback);
 
@@ -263,7 +266,7 @@ private:
 
   state board_state_;
 
-  static const uint8_t num_registers_ = 40;
+  static const uint8_t num_registers_ = 67;
   //static const char *default_config_;
   json config_;
   void *mapped_conf_base_addr_;
@@ -290,7 +293,7 @@ private:
 inline void board_manager::set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value) {
   // Create a mask based on pos and len
   uint32_t mask = (((uint32_t)1 << len)-1) << pos;
-  register_map_[reg].value() = (register_map_[reg].value() & ~mask) | (value & mask);
+  register_map_[reg].value() = (register_map_[reg].value() & ~mask) | (mask & value);
 }
 
 inline void board_manager::set_bit(const uint32_t reg, const uint32_t bit, bool status) {

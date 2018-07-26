@@ -19,8 +19,8 @@
     },
     "misc":{
       "randomtrigger":{
-        "enable":true,
-        "frequency":50000
+        "enable":false,
+        "frequency":500000
       },
       "pulser":{
         "enable":true,
@@ -34,10 +34,10 @@
     "HLT":{
       "trigger": [                                        
         { "id":"HLT_0",
-          "description": "Beam trigger w/ CRT veto around beam pipe",
+          "description": "Beam trigger w/ CRT veto around beam pipe (for now BI test HLT)",
           "enable":true,
-          "minc" : "0x31",
-          "mexc" : "0x0"
+          "minc" : "0x4",
+          "mexc" : "0x1"
         },
         { "id":"HLT_1",
           "description": "Beam trigger w/ CRT veto around beam pipe", 
@@ -67,7 +67,7 @@
     },
     "subsystems":{
       "pds":{
-        "channel_mask":"0xFFFFFF",
+        "channel_mask":"0xFFFFF",
         "reshape_length" : 10,
         "delays":[100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100],
         "dac_thresholds":[2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250, 2250],
@@ -89,16 +89,16 @@
           { "id":"LLT_11",
             "description": "Counting trigger on the PDS",
             "enable":true,
-            "mask" : "0x31",
-            "type" : "0x4",
-            "count" : "0x5"
+            "mask" : "0x3",
+            "type" : "0x2",
+            "count" : "0x2"
           },
           { "id":"LLT_12",
             "description": "Counting trigger on the PDS",
-            "enable":true,
-            "mask" : "0x31",
-            "type" : "0x4",
-            "count" : "0x5"
+            "enable":false,
+            "mask" : "0xFFFFFF",
+            "type" : "0x1",
+            "count" : "0x0"
           },
           { "id":"LLT_13",                                
             "description": "Counting trigger on the PDS",
@@ -125,13 +125,13 @@
       },
       "beam":{                     
         "channel_mask": "0x1FF",
-        "reshape_length" : 10,
-        "delays":[100,100,100,100,100,100,100,100,100],
+        "reshape_length" : 0,
+        "delays":[0,0,0,0,0,0,0,0,0],
         "triggers": [
           { "id":"LLT_1",                           
             "description": "Beam particle trigger",
             "enable":true,
-            "mask" : "0x4"
+            "mask" : "0x3"
           },
           { "id":"LLT_3",
             "description": "Beam particle trigger",
@@ -141,7 +141,7 @@
           { "id":"LLT_4",                           
             "description": "Beam particle trigger",
             "enable":true,
-            "mask" : "0x3"
+            "mask" : "0x2"
           },
           { "id":"LLT_5",
             "description": "Beam particle trigger",

@@ -1,0 +1,186 @@
+{
+  "ctb":{
+    "sockets":{
+	"receiver":{
+	    "rollover":500000,
+            "host":"158.130.217.89",
+            "port":8992
+      },
+      "monitor":{
+        "enable" : false,
+        "host": "localhost",
+        "port": 8993
+        },
+      "statistics": {
+        "enable":false,
+        "port":8994,
+        "updt_period": 1
+      }
+    },
+    "misc":{
+      "randomtrigger":{
+        "enable":true,
+        "fixed_freq":false,
+        "frequency":1000000
+      },
+      "pulser":{
+        "enable":true,
+        "frequency":10
+      },
+      "timing":{
+        "address":"0x0",
+        "group":"0x0",
+        "triggers":false
+      },
+      "ch_status":true
+    },
+    "HLT":{
+      "trigger": [                                        
+        { "id":"HLT_1",
+          "description": "Beam trigger, veto with high-rate muon CRT around beam pipe",
+          "enable":true,
+          "minc" : "0x1",
+          "mexc" : "0x2"
+        },
+        { "id":"HLT_2",
+          "description": "Reconstructable track beam trigger, high-rate muon veto with CRT around beam pipe", 
+          "enable":true,
+          "minc" : "0x1",
+          "mexc" : "0x2"
+        },
+        { "id":"HLT_3",
+          "description": "Medium beam energy pion trigger, cherenkov particle selection, high-rate muon CRT veto around beam pipe, no PDS",
+          "enable":true,
+          "minc" : "0x1",
+          "mexc" : "0x6"
+        },
+        { "id":"HLT_4",
+          "description": "Muon halo trigger, with PDS",
+          "enable":true,
+          "minc" : "0xF",
+          "mexc" : "0x0"
+        },
+        { "id":"HLT_5",
+          "description": "Cosmic trigger, high to lower, up to down stream muon on Jura-side CRT and PDS (no Beam)",
+          "enable":true,
+          "minc" : "0xE",
+          "mexc" : "0x1"
+        },
+        { "id":"HLT_6",
+          "description": "Low beam energy electron trigger, high-rate muon veto with CRT around beam pipe, no PDS",
+          "enable":true,
+          "minc" : "0x1",
+          "mexc" : "0x2"
+        },
+        { "id":"HLT_7",
+          "description": "Low beam energy hadron trigger, veto with high-rate muon CRT around beam pipe, no PDS",
+          "enable":true,
+          "minc" : "0x1",
+          "mexc" : "0x6"
+        }
+      ]
+    },
+    "subsystems":{
+      "pds":{
+        "channel_mask":"0xFFFFFF",
+        "reshape_length" : 1,
+        "delays":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "dac_thresholds":[2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250, 2250],
+        "triggers": [
+          { "id":"LLT_14",
+            "description": "PDS at least 3 channels (on Jura side)",
+            "enable":true,
+            "mask" : "0xFFF",
+            "type" : "0x1",
+            "count" : "0x2"
+          }
+        ]
+      },
+      "crt":{
+        "channel_mask": "0xFFCFF3FF",
+        "pixelate": false,
+        "reshape_length" : 1,
+        "delays":[100,100,100,100,0,100,100,100,100,100,100,100,100,100,100,1,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100],
+        "triggers": [
+          { "id":"LLT_11",
+            "description": "Select CRT pixels around beam pipe",
+            "enable":true,
+            "mask" : "0xF000",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_12",
+            "description": "CRT for through-going muons (upstream)",
+            "enable":false,
+            "mask" : "0x6000",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_13",                                
+            "description": "CRT for through-going muons (downstream)",
+            "enable":true,
+            "mask" : "0x60000000",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_15",
+            "description": "CRT upstream upper half of Jura supermodule",
+            "enable":true,
+            "mask" : "0x201C",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_16",
+            "description": "CRT downstream lower half of Jura supermodule",
+            "enable":true,
+            "mask" : "0x40E00000",
+            "type" : "0x1",
+            "count" : "0x0"
+          }
+        ]
+      },
+      "beam":{                     
+        "channel_mask": "0x1FF",
+        "reshape_length" : 1,
+        "delays":[1,1,1,1,1,1,1,1,1],
+        "triggers": [
+          { "id":"LLT_1",                           
+            "description": "Beam particle trigger",
+            "enable":true,
+            "mask" : "0x67"
+          },
+          { "id":"LLT_3",
+            "description": "Mask in all BI, except Cherenkov detector",
+            "enable":true,
+            "mask" : "0x7F"
+          },
+          { "id":"LLT_4",                           
+            "description": "Mask in all BI except C1",
+            "enable":true,
+            "mask" : "0x17F"
+          },
+          { "id":"LLT_5",
+            "description": "Mask in C1",
+            "enable":true,
+            "mask" : "0x80"
+          },
+          { "id":"LLT_6",
+            "description": "Beam gate selection",
+            "enable":true,
+            "mask" : "0x1"
+          },
+          { "id":"LLT_7",
+            "description": "Mask in all BI for trigger inclusion",
+            "enable":true,
+            "mask" : "0xFF"
+          },
+          { "id":"LLT_8",
+            "description": "Select only the Cherenkov detectors",
+            "enable":true,
+            "mask" : "0x180"
+          }
+        ]
+      }
+    }
+  }
+}
