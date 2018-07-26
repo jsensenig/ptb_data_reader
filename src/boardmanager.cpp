@@ -74,6 +74,7 @@ namespace ptb {
     commands_.insert(std::map<std::string, command>::value_type("StopRun",STOPRUN));
     commands_.insert(std::map<std::string, command>::value_type("SoftReset",SOFTRESET));
     commands_.insert(std::map<std::string, command>::value_type("HardReset",HARDRESET));
+    commands_.insert(std::map<std::string, command>::value_type("CAENReset",CAENRESET));
     // Setup the registers first, to make sure that if the data
     // manager receives something we are ready to deliver.
     setup_registers();
@@ -131,6 +132,29 @@ namespace ptb {
         // TODO: Only restore if the registers actually have something in them.
         restore_config_registers();
         set_config_bit(true);
+        break;
+      case CAENRESET:   
+        
+#if defined(PDUNE_COMPILATION)
+        Log(warning, "Undefined operation for ProtoDUNE");        
+        json obj;
+        obj["type"] = "warning";
+        obj["message"] = "This operation is not defined for ProtoDUNE. Ignore";
+        feedback_.push_back(obj);
+#elif defined(SBND_COMPILATION)
+        Log(debug,"Issuing a reset to the CAEN VME crate");
+        Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
+        caen_reset(); 
+/*        set_caen_reset_bit(true);
+        //Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
+        // Sleep for 100 microseconds to make sure that reset has taken place
+        std::this_thread::sleep_for (std::chrono::milliseconds(2));
+        set_caen_reset_bit(false); // has to reset before the 2ms pulse in the firmware
+*/        //Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
+#else
+#error "Unknown compilation mode. Check config.h file in repository head"
+#endif
+ 
         break;
       case HARDRESET:
         Log(debug,"Applying a hard reset");
@@ -359,6 +383,24 @@ namespace ptb {
       Log(info,"Run stopped");
     }
     board_state_ = IDLE;
+  }
+
+  void board_manager::caen_reset() {
+
+    if (get_board_state() == board_manager::RUNNING) {
+        Log(warning, "Cannot issue CAEN reset during a run.");
+        json obj;
+        obj["type"] = "warning";
+        obj["message"] = "Failed to issue reset to CAEN. Board is in RUNNING state";
+        feedback_.push_back(obj);
+    } else {
+      set_caen_reset_bit(true);
+      Log(debug,"VME_reset requested. Register: 0x%08x ",register_map_[0].value() );
+      Log(info, "Issued reset to CAENs");
+      usleep(2000); //hold reset for ~2ms
+      set_caen_reset_bit(false);
+    }
+
   }
 
   void board_manager::setup_registers() {

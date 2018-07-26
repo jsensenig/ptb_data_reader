@@ -49,8 +49,10 @@ boost: standalone_run_boost
 
 root: standalone_run_root
 
+sbnd: sbnd_standalone_run_boost
+
 clean:
-	rm -f standalone_run standalone_run_boost standalone_run_root
+	rm -f standalone_run standalone_run_boost standalone_run_root sbnd_standalone_run_boost
 
 standalone_run: standalone_run.cpp PracticalSocket.cpp
 	$(CC) -I./ $(CFLAGS) -o $@ $? $(LFLAGS)

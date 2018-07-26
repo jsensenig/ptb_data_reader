@@ -51,7 +51,8 @@ public:
                 STOPRUN = 1,
                 SOFTRESET = 2,
                 HARDRESET = 3,
-                GETSTARTTIME = 4
+                GETSTARTTIME = 4,
+                CAENRESET = 5
                };
 
   board_manager();
@@ -171,6 +172,7 @@ protected:
   void start_run();
   void stop_run();
   void soft_reset();
+  void caen_reset();
 
 
 private:
@@ -212,6 +214,12 @@ private:
    * @param status
    */
   void set_reset_bit(bool status);
+
+  /**
+   * Sets the register responsible for requesting a reset to be sent to the CAEN VME crate
+   * (true: send; false:don't)
+   */
+  void set_caen_reset_bit(bool status);
 
   /**
    * Commits the configuration. Sets the config register to status (true: on; false:off)
@@ -310,6 +318,11 @@ inline void board_manager::set_enable_bit(bool status) {
 inline void board_manager::set_reset_bit(bool status) {
   // here true defines the reset enable...the firmware inverts this
 	set_bit(0,27,status);
+}
+
+inline void board_manager::set_caen_reset_bit(bool status) {
+  // setting true means there was a request to reset the CAENs
+        set_bit(0,26,status);
 }
 
 // request config
