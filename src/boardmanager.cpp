@@ -135,24 +135,14 @@ namespace ptb {
         break;
       case CAENRESET:   
         
-#if defined(PDUNE_COMPILATION)
-        Log(warning, "Undefined operation for ProtoDUNE");        
-        json obj;
-        obj["type"] = "warning";
-        obj["message"] = "This operation is not defined for ProtoDUNE. Ignore";
-        feedback_.push_back(obj);
-#elif defined(SBND_COMPILATION)
-        Log(debug,"Issuing a reset to the CAEN VME crate");
-        Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
-        caen_reset(); 
-/*        set_caen_reset_bit(true);
-        //Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
-        // Sleep for 100 microseconds to make sure that reset has taken place
-        std::this_thread::sleep_for (std::chrono::milliseconds(2));
-        set_caen_reset_bit(false); // has to reset before the 2ms pulse in the firmware
-*/        //Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
+#if defined(SBND_COMPILATION)
+          Log(debug,"Issuing a reset to the CAEN VME crate");
+          caen_reset(); 
+#elif defined(PDUNE_COMPILATION)
+          Log(warning, "Undefined operation for ProtoDUNE");        
+          error_state_ = true;
 #else
-#error "Unknown compilation mode. Check config.h file in repository head"
+  #error "Unknown compilation mode. Check config.h file in repository head"
 #endif
  
         break;
