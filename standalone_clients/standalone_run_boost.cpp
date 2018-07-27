@@ -90,6 +90,17 @@ class ctb_robot {
       is_conf_ = false;
     }
 
+    //currently fake command to reset the VME crate for the CAENs
+    void send_caen_reset() {
+      if (is_running_) {
+        printf("ctb_robot::send_caen_reset : ERROR; Can't Reset CAEN while run is in progress\n");
+        return;
+      } else {
+      printf("ctb_robot::send_caen_reset : Sending a soft reset to the CAEN VME crate\n");
+      client_->send_command("CAENReset");
+      }
+    }
+
     void send_start() {
       if (!is_conf_) {
         printf("ctb_robot::send_start : ERROR: Can't start a run without configuring first\n");
@@ -199,14 +210,14 @@ class ctb_robot {
     }
 
     void run() {
-      enum commands {reset=0,init=1,start=2,stop=3,quit=4};
+      enum commands {reset=0,init=1,start=2,stop=3,quit=4,caen=5};
       // Set the stop condition to false to wait for the data
       //std::signal(SIGINT, ctb_robot::static_sig_handler);
       std::string rcommand;
       std::ifstream cfin;
       json conf;
       while(!exit_req_) {
-        printf("\n\n### Select command : \n 0: Reset Board\n 1 : Init\n 2 : Start Run\n 3 : Stop Run\n 4 : Quit\n\n");
+        printf("\n\n### Select command : \n 0 : Reset Board\n 1 : Init\n 2 : Start Run\n 3 : Stop Run\n 4 : Quit\n 5 : Reset CAEN\n");
 
         std::cin >> rcommand;
         if (!isdigit (rcommand.c_str()[0])) {
@@ -232,6 +243,9 @@ class ctb_robot {
             std::this_thread::sleep_for(std::chrono::seconds(2));
             //reader.
             //reader.join();
+            break;
+          case caen:
+            send_caen_reset();
             break;
           default:
             printf("ctb_robot::run : Wrong option (%d)\n\n",command);

@@ -3,7 +3,7 @@
     "sockets":{
 	"receiver":{
 	    "rollover":50000,
-            "host":"localhost",
+            "host":"128.91.41.180",
             "port":8992
       },
       "monitor":{
@@ -13,7 +13,7 @@
         },
       "statistics": {
         "enable":false,
-        "port":8994,
+        "port": 8994,
         "updt_period": 1
       }
     },
@@ -25,7 +25,10 @@
             "description": "Counting trigger on the PDS",
             "enable":true,
             "type" : "0x2",
-            "count" : "0x1"
+            "count" : "0x1",
+            "npulses" : "0x5",
+            "period" : "0x3",
+            "duty" : "0x2"
           }
         ]
       },
