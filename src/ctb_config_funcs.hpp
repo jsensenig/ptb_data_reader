@@ -682,7 +682,7 @@ namespace ptb {
       set_bit_range_register(26,0,6,reshape_len);
 
       //Configure counting trigger(s)
-      set_bit(27,11,llt14_enable);
+      set_bit(27,14,llt14_enable);
       uint32_t llt14 = (llt14type<<5) + llt14count;
       set_bit_range_register(44,0,9,llt14);
       set_bit_range_register(45,0,32,llt14mask);
