@@ -3,7 +3,7 @@
     "sockets":{
 	"receiver":{
 	    "rollover":500000,
-            "host":"158.130.217.89",
+            "host":"localhost",
             "port":8992
       },
       "monitor":{
@@ -19,12 +19,12 @@
     },
     "misc":{
       "randomtrigger":{
-        "enable":true,
+        "enable":false,
         "fixed_freq":false,
         "frequency":1000000
       },
       "pulser":{
-        "enable":true,
+        "enable":false,
         "frequency":10
       },
       "timing":{
@@ -40,67 +40,74 @@
           "description": "Beam trigger, veto with high-rate muon CRT around beam pipe",
           "enable":true,
           "minc" : "0x1",
-          "mexc" : "0x2"
+          "mexc" : "0x2",
+          "prescale" : "0x1"
         },
         { "id":"HLT_2",
           "description": "Reconstructable track beam trigger, high-rate muon veto with CRT around beam pipe", 
           "enable":true,
           "minc" : "0x1",
-          "mexc" : "0x2"
+          "mexc" : "0x2",
+          "prescale" : "0x1"
         },
         { "id":"HLT_3",
           "description": "Medium beam energy pion trigger, cherenkov particle selection, high-rate muon CRT veto around beam pipe, no PDS",
           "enable":true,
           "minc" : "0x1",
-          "mexc" : "0x6"
+          "mexc" : "0x6",
+          "prescale" : "0x1"
         },
         { "id":"HLT_4",
           "description": "Muon halo trigger, with PDS",
           "enable":true,
-          "minc" : "0xF",
-          "mexc" : "0x0"
+          "minc" : "0x8",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
         },
         { "id":"HLT_5",
           "description": "Cosmic trigger, high to lower, up to down stream muon on Jura-side CRT and PDS (no Beam)",
           "enable":true,
           "minc" : "0xE",
-          "mexc" : "0x1"
+          "mexc" : "0x1",
+          "prescale" : "0x1"
         },
         { "id":"HLT_6",
           "description": "Low beam energy electron trigger, high-rate muon veto with CRT around beam pipe, no PDS",
           "enable":true,
           "minc" : "0x1",
-          "mexc" : "0x2"
+          "mexc" : "0x2",
+          "prescale" : "0x1"
         },
         { "id":"HLT_7",
           "description": "Low beam energy hadron trigger, veto with high-rate muon CRT around beam pipe, no PDS",
           "enable":true,
           "minc" : "0x1",
-          "mexc" : "0x6"
+          "mexc" : "0x6",
+          "prescale" : "0x1"
         }
       ]
     },
     "subsystems":{
       "pds":{
         "channel_mask":"0xFFFFFF",
-        "reshape_length" : 1,
-        "delays":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "reshape_length" : 3,
+        "delays":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
         "dac_thresholds":[2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250,2250, 2250],
         "triggers": [
           { "id":"LLT_14",
             "description": "PDS at least 3 channels (on Jura side)",
             "enable":true,
-            "mask" : "0xFFF",
+            "mask" : "0xFFF000",
             "type" : "0x1",
-            "count" : "0x2"
+            "count" : "0x0"
           }
         ]
       },
       "crt":{
-        "channel_mask": "0xFFCFF3FF",
+        "channel_mask": "0xFFFFFFFF",
         "pixelate": false,
         "reshape_length" : 1,
-        "delays":[100,100,100,100,0,100,100,100,100,100,100,100,100,100,100,1,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100],
+        "delays":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
         "triggers": [
           { "id":"LLT_11",
             "description": "Select CRT pixels around beam pipe",

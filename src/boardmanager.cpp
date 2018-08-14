@@ -340,7 +340,7 @@ namespace ptb {
     if (get_board_state() == board_manager::RUNNING) {
      // uint32_t evtctr = register_map_[65].value();
       std::ostringstream evts; 
-      evts << "num_events: " << register_map_[66].value();
+      evts << "num_events: " << register_map_[101].value();
       json stat;
       stat["type"] = "statistics";
       stat["message"] = evts.str();
@@ -607,11 +607,11 @@ namespace ptb {
     //Sleep for a bit to allow the timing endpoint to cycle through it's state machine
     usleep(900000);
     //Read the timing status 
-    uint32_t timing_reg = 65; //reg_out_1[31:28]
+    uint32_t timing_reg = 100; //reg_out_1[31:28]
     uint32_t timing_stat = register_map_[timing_reg].value();
-    Log(debug,"Received %X timing status: ",(timing_stat >> 28));
+    Log(debug,"Received %X timing status:  and PLL LoL: %X ",(timing_stat >> 28), ((timing_stat >> 25) & 0x1));
     std::ostringstream oss0;
-    oss0 << "Recieved timing status: " << (timing_stat >> 28);
+    oss0 << "Recieved timing status: " << (timing_stat >> 28) << " and PLL LoL: " << ((timing_stat >> 25) & 0x1);
     json obj1;
     obj1["type"] = "info";
     obj1["message"] = oss0.str();

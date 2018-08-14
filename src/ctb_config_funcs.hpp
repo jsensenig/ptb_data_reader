@@ -682,7 +682,7 @@ namespace ptb {
       set_bit_range_register(26,0,6,reshape_len);
 
       //Configure counting trigger(s)
-      set_bit(27,11,llt14_enable);
+      set_bit(27,14,llt14_enable);
       uint32_t llt14 = (llt14type<<5) + llt14count;
       set_bit_range_register(44,0,9,llt14);
       set_bit_range_register(45,0,32,llt14mask);
@@ -786,7 +786,7 @@ namespace ptb {
                                                                                                                               
     void board_manager::hlt_config(json& hltconfig, json& feedback) {
                                                                                                                                                             
-      size_t err_msgs = 7;
+      size_t err_msgs = 14;
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
      
       json trigs = hltconfig.at("trigger");
@@ -794,84 +794,149 @@ namespace ptb {
       bool hlt1_enable = trigs.at(0).at("enable").get<bool>();
       std::string s_hlt1minc = trigs.at(0).at("minc").get<std::string>();
       std::string s_hlt1mexc = trigs.at(0).at("mexc").get<std::string>();
+      std::string s_hlt1prescale = trigs.at(0).at("prescale").get<std::string>();
       uint32_t hlt1minc = (uint32_t)strtoul(s_hlt1minc.c_str(),NULL,0);
       uint32_t hlt1mexc = (uint32_t)strtoul(s_hlt1mexc.c_str(),NULL,0);
+      uint32_t hlt1prescale = (uint32_t)strtoul(s_hlt1prescale.c_str(),NULL,0);
       std::ostringstream oss0;
+      std::ostringstream oss7;
       if (hlt1minc == 0) { 
         oss0 << trigs.at(0).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss0.str());
       }
+      if (hlt1prescale == 0) { 
+        oss7 << trigs.at(0).at("id").get<std::string>() << " prescale undefined (0x0). Setting to 0x1"; 
+        Log(warning,"%s", oss7.str());
+        hlt1prescale = 1;
+      }
       tmp[0] = std::make_pair("warning", oss0.str());
+      tmp[7] = std::make_pair("warning", oss7.str());
  
       bool hlt2_enable = trigs.at(1).at("enable").get<bool>();                                                         
       std::string s_hlt2minc = trigs.at(1).at("minc").get<std::string>();
       std::string s_hlt2mexc = trigs.at(1).at("mexc").get<std::string>();
+      std::string s_hlt2prescale = trigs.at(1).at("prescale").get<std::string>();
       uint32_t hlt2minc = (uint32_t)strtoul(s_hlt2minc.c_str(),NULL,0);
       uint32_t hlt2mexc = (uint32_t)strtoul(s_hlt2mexc.c_str(),NULL,0);
+      uint32_t hlt2prescale = (uint32_t)strtoul(s_hlt2prescale.c_str(),NULL,0);
       std::ostringstream oss1;
+      std::ostringstream oss8;
       if (hlt2minc == 0) { 
         oss1 << trigs.at(1).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss1.str());
       }
+      if (hlt2prescale == 0) { 
+        oss8 << trigs.at(1).at("id").get<std::string>() << " prescale undefined (0x0). Setting to 0x1"; 
+        Log(warning,"%s", oss8.str());
+        hlt2prescale = 1;
+      }
       tmp[1] = std::make_pair("warning", oss1.str());
+      tmp[8] = std::make_pair("warning", oss8.str());
 
       bool hlt3_enable = trigs.at(2).at("enable").get<bool>();
       std::string s_hlt3minc = trigs.at(2).at("minc").get<std::string>();
       std::string s_hlt3mexc = trigs.at(2).at("mexc").get<std::string>();
+      std::string s_hlt3prescale = trigs.at(2).at("prescale").get<std::string>();
       uint32_t hlt3minc = (uint32_t)strtoul(s_hlt3minc.c_str(),NULL,0);
       uint32_t hlt3mexc = (uint32_t)strtoul(s_hlt3mexc.c_str(),NULL,0);
+      uint32_t hlt3prescale = (uint32_t)strtoul(s_hlt3prescale.c_str(),NULL,0);
       std::ostringstream oss2;
+      std::ostringstream oss9;
       if (hlt3minc == 0) { 
         oss2 << trigs.at(2).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss2.str());
       }
+      if (hlt3prescale == 0) { 
+        oss9 << trigs.at(2).at("id").get<std::string>() << " prescale undefined (0x0). Setting to 0x1"; 
+        Log(warning,"%s", oss9.str());
+        hlt3prescale = 1;
+      }
       tmp[2] = std::make_pair("warning", oss2.str());
+      tmp[9] = std::make_pair("warning", oss9.str());
 
       bool hlt4_enable = trigs.at(3).at("enable").get<bool>();                                                         
       std::string s_hlt4minc = trigs.at(3).at("minc").get<std::string>();
       std::string s_hlt4mexc = trigs.at(3).at("mexc").get<std::string>();
+      std::string s_hlt4prescale = trigs.at(3).at("prescale").get<std::string>();
       uint32_t hlt4minc = (uint32_t)strtoul(s_hlt4minc.c_str(),NULL,0);
       uint32_t hlt4mexc = (uint32_t)strtoul(s_hlt4mexc.c_str(),NULL,0);
+      uint32_t hlt4prescale = (uint32_t)strtoul(s_hlt4prescale.c_str(),NULL,0);
       std::ostringstream oss3;
+      std::ostringstream oss10;
       if (hlt4minc == 0) { 
         oss3 << trigs.at(3).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss3.str());
       }
+      if (hlt4prescale == 0) { 
+        oss10 << trigs.at(3).at("id").get<std::string>() << " prescale undefined (0x0). Setting to 0x1"; 
+        Log(warning,"%s", oss10.str());
+        hlt4prescale = 1;
+      }
       tmp[3] = std::make_pair("warning", oss3.str());
+      tmp[10] = std::make_pair("warning", oss10.str());
 
       bool hlt5_enable = trigs.at(4).at("enable").get<bool>();
       std::string s_hlt5minc = trigs.at(4).at("minc").get<std::string>();
       std::string s_hlt5mexc = trigs.at(4).at("mexc").get<std::string>();
+      std::string s_hlt5prescale = trigs.at(4).at("prescale").get<std::string>();
       uint32_t hlt5minc = (uint32_t)strtoul(s_hlt5minc.c_str(),NULL,0);
       uint32_t hlt5mexc = (uint32_t)strtoul(s_hlt5mexc.c_str(),NULL,0);
+      uint32_t hlt5prescale = (uint32_t)strtoul(s_hlt5prescale.c_str(),NULL,0);
       std::ostringstream oss4;
+      std::ostringstream oss11;
       if (hlt5minc == 0) { 
         oss4 << trigs.at(4).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss4.str());
       }
+      if (hlt5prescale == 0) { 
+        oss11 << trigs.at(4).at("id").get<std::string>() << " prescale undefined (0x0). Setting to 0x1"; 
+        Log(warning,"%s", oss11.str());
+        hlt5prescale = 1;
+      }
       tmp[4] = std::make_pair("warning", oss4.str());
+      tmp[11] = std::make_pair("warning", oss4.str());
+
       bool hlt6_enable = trigs.at(5).at("enable").get<bool>();
       std::string s_hlt6minc = trigs.at(5).at("minc").get<std::string>();
       std::string s_hlt6mexc = trigs.at(5).at("mexc").get<std::string>();
+      std::string s_hlt6prescale = trigs.at(5).at("prescale").get<std::string>();
       uint32_t hlt6minc = (uint32_t)strtoul(s_hlt6minc.c_str(),NULL,0);
       uint32_t hlt6mexc = (uint32_t)strtoul(s_hlt6mexc.c_str(),NULL,0);
+      uint32_t hlt6prescale = (uint32_t)strtoul(s_hlt6prescale.c_str(),NULL,0);
       std::ostringstream oss5;
+      std::ostringstream oss12;
       if (hlt4minc == 0) { 
         oss5 << trigs.at(5).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss5.str());
       }
+      if (hlt6prescale == 0) { 
+        oss12 << trigs.at(5).at("id").get<std::string>() << " prescale undefined (0x0). Setting to 0x1"; 
+        Log(warning,"%s", oss12.str());
+        hlt6prescale = 1;
+      }
       tmp[5] = std::make_pair("warning", oss5.str());
+      tmp[12] = std::make_pair("warning", oss12.str());
+
       bool hlt7_enable = trigs.at(6).at("enable").get<bool>();
       std::string s_hlt7minc = trigs.at(6).at("minc").get<std::string>();
       std::string s_hlt7mexc = trigs.at(6).at("mexc").get<std::string>();
+      std::string s_hlt7prescale = trigs.at(6).at("prescale").get<std::string>();
       uint32_t hlt7minc = (uint32_t)strtoul(s_hlt7minc.c_str(),NULL,0);
       uint32_t hlt7mexc = (uint32_t)strtoul(s_hlt7mexc.c_str(),NULL,0);
+      uint32_t hlt7prescale = (uint32_t)strtoul(s_hlt7prescale.c_str(),NULL,0);
       std::ostringstream oss6;
+      std::ostringstream oss13;
       if (hlt7minc == 0) { 
         oss6 << trigs.at(6).at("id").get<std::string>() << " mask set to 0x0. Equivalent to disabled."; 
         Log(warning,"%s", oss6.str());
       }
+      if (hlt7prescale == 0) { 
+        oss13 << trigs.at(6).at("id").get<std::string>() << " prescale undefined (0x0). Setting to 0x1"; 
+        Log(warning,"%s", oss13.str());
+        hlt7prescale = 1;
+      }
       tmp[6] = std::make_pair("warning", oss6.str());
+      tmp[13] = std::make_pair("warning", oss13.str());
 
       //HLT enables
       set_bit(27,19,hlt1_enable);
@@ -891,7 +956,7 @@ namespace ptb {
       uint32_t hlt6 = (hlt6mexc<<16) + hlt6minc;
       uint32_t hlt7 = (hlt7mexc<<16) + hlt7minc;
 
-      //HLT parameters
+      //HLT parameter registers
       set_bit_range_register(54,0,32,hlt1);
       set_bit_range_register(55,0,32,hlt2);
       set_bit_range_register(56,0,32,hlt3);
@@ -899,6 +964,15 @@ namespace ptb {
       set_bit_range_register(58,0,32,hlt5);
       set_bit_range_register(59,0,32,hlt6);
       set_bit_range_register(60,0,32,hlt7);
+
+      //HLT prescale registers
+      set_bit_range_register(63,0,32,hlt1prescale);
+      set_bit_range_register(64,0,32,hlt2prescale);
+      set_bit_range_register(65,0,32,hlt3prescale);
+      set_bit_range_register(66,0,32,hlt4prescale);
+      set_bit_range_register(67,0,32,hlt5prescale);
+      set_bit_range_register(68,0,32,hlt6prescale);
+      set_bit_range_register(69,0,32,hlt7prescale);
 
       //Place warnings into json feedback obj
       json obj;

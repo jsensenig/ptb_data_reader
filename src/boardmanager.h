@@ -266,7 +266,7 @@ private:
 
   state board_state_;
 
-  static const uint8_t num_registers_ = 67;
+  static const uint8_t num_registers_ = 102;
   //static const char *default_config_;
   json config_;
   void *mapped_conf_base_addr_;
