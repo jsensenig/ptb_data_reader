@@ -32,7 +32,8 @@
         "group":"0x0",
         "triggers":false
       },
-      "ch_status":true
+      "ch_status":true,
+      "standalone_enable": false 
     },
     "HLT":{
       "trigger": [                                        

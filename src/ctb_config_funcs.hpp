@@ -719,7 +719,8 @@ namespace ptb {
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
       std::ostringstream oss;
       
-      bool ch_status_ena = miscconfig.at("ch_status").get<bool>();
+      bool ch_status_en = miscconfig.at("ch_status").get<bool>();
+      bool standalone_en = miscconfig.at("standalone_enable").get<bool>();
 
       json rtrigger = miscconfig.at("randomtrigger");
       bool rtrigger_en = rtrigger.at("enable").get<bool>();
@@ -756,7 +757,8 @@ namespace ptb {
       bool trigger_ena = timingconf.at("triggers").get<bool>();
 
 
-      set_bit(62,0,ch_status_ena);
+      set_bit(62,0,ch_status_en);
+      set_bit(70,0,standalone_en);
 
       set_bit(27,0,rtrigger_en);
       set_bit(62,2,rtrig_fixed_freq);
