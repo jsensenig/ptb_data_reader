@@ -238,7 +238,7 @@ namespace ptb {
         Log(warning,"Received call to start transmitting but reader is not ready. Refusing to run." );
         json obj;
         obj["type"] = "error";
-        obj["message"] = "PTB data reader is not ready yet.Refusing to run";
+        obj["message"] = "PTB data reader is not ready yet. Refusing to run";
         feedback_.push_back(obj);
         error_state_ = true;
         return;
@@ -337,10 +337,13 @@ namespace ptb {
     }
 
     // Build a statistics object
+    const int num_cmd = 8;
+    const int offset_reg = 85;
+    std::vector<unsigned int> cmd_codes = {8, 9, 10, 11, 12, 13, 14, 15};
     if (get_board_state() == board_manager::RUNNING) {
      // uint32_t evtctr = register_map_[65].value();
       std::ostringstream evts; 
-      evts << "num_events: " << register_map_[101].value();
+      evts << "num_events: " << register_map_[92].value();
       json stat;
       stat["type"] = "statistics";
       stat["message"] = evts.str();
@@ -351,6 +354,28 @@ namespace ptb {
       stat["num_llt"] = reader_->get_n_ltriggers();
       stat["num_tstamp"] = reader_->get_n_timestamps();
       stat["num_fifo_warn"] = reader_->get_n_warns();
+     
+      stat["num_0x8"] = register_map_[8+offset_reg].value();     
+      stat["num_0x9"] = register_map_[9+offset_reg].value();     
+      stat["num_0xA"] = register_map_[10+offset_reg].value();     
+      stat["num_0xB"] = register_map_[11+offset_reg].value();     
+      stat["num_0xC"] = register_map_[12+offset_reg].value();     
+      stat["num_0xD"] = register_map_[13+offset_reg].value();     
+      stat["num_0xE"] = register_map_[14+offset_reg].value();     
+      stat["num_0xF"] = register_map_[15+offset_reg].value();     
+
+/* 
+      //std::vector< std::ostringstream > cmd_counters[num_cmd];
+      for(unsigned int i=0; i< num_cmd; ++i) {
+        //cmd_counters.at(i) << register_map_[cmd_codes[i]].value();
+	string base = "cmd_code";
+	string key = std::to_string(cmd_codes[i]);
+        stat["cmd_code"] = cmd_codes[i];
+        stat["num_cmd_issued"] = register_map_[cmd_codes[i]+offset_reg].value(); 
+      }
+*/     
+      stat["ack_trg_ctr"] = register_map_[101].value();
+ 
       reader_->reset_counters();
       feedback_.push_back(stat);
       Log(info,"End of run message: %s",stat.dump(2).c_str());
@@ -607,7 +632,7 @@ namespace ptb {
     //Sleep for a bit to allow the timing endpoint to cycle through it's state machine
     usleep(900000);
     //Read the timing status 
-    uint32_t timing_reg = 100; //reg_out_1[31:28]
+    uint32_t timing_reg = 91; //reg_out_1[31:28]
     uint32_t timing_stat = register_map_[timing_reg].value();
     Log(debug,"Received %X timing status:  and PLL LoL: %X ",(timing_stat >> 28), ((timing_stat >> 25) & 0x1));
     std::ostringstream oss0;

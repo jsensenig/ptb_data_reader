@@ -19,21 +19,22 @@
     },
     "misc":{
       "randomtrigger":{
-        "enable":false,
-        "fixed_freq":false,
-        "frequency":1000000
+        "enable":true,
+        "fixed_freq":true,
+        "period":1000000
       },
       "pulser":{
         "enable":false,
-        "frequency":10
+        "frequency":50
       },
       "timing":{
         "address":"0x0",
         "group":"0x0",
-        "triggers":false
+        "triggers":true,
+        "lockout":"0x1"
       },
       "ch_status":true,
-      "standalone_enable": false 
+      "standalone_enable": true 
     },
     "HLT":{
       "trigger": [                                        

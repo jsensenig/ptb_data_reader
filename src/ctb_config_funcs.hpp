@@ -238,7 +238,7 @@ namespace ptb {
         }
       }
 
-      //Log(info,"Programmed [%d] (%u) [0x%X][%s]",rtriggerfreq,rtriggerfreq,rtriggerfreq, std::bitset<26>(rtriggerfreq).to_string().c_str());
+      //Log(info,"Programmed [%d] (%u) [0x%X][%s]",rtriggerperiod,rtriggerperiod,rtriggerperiod, std::bitset<26>(rtriggerperiod).to_string().c_str());
 
     } //Beam config
 
@@ -725,14 +725,14 @@ namespace ptb {
       json rtrigger = miscconfig.at("randomtrigger");
       bool rtrigger_en = rtrigger.at("enable").get<bool>();
       bool rtrig_fixed_freq = rtrigger.at("fixed_freq").get<bool>();
-      uint32_t rtriggerfreq = rtrigger.at("frequency").get<unsigned int>();
-      Log(debug,"Random Trigger Frequency [%d] (%u) [0x%X][%s]",rtriggerfreq,rtriggerfreq,rtriggerfreq, std::bitset<26>(rtriggerfreq).to_string().c_str());
-      if (rtriggerfreq >= (1<<26)) {
+      uint32_t rtriggerperiod = rtrigger.at("period").get<unsigned int>();
+      Log(debug,"Random Trigger Frequency [%d] (%u) [0x%X][%s]",rtriggerperiod,rtriggerperiod,rtriggerperiod, std::bitset<26>(rtriggerperiod).to_string().c_str());
+      if (rtriggerperiod >= (1<<26)) {
         //std::ostringstream oss0;
-        oss << "Random trigger value of " << rtriggerfreq << " above maximum rollover [2^26 - 1]. Truncating to maximum.";
+        oss << "Random trigger value of " << rtriggerperiod << " above maximum rollover [2^26 - 1]. Truncating to maximum.";
         tmp[0] = std::make_pair("warning", oss.str());
         Log(warning,"%s", oss.str());
-        rtriggerfreq = (1<<26)-1;
+        rtriggerperiod = (1<<26)-1;
       }
       
       //Set pulser frequency
@@ -752,10 +752,11 @@ namespace ptb {
       json timingconf = miscconfig.at("timing");
       std::string s_t_addr = timingconf.at("address").get<std::string>();
       std::string s_t_group = timingconf.at("group").get<std::string>();
+      std::string s_cmd_lockout = timingconf.at("lockout").get<std::string>();
       uint32_t t_addr = (uint32_t)strtoul(s_t_addr.c_str(),NULL,0);
       uint32_t t_group = (uint32_t)strtoul(s_t_group.c_str(),NULL,0);
+      uint32_t cmd_lockout = (uint32_t)strtoul(s_cmd_lockout.c_str(),NULL,0);
       bool trigger_ena = timingconf.at("triggers").get<bool>();
-
 
       set_bit(62,0,ch_status_en);
       set_bit(70,0,standalone_en);
@@ -764,11 +765,11 @@ namespace ptb {
       set_bit(62,2,rtrig_fixed_freq);
       set_bit(5,31,pulser_en);
 
-      set_bit_range_register(4,0,26,rtriggerfreq);
+      set_bit_range_register(4,0,26,rtriggerperiod);
       set_bit_range_register(5,0,26,pulserfreq);
 
-      uint32_t t_param = (t_group<<8) + t_addr;
-      set_bit_range_register(61,0,10,t_param);
+      uint32_t t_param = (cmd_lockout<<11) + (t_group<<8) + t_addr;
+      set_bit_range_register(61,0,19,t_param);
       set_bit(61,10,trigger_ena);
 
       //Place warnings into json feedback obj
