@@ -565,7 +565,7 @@ namespace ptb {
       ///FIXME: How can this work? dacsetup is not initialized in this function
       i2conf dacsetup;
 
-      size_t err_msgs = 12;
+      size_t err_msgs = 14;
       std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
 
       json trigs = pdsconfig.at("triggers"); //Array of trigger configs
@@ -577,33 +577,40 @@ namespace ptb {
       std::string s_llt14count = trigs.at(0).at("count").get<std::string>();
       std::string s_llt14mask = trigs.at(0).at("mask").get<std::string>();
       bool llt14_enable = trigs.at(0).at("enable").get<bool>();
+      std::string s_llt17type = trigs.at(1).at("type").get<std::string>();
+      std::string s_llt17count = trigs.at(1).at("count").get<std::string>();
+      std::string s_llt17mask = trigs.at(1).at("mask").get<std::string>();
+      bool llt17_enable = trigs.at(1).at("enable").get<bool>();
 
       uint32_t channelmask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
       uint8_t llt14type = (int)strtol(s_llt14type.c_str(),NULL,0);
       uint8_t llt14count = (int)strtol(s_llt14count.c_str(),NULL,0);
       uint32_t llt14mask = (uint32_t)strtoul(s_llt14mask.c_str(),NULL,0);
+      uint8_t llt17type = (int)strtol(s_llt17type.c_str(),NULL,0);
+      uint8_t llt17count = (int)strtol(s_llt17count.c_str(),NULL,0);
+      uint32_t llt17mask = (uint32_t)strtoul(s_llt17mask.c_str(),NULL,0);
 
       uint32_t reshape_len = pdsconfig.at("reshape_length").get<unsigned int>();
       Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
       if (reshape_len >= (1<<6)) {
-         std::ostringstream oss11;
-         oss11 << "Random trigger value of " << reshape_len << " above maximum rollover [2^6 - 1]. Truncating to maximum.";
-         tmp[11] = std::make_pair("warning", oss11.str());
-         Log(warning,"%s", oss11.str());
+         std::ostringstream oss13;
+         oss13 << "Random trigger value of " << reshape_len << " above maximum rollover [2^6 - 1]. Truncating to maximum.";
+         tmp[13] = std::make_pair("warning", oss13.str());
+         Log(warning,"%s", oss13.str());
          reshape_len = (1<<6)-1;
       }
 
-
-
-       std::ostringstream oss0;
-       if (llt14type > 4 || llt14type == 3 || llt14type == 0) {
-         oss0 << "Trigger " << trigs.at(0).at("id").get<std::string>() << " type (" << (int)llt14type << ") logic type undefined! ";
-         Log(error,"%s", oss0.str());
-         //FIXME Add return, this should be an error
-       }
-       tmp[0] = std::make_pair("warning", oss0.str());
+      std::ostringstream oss0;
+      if (llt14type > 4 || llt14type == 3 || llt14type == 0) {
+        oss0 << "Trigger " << trigs.at(0).at("id").get<std::string>() << " type (" << (int)llt14type << ") logic type undefined! ";
+        Log(error,"%s", oss0.str());
+        //FIXME Add return, this should be an error
+      }
+      tmp[0] = std::make_pair("warning", oss0.str());
       std::ostringstream oss1;
-      if ((llt14count == 0 && llt14type == 2)) { 
+      if ((llt14count == 0 && llt14type == 2) ||
+          (llt14count == 1 && llt14type == 4) ||
+          (llt14count > llt14mask) && (llt14type == 2 || llt14type == 1)) { 
         oss1 << "Trigger " << trigs.at(0).at("id").get<std::string>() << ", with count (" << (int)llt14count << ") amd type (" << (int)llt14type << ") is equivalent to disabled.";
         Log(warning,"%s", oss1.str());
       }
@@ -615,65 +622,81 @@ namespace ptb {
       }
       tmp[2] = std::make_pair("warning", oss2.str());
       std::ostringstream oss3;
-      if ((llt14count == 1 && llt14type == 4)) { 
-        oss3 << "Trigger " << trigs.at(0).at("id").get<std::string>() << ", with count (" << (int)llt14count << ") amd type (" << (int)llt14type << ") is equivalent to disabled.";
-        Log(warning,"%s", oss3.str());
+      if (llt14count > std::pow(2,5)-1) { 
+        oss3 << "Trigger " << trigs.at(0).at("id").get<std::string>() << ", with count (" << (int)llt14count << ") is larger than the number of available bits. Configuration aborted.";
+        Log(error,"%s", oss3.str());
       }
       tmp[3] = std::make_pair("warning", oss3.str());
+
       std::ostringstream oss4;
-      if ((llt14count > llt14mask) && (llt14type == 2 || llt14type == 1)) { 
-        oss4 << "Trigger " << trigs.at(0).at("id").get<std::string>() << ", with count (" << (int)llt14count << ") amd type (" << (int)llt14type << ") is equivalent to disabled.";
-        Log(warning,"%s", oss4.str());
+      if (llt17type > 4 || llt17type == 3 || llt17type == 0) {
+        oss4 << "Trigger " << trigs.at(1).at("id").get<std::string>() << " type (" << (int)llt17type << ") logic type undefined! ";
+        Log(error,"%s", oss4.str());
+        //FIXME Add return, this should be an error
       }
       tmp[4] = std::make_pair("warning", oss4.str());
       std::ostringstream oss5;
-      if (llt14count > std::pow(2,5)-1) { 
-        oss5 << "Trigger " << trigs.at(0).at("id").get<std::string>() << ", with count (" << (int)llt14count << ") is larger than the number of available bits. Configuration aborted.";
-        Log(error,"%s", oss5.str());
+      if ((llt17count == 0 && llt17type == 2) ||
+          (llt17count == 1 && llt17type == 4) ||
+          (llt17count > llt17mask) && (llt17type == 2 || llt17type == 1)) { 
+        oss5 << "Trigger " << trigs.at(1).at("id").get<std::string>() << ", with count (" << (int)llt17count << ") amd type (" << (int)llt17type << ") is equivalent to disabled.";
+        Log(warning,"%s", oss5.str());
       }
       tmp[5] = std::make_pair("warning", oss5.str());
-
       std::ostringstream oss6;
-      if (delays.size() != NPDS_CH) {
-        oss6 << "Number of configuration values " << delays.size() << " doesn't match number of PDS channels " << NPDS_CH << " !";
+      if ((llt17count == 0 && llt17type == 4)) { 
+        oss6 << "Trigger " << trigs.at(1).at("id").get<std::string>() << ", with count (" << (int)llt17count << ") amd type (" << (int)llt17type << ") is asking for negative count. Trigger disabled.";
         Log(warning,"%s", oss6.str());
       }
       tmp[6] = std::make_pair("warning", oss6.str());
-
-       for (size_t i=0; i<delays.size(); i++) {
-         if (delays[i] > std::pow(2,7)) { //Range 0 - 2^7 -1
-           std::ostringstream oss7;
-           oss7 << "Delay value out of range (" << delays.at(i) << "). Truncating to maximum (127)";
-           Log(warning,"%s", oss7.str());
-           tmp[7] = std::make_pair("warning", oss7.str());
-         }
-       }
+      std::ostringstream oss7;
+      if (llt17count > std::pow(2,5)-1) { 
+        oss7 << "Trigger " << trigs.at(1).at("id").get<std::string>() << ", with count (" << (int)llt17count << ") is larger than the number of available bits. Configuration aborted.";
+        Log(error,"%s", oss7.str());
+      }
+      tmp[7] = std::make_pair("warning", oss7.str());
 
       std::ostringstream oss8;
-      if (dac_values.size() != (i2conf::nchannels_)*(i2conf::ndacs_)) {
-        oss8 << "Number of configuration values (" << dac_values.size() << ") doesn't match number of DAC channels (" << (i2conf::nchannels_)*(i2conf::ndacs_) << ")";
+      if (delays.size() != NPDS_CH) {
+        oss8 << "Number of configuration values " << delays.size() << " doesn't match number of PDS channels " << NPDS_CH << " !";
         Log(warning,"%s", oss8.str());
       }
       tmp[8] = std::make_pair("warning", oss8.str());
+
+       for (size_t i=0; i<delays.size(); i++) {
+         if (delays[i] > std::pow(2,7)) { //Range 0 - 2^7 -1
+           std::ostringstream oss9;
+           oss9 << "Delay value out of range (" << delays.at(i) << "). Truncating to maximum (127)";
+           Log(warning,"%s", oss9.str());
+           tmp[9] = std::make_pair("warning", oss9.str());
+         }
+       }
+
+      std::ostringstream oss10;
+      if (dac_values.size() != (i2conf::nchannels_)*(i2conf::ndacs_)) {
+        oss10 << "Number of configuration values (" << dac_values.size() << ") doesn't match number of DAC channels (" << (i2conf::nchannels_)*(i2conf::ndacs_) << ")";
+        Log(warning,"%s", oss10.str());
+      }
+      tmp[10] = std::make_pair("warning", oss10.str());
 
       Log(info,"Size of channel values vector %i", dac_values.size());
       for (size_t i=0; i<dac_values.size(); i++) {
         Log(info,"Channel %zu value %u", i, dac_values[i]);
         if (dac_values[i] > 4095) { //Range 0 - 4095
-          std::ostringstream oss9;
-          oss9 << "DAC value out of range (" << dac_values.at(i) << "). Truncating to maximum (4095)";
-          tmp[9] = std::make_pair("warning", oss9.str());
-          Log(warning,"%s", oss9.str());
+          std::ostringstream oss11;
+          oss1 << "DAC value out of range (" << dac_values.at(i) << "). Truncating to maximum (4095)";
+          tmp[11] = std::make_pair("warning", oss11.str());
+          Log(warning,"%s", oss11.str());
           dac_values[i] = 4095;
         }
       }
       //Now pass DAC configs to setup
-      std::ostringstream oss10;
+      std::ostringstream oss12;
       if (dacsetup.ConfigureDacs(dac_values,false)) {
-        oss10 << "Failed to write configuration values to DACs.";
-        Log(warning,"%s", oss10.str());
+        oss12 << "Failed to write configuration values to DACs.";
+        Log(warning,"%s", oss12.str());
       }
-      tmp[10] = std::make_pair("error", oss10.str());
+      tmp[12] = std::make_pair("error", oss12.str());
       Log(info,"Programmed %zu DAC channels", dac_values.size());
 
       //Input channel masks
@@ -686,6 +709,11 @@ namespace ptb {
       uint32_t llt14 = (llt14type<<5) + llt14count;
       set_bit_range_register(44,0,9,llt14);
       set_bit_range_register(45,0,32,llt14mask);
+
+      set_bit(27,17,llt17_enable);
+      uint32_t llt17 = (llt17type<<5) + llt17count;
+      set_bit_range_register(50,0,9,llt17);
+      set_bit_range_register(51,0,32,llt17mask);
 
      uint8_t dbits = 7;
      // PDS delays 24ch * 7b = 168b --> 6 regs
