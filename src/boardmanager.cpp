@@ -336,10 +336,10 @@ namespace ptb {
       Log(error,"Received an error state from the board reader");
     }
 
+    const int num_cmd = 4;
+    const int offset_reg = 81;
+    std::vector<unsigned int> cmd_codes = {12, 13, 14, 15};
     // Build a statistics object
-    const int num_cmd = 8;
-    const int offset_reg = 85;
-    std::vector<unsigned int> cmd_codes = {8, 9, 10, 11, 12, 13, 14, 15};
     if (get_board_state() == board_manager::RUNNING) {
      // uint32_t evtctr = register_map_[65].value();
       std::ostringstream evts; 
@@ -355,26 +355,23 @@ namespace ptb {
       stat["num_tstamp"] = reader_->get_n_timestamps();
       stat["num_fifo_warn"] = reader_->get_n_warns();
      
-      stat["num_0x8"] = register_map_[8+offset_reg].value();     
-      stat["num_0x9"] = register_map_[9+offset_reg].value();     
-      stat["num_0xA"] = register_map_[10+offset_reg].value();     
-      stat["num_0xB"] = register_map_[11+offset_reg].value();     
       stat["num_0xC"] = register_map_[12+offset_reg].value();     
       stat["num_0xD"] = register_map_[13+offset_reg].value();     
       stat["num_0xE"] = register_map_[14+offset_reg].value();     
       stat["num_0xF"] = register_map_[15+offset_reg].value();     
 
-/* 
-      //std::vector< std::ostringstream > cmd_counters[num_cmd];
+/*
+      std::vector<std::string> keys(num_cmd);
+      std::vector<std::stringstream> ssk(num_cmd);
       for(unsigned int i=0; i< num_cmd; ++i) {
-        //cmd_counters.at(i) << register_map_[cmd_codes[i]].value();
-	string base = "cmd_code";
-	string key = std::to_string(cmd_codes[i]);
-        stat["cmd_code"] = cmd_codes[i];
-        stat["num_cmd_issued"] = register_map_[cmd_codes[i]+offset_reg].value(); 
-      }
-*/     
-      stat["ack_trg_ctr"] = register_map_[101].value();
+	string base = "num_0x";
+        ssk.at(i) << std::hex << cmd_codes.at(i);
+	keys.at(i) = base + ssk.at(i).str();
+        stat[keys.at(i)] = cmd_codes[i];
+        stat["num_cmd_issued"] = register_map_[cmd_codes.at(i)+offset_reg].value(); 
+      } 
+*/    
+      stat["ack_trg_ctr"] = register_map_[97].value();
  
       reader_->reset_counters();
       feedback_.push_back(stat);
