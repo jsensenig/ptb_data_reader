@@ -496,9 +496,14 @@ class ctb_robot {
       unsigned int wtype;
       uint64_t tstamp;
       uint64_t payload;
+      uint64_t crt_status;
+      uint64_t beam_status;
+
       outtree_->Branch("type",&wtype);
       outtree_->Branch("timestamp",&tstamp,"timestamp/l");
       outtree_->Branch("payload",&payload,"payload/l");
+      outtree_->Branch("beam_status",&beam_status,"beam_status/l");
+      outtree_->Branch("crt_status",&crt_status,"crt_status/l");
 
       // -- Now enter the loop to store the data
       buffer word;
@@ -556,6 +561,9 @@ class ctb_robot {
             wtype = chs->word_type;
             tstamp = chs->timestamp;
             payload = chs->get_pds();
+            crt_status = chs->get_crt();
+            //crt_status = 0xffffffff;
+            beam_status = chs->get_beam();
             outtree_->Fill();
             break;
           default:
