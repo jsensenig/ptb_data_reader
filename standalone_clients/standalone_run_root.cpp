@@ -498,7 +498,7 @@ class ctb_robot {
       uint64_t payload;
       uint64_t crt_status;
       uint64_t beam_status;
-
+      
       outtree_->Branch("type",&wtype);
       outtree_->Branch("timestamp",&tstamp,"timestamp/l");
       outtree_->Branch("payload",&payload,"payload/l");
@@ -561,9 +561,8 @@ class ctb_robot {
             wtype = chs->word_type;
             tstamp = chs->timestamp;
             payload = chs->get_pds();
-            crt_status = chs->get_crt();
-            //crt_status = 0xffffffff;
             beam_status = chs->get_beam();
+            crt_status = chs->get_crt();
             outtree_->Fill();
             break;
           default:
