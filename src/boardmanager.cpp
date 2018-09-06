@@ -62,6 +62,7 @@ namespace ptb {
 		            //cfg_srv_(0),
 		            board_state_(IDLE),
 		            mapped_conf_base_addr_(nullptr),
+		            mapped_gpio_base_addr_(nullptr),
 		            msgs_str_(""),
 		            error_state_(false),
 		            data_socket_host_("192.168.100.100"),
@@ -349,7 +350,7 @@ namespace ptb {
       stat["message"] = evts.str();
       stat["num_eth_packets"] = reader_->get_n_sent_frags();
       stat["num_eth_bytes"] = reader_->get_sent_bytes();
-      stat["num_word_counter"] = reader_->get_n_status();
+      stat["num_chstatus"] = reader_->get_n_status();
       stat["num_hlt"] = reader_->get_n_gtriggers();
       stat["num_llt"] = reader_->get_n_ltriggers();
       stat["num_tstamp"] = reader_->get_n_timestamps();
@@ -452,12 +453,24 @@ namespace ptb {
     if (ptb::config::conf_reg.n_registers < num_registers_) {
       Log(warning,"Have less configured registers than the ones required. (%u != %u)",ptb::config::conf_reg.n_registers,num_registers_);
     }
-
+    
     register_map_[0].addr =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_conf_base_addr_) + ptb::config::conf_reg.addr_offset[0]);
     register_map_[0].value() = CTL_BASE_REG_VAL;
     for (uint32_t i = 1; i < num_registers_; ++i) {
       register_map_[i].addr =  reinterpret_cast<void*>(reinterpret_cast<uint32_t>(mapped_conf_base_addr_) + ptb::config::conf_reg.addr_offset[i]);
       register_map_[i].value() = 0;
+    }
+
+    //Follow the same process to map the GPIO address
+    ptb::config::setup_ctb_gpio();
+    // First get the virtual address for the mapped physical address
+    Log(debug,"Mapping GPIO physical address [0x%X 0x%X]",ptb::config::gpio_reg.base_addr,ptb::config::gpio_reg.high_addr);
+    mapped_gpio_base_addr_ = ptb::util::map_physical_memory(ptb::config::gpio_reg.base_addr,ptb::config::gpio_reg.high_addr);
+                                                                                                                                         
+    Log(debug,"Received virtual address for GPIO : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_gpio_base_addr_));
+    // Cross check that we have at least as many offsets as GPIO registers expected
+    if (ptb::config::gpio_reg.n_registers < num_gpio_reg_) {
+      Log(warning,"Have less configured GPIO registers than the ones required. (%u != %u)",ptb::config::gpio_reg.n_registers, num_gpio_reg_);
     }
 
 #endif
@@ -543,11 +556,12 @@ namespace ptb {
       std::this_thread::sleep_for (std::chrono::microseconds(10));
       set_reset_bit(false);
 
-      Log(warning,"Still in development. Only a few configuration registers are being set");
-      json obj;
-      obj["type"] = "warning";
-      obj["message"] = "Configuration still in development. Only a few configuration registers are being set";
-      answers.push_back(obj);
+      // I think we have reached the point at which this can be retired.
+      //Log(warning,"Still in development. Only a few configuration registers are being set");
+      //json obj;
+      //obj["type"] = "warning";
+      //obj["message"] = "Configuration still in development. Only a few configuration registers are being set";
+      //answers.push_back(obj);
 
     }
     // -- Only catch something deriving from std::exception and unspecified
@@ -620,6 +634,17 @@ namespace ptb {
 //Add preprocessor block below for CTB/PTB config use
 
 #if defined(PDUNE_COMPILATION)
+
+    //Program timing endpoint addr and group first using GPIO so the endpoint is ready when the config is committed
+    json timingconf = doc.at("ctb").at("misc").at("timing");
+    std::string s_t_addr = timingconf.at("address").get<std::string>();
+    std::string s_t_group = timingconf.at("group").get<std::string>();
+    uint32_t t_addr = (uint32_t)strtoul(s_t_addr.c_str(),NULL,0);
+    uint32_t t_group = (uint32_t)strtoul(s_t_group.c_str(),NULL,0);
+
+    uint32_t timing_addr = (t_group<<15) + (t_addr<<7);
+    util::Xil_Out32((uint32_t)(mapped_gpio_base_addr_ + ptb::config::gpio_reg.addr_offset[0]), timing_addr);
+
     json feedback;
     configure_ctb(doc, feedback);
     if (!feedback.empty()) {
@@ -627,7 +652,8 @@ namespace ptb {
       answers.insert(std::end(answers),feedback.begin(),feedback.end());
     }
     //Sleep for a bit to allow the timing endpoint to cycle through it's state machine
-    usleep(900000);
+    // --> Resetting the endpoint messes up the timing server, skip the reset
+    //usleep(900000);
     //Read the timing status 
     uint32_t timing_reg = 91; //reg_out_1[31:28]
     uint32_t timing_stat = register_map_[timing_reg].value();

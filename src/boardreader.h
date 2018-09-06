@@ -117,7 +117,7 @@ namespace ptb {
 
       // -- Statistics methods:
       uint32_t get_n_sent_frags() {return num_eth_fragments_;};
-      uint32_t get_n_status() {return num_word_counter_;};
+      uint32_t get_n_status() {return num_word_chstatus_;};
       uint32_t get_n_gtriggers() {return num_word_gtrigger_;};
       uint32_t get_n_ltriggers() {return num_word_ltrigger_;};
       uint32_t get_n_warns() {return num_word_feedback_;};
@@ -192,7 +192,7 @@ namespace ptb {
 
       /// -- Internal run statistics
       uint32_t num_eth_fragments_;
-      uint32_t num_word_counter_;
+      uint32_t num_word_chstatus_;
       uint32_t num_word_gtrigger_;
       uint32_t num_word_ltrigger_;
       uint32_t num_word_feedback_;

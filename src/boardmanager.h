@@ -267,9 +267,11 @@ private:
   state board_state_;
 
   static const uint8_t num_registers_ = 102;
+  static const uint8_t num_gpio_reg_ = 1;
   //static const char *default_config_;
   json config_;
   void *mapped_conf_base_addr_;
+  void *mapped_gpio_base_addr_;
 
   //std::vector<std::string> feedback_;
   json feedback_;

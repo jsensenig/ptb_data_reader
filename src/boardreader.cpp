@@ -54,7 +54,7 @@ board_reader::board_reader() :
     keep_collecting_(true),
     // below this point all these are debugging variables
     num_eth_fragments_(0),
-    num_word_counter_(0),num_word_gtrigger_(0),num_word_ltrigger_(0),num_word_feedback_(0),
+    num_word_chstatus_(0),num_word_gtrigger_(0),num_word_ltrigger_(0),num_word_feedback_(0),
     num_word_tstamp_(0),bytes_sent_(0)
 {
 
@@ -83,7 +83,7 @@ void board_reader::get_feedback(bool &error, json &msgs, const bool reset)
 void board_reader::reset_counters() {
   Log(info,"Resetting reader counters");
   num_eth_fragments_ = 0;
-  num_word_counter_ = 0;
+  num_word_chstatus_ = 0;
   num_word_feedback_ = 0;
   num_word_gtrigger_ = 0;
   num_word_ltrigger_ = 0;
@@ -364,6 +364,13 @@ void board_reader::data_collector() {
         obj["type"] = "error";
         obj["message"] = "Failed to acquire data due to claimed DMA buffers";
         feedback_messages_.push_back(obj);
+        //Create feedback word and inject into data stream
+        // -- not sure how to grab the most recent TS
+        // -- for consistency these words should be big endian
+        //uint64_t feedback_up = (code<<?) + (code<<?);
+        //uint64_t feedback_down = TS;
+        //buffer_queue_.push(feedback_up,8);
+        //buffer_queue_.push(feedback_down,8);
       }
       Log(error,"Failed to acquire data. Returned %i [iteration %u]",dma_buffer.handle,counter);
       std::ostringstream err_msg;
@@ -531,7 +538,7 @@ void board_reader::data_transmitter() {
   /// FIXME: SHould the counters be reset here?
   // Debugging information that is passed down in the end of the run
   num_eth_fragments_ = 0;
-  num_word_counter_ = 0;
+  num_word_chstatus_ = 0;
   num_word_gtrigger_ = 0;
   num_word_ltrigger_ = 0;
   num_word_tstamp_ = 0;
@@ -630,7 +637,7 @@ void board_reader::data_transmitter() {
            num_word_tstamp_++;
            break;
          case ptb::content::word::t_ch:
-           num_word_counter_++;
+           num_word_chstatus_++;
            break;
          default:
            // -- A dangerous situation was found...the header has an unexpected type

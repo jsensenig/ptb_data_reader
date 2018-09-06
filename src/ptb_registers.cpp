@@ -30,6 +30,28 @@ void setup_ptb_registers() {
   Log(debug,"Configuration registers set.");
 }
 
+  // Map a single GPIO for general config use
+  mapped_register gpio_reg;
+
+void setup_ctb_gpio() {
+  gpio_reg.dev_id = 0;
+  gpio_reg.base_addr = 0x41200000;
+  gpio_reg.high_addr = 0x4120FFFF;
+  gpio_reg.n_registers = 1;
+  gpio_reg.addr_offset = new uint32_t[gpio_reg.n_registers];
+  unsigned int i = 0;
+  for (i = 0; i < gpio_reg.n_registers; ++i) {
+   gpio_reg.addr_offset[i] = i*4;
+    Log(debug,
+        "Setting GPIO register (%u) to address 0x%08X + 0x%08X =  [0x%08X].",
+        i,
+        gpio_reg.base_addr,
+        gpio_reg.addr_offset[i],
+        gpio_reg.base_addr+gpio_reg.addr_offset[i]);
+  }
+  Log(debug,"GPIO registers set.");
+}
+
 #ifdef ARM_MMAP
 void SetupDataRegisters() {
   data_reg.dev_id = 0;

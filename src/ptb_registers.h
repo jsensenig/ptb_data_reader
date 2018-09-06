@@ -41,8 +41,10 @@ typedef struct mapped_register {
 extern int g_mem_fd;
 
 extern mapped_register conf_reg;
+extern mapped_register gpio_reg;
 
 void setup_ptb_registers();
+void setup_ctb_gpio();
 
 }
 }
