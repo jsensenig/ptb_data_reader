@@ -497,11 +497,12 @@ class ctb_robot {
       uint64_t tstamp;
       uint64_t payload;
       uint64_t crt_status;
-      uint32_t beam_status;
+      uint64_t beam_status;
+      
       outtree_->Branch("type",&wtype);
       outtree_->Branch("timestamp",&tstamp,"timestamp/l");
       outtree_->Branch("payload",&payload,"payload/l");
-      outtree_->Branch("beam_status",&beam_status,"beam_status/i");
+      outtree_->Branch("beam_status",&beam_status,"beam_status/l");
       outtree_->Branch("crt_status",&crt_status,"crt_status/l");
 
       // -- Now enter the loop to store the data
