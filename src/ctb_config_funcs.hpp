@@ -754,6 +754,7 @@ namespace ptb {
       bool rtrigger_en = rtrigger.at("enable").get<bool>();
       bool rtrig_fixed_freq = rtrigger.at("fixed_freq").get<bool>();
       uint32_t rtriggerperiod = rtrigger.at("period").get<unsigned int>();
+      bool beam_mode = rtrigger.at("beam_mode").get<bool>();
       Log(debug,"Random Trigger Frequency [%d] (%u) [0x%X][%s]",rtriggerperiod,rtriggerperiod,rtriggerperiod, std::bitset<26>(rtriggerperiod).to_string().c_str());
       if (rtriggerperiod >= (1<<26)) {
         //std::ostringstream oss0;
@@ -788,6 +789,7 @@ namespace ptb {
 
       set_bit(62,0,ch_status_en);
       set_bit(70,0,standalone_en);
+      set_bit(70,1,beam_mode);
 
       set_bit(27,0,rtrigger_en);
       set_bit(62,2,rtrig_fixed_freq);
@@ -796,7 +798,7 @@ namespace ptb {
       set_bit_range_register(4,0,26,rtriggerperiod);
       set_bit_range_register(5,0,26,pulserfreq);
 
-      uint32_t t_param = (cmd_lockout<<11) + (t_group<<8) + t_addr;
+      uint32_t t_param = (cmd_lockout<<11);// + (t_group<<8) + t_addr;
       set_bit_range_register(61,0,19,t_param);
       set_bit(61,10,trigger_ena);
 
