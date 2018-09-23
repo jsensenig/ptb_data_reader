@@ -337,26 +337,21 @@ namespace ptb {
     Log(verbose,"Processing a transmission");
     Log(verbose,"[%s]",buffer.c_str());
 
-    try {
-      // -- We just need to figure out if this is a configuration or command message
-      json doc = json::parse(buffer);
-      std::string jd = doc.dump(4);
-      Log(verbose,"Buffer [%s]",jd.c_str());
-      if (doc.count("ctb") >= 1) {
-        // we have a configuration document
-        Log(debug,"Processing config");
-        board_manager_->process_config(doc,msg_answers_);
-      } else if (doc.count("command") >= 1) {
-        Log(debug,"Processing command : %s",doc.at("command").get<std::string>().c_str());
-        board_manager_->exec_command(doc.at("command").get<std::string>(),msg_answers_);
-      } else {
-        Log(error,"Unknown document type.");
-        msg_answers_.push_back("ERROR: Unknown document type");
-      }
-    } catch(std::exception &e) {
-      Log(error,"Caught an exception: %s",e.what());
+    // -- We just need to figure out if this is a configuration or command message
+    json doc = json::parse(buffer);
+    std::string jd = doc.dump(4);
+    Log(verbose,"Buffer [%s]",jd.c_str());
+    if (doc.count("ctb") >= 1) {
+      // we have a configuration document
+      Log(debug,"Processing config");
+      board_manager_->process_config(doc,msg_answers_);
+    } else if (doc.count("command") >= 1) {
+      Log(debug,"Processing command : %s",doc.at("command").get<std::string>().c_str());
+      board_manager_->exec_command(doc.at("command").get<std::string>(),msg_answers_);
+    } else {
+      Log(error,"Unknown document type.");
+      msg_answers_.push_back("ERROR: Unknown document type");
     }
-
   }
 
   void board_server::register_board_manager(board_manager* newmgr) {
