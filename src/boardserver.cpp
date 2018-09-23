@@ -247,6 +247,17 @@ namespace ptb {
             try {
               process_request(tcp_buffer_.c_str(),msg_answers_);
             }
+
+            catch(SocketException &e) {
+              std::string msg = "Socket excepion caught : ";
+              msg += e.what();
+
+              Log(error,"%s",msg.c_str());
+              json obj;
+              obj["type"]="error";
+              obj["message"]=msg;
+              msg_answers_.push_back(obj);
+            }
             catch(json::exception &e) {
               std::string msg = "JSON exception : ";
               msg += e.what();
