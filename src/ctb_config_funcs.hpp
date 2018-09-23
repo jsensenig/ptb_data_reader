@@ -786,7 +786,7 @@ namespace ptb {
     json timingconf = miscconfig.at("timing");
 //    std::string s_t_addr = timingconf.at("address").get<std::string>();
 //    std::string s_t_group = timingconf.at("group").get<std::string>();
-//    std::string s_cmd_lockout = timingconf.at("lockout").get<std::string>();
+    std::string s_cmd_lockout = timingconf.at("lockout").get<std::string>();
 //    uint32_t t_addr = (uint32_t)strtoul(s_t_addr.c_str(),NULL,0);
 //    uint32_t t_group = (uint32_t)strtoul(s_t_group.c_str(),NULL,0);
     uint32_t cmd_lockout = (uint32_t)strtoul(s_cmd_lockout.c_str(),NULL,0);
