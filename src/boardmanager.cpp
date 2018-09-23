@@ -358,7 +358,7 @@ namespace ptb {
       Log(error,"Received an error state from the board reader");
     }
 
-    const int num_cmd = 4;
+    //const int num_cmd = 4;
     const int offset_reg = 81;
     std::vector<unsigned int> cmd_codes = {12, 13, 14, 15};
     // Build a statistics object
