@@ -269,6 +269,7 @@ namespace ptb {
       obj["type"] = "error";
       std::string msg = "PTB data socket exception (socket): ";
       msg += e.what();
+      Log(error,"%s",msg.c_str());
       obj["message"] = msg;
       feedback_.push_back(obj);
       error_state_ = true;
@@ -279,6 +280,7 @@ namespace ptb {
       obj["type"] = "error";
       std::string msg = "PTB data socket exception (std): ";
       msg += e.what();
+      Log(error,"%s",msg.c_str());
       obj["message"] = msg;
       feedback_.push_back(obj);
       error_state_ = true;
@@ -289,6 +291,7 @@ namespace ptb {
       json obj;
       obj["type"] = "error";
       obj["message"] = "PTB data socket exception (unknown): error starting reader";
+      Log(error,"PTB data socket exception (unknown): error starting reader");
       feedback_.push_back(obj);
       error_state_ = true;
       return;
@@ -309,7 +312,7 @@ namespace ptb {
       return;
     }
 
-    // The GLB_EN is located in bin 31 of register 30
+    // The GLB_EN is located in bin 31 of register 0
     set_enable_bit(true);
 
     Log(debug,"GLB_EN set. Register: 0x%08x ", register_map_[0].value() );
@@ -372,7 +375,7 @@ namespace ptb {
       stat["num_hlt"] = reader_->get_n_gtriggers();
       stat["num_llt"] = reader_->get_n_ltriggers();
       stat["num_tstamp"] = reader_->get_n_timestamps();
-      stat["num_fifo_warn"] = reader_->get_n_warns();
+      stat["num_errors"] = reader_->get_n_warns();
      
       stat["num_0xC"] = register_map_[12+offset_reg].value();     
       stat["num_0xD"] = register_map_[13+offset_reg].value();     
@@ -556,9 +559,12 @@ namespace ptb {
 
 
   void board_manager::process_config(json &doc,json &answers) {
+    // -- NFB --
+    // wouldn't it be better to clear these feedback at the end of process_config
+    // and at this stage simply prepend them?
     feedback_.clear();
 
-    if (board_state_ == RUNNING) {
+    if ((board_state_ == RUNNING) || get_enable_bit_ACK()) {
       json obj;
       obj["type"] = "warning";
       obj["message"] = "Attempted to pass a new configuration during a run. Ignoring the new configuration";
