@@ -80,6 +80,24 @@ namespace ptb {
     // manager receives something we are ready to deliver.
     setup_registers();
 
+
+    // -- Force a hard reset.
+    // This gives some degree of protection in case of catastrophic
+    // failure. In particular protects against
+    // the software thinking that the board is not running, and the board thinking otherwise
+
+    Log(info,"Applying a hard reset to make sure that the board is not running rogue.");
+
+    // A hard reset should sent the whole thing to zeros
+    // Including clearing up the configuration. A new configuration will have to be reissued
+    set_enable_bit(false);
+    set_config_bit(false);
+    // the hard reset also includes a complete reset of the local buffers
+    set_reset_bit(true);
+    // Sleep for 100 microseconds to make sure that reset has taken place
+    std::this_thread::sleep_for (std::chrono::microseconds(100));
+    set_reset_bit(false);
+
   }
 
   board_manager::~board_manager() {
