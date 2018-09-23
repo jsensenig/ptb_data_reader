@@ -651,7 +651,7 @@ namespace ptb {
     bool got_error = false;
     configure_ctb(doc, feedback,got_error);
     if (!feedback.empty()) {
-      Log(warning,"Received %u messages from CTB configuration",feedback.size());
+      Log(warning,"Received %u messages from CTB configuration [error : %d]",feedback.size(),((got_error)?1:0));
       answers.insert(std::end(answers),feedback.begin(),feedback.end());
     }
 
@@ -678,10 +678,11 @@ namespace ptb {
     if ((timing_stat >> 28) != 0x8) {
       json obj;
       std::ostringstream msg2;
-      msg2 << "Timing not initialized! Timing status: " << (timing_stat >> 28)
+      msg2 << "Timing not in a good state (0x8)! Present status : " << (timing_stat >> 28)
           << " [0x" << std::hex << (timing_stat >> 28) << std::dec << "]";
-      obj["type"] = "warning";
+      obj["type"] = "error";
       obj["message"] = msg2.str();
+      Log(error,"%s",msg2.str().c_str());
       answers.push_back(obj);
       has_error = true;
     }
@@ -728,7 +729,7 @@ namespace ptb {
       // The best is to reset everything and fail the configuration.
       std::ostringstream msgs_;
       if (has_error) {
-        msgs_ << "ERROR: Failed to process configuration fragment. Resetting config. ";
+        msgs_ << "Failed to process configuration fragment. Resetting config. ";
         Log(error,"Error caught processing fragment");
 
       } else {
