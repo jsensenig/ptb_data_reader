@@ -559,9 +559,7 @@ namespace ptb {
 
 
   void board_manager::process_config(json &doc,json &answers) {
-    // -- NFB --
-    // wouldn't it be better to clear these feedback at the end of process_config
-    // and at this stage simply prepend them?
+    // clear all messages that existed from before (since last stop?)
     feedback_.clear();
 
     if ((board_state_ == RUNNING) || get_enable_bit_ACK()) {
@@ -574,44 +572,14 @@ namespace ptb {
       return;
     }
     bool has_error = false;
-    try{
-      Log(info,"Applying a reset prior to the configuration.");
-      set_reset_bit(true);
-      std::this_thread::sleep_for (std::chrono::microseconds(10));
-      set_reset_bit(false);
 
-      // I think we have reached the point at which this can be retired.
-      //Log(warning,"Still in development. Only a few configuration registers are being set");
-      //json obj;
-      //obj["type"] = "warning";
-      //obj["message"] = "Configuration still in development. Only a few configuration registers are being set";
-      //answers.push_back(obj);
+    // -- NFB --
+    // Start by sending a reset into the board, to clear out the state
+    Log(info,"Applying a reset prior to the configuration.");
+    set_reset_bit(true);
+    std::this_thread::sleep_for (std::chrono::microseconds(10));
+    set_reset_bit(false);
 
-    }
-    // -- Only catch something deriving from std::exception and unspecified
-    catch(std::exception &e) {
-
-      std::string msg = "Error processing configuration: ";
-      msg += e.what();
-      msg += ". Not committing configuration to PTB.";
-      json obj;
-      obj["type"] = "error";
-      obj["message"] = msg;
-      answers.push_back(obj);
-      has_error = true;
-    }
-    catch(...) {
-      json obj;
-      obj["type"] = "error";
-      obj["message"] = "Unknown error processing configuration. Not committing configuration to PTB";
-      answers.push_back(obj);
-      has_error = true;
-    }
-    // Check if we got an error. If so, do not commit.
-    if (has_error) {
-      // Don't commit. Just go back and throw the error.
-      return;
-    }
 
     if (!reader_) {
       Log(warning,"Don't have a valid PTBReader instance. Attempting to create a new one." );
@@ -665,37 +633,59 @@ namespace ptb {
     std::string s_t_group = timingconf.at("group").get<std::string>();
     uint32_t t_addr = (uint32_t)strtoul(s_t_addr.c_str(),NULL,0);
     uint32_t t_group = (uint32_t)strtoul(s_t_group.c_str(),NULL,0);
-
+    Log(info,
+        "Setting timing endpoint with address [%s] (0x%X) and group [%s] (0x%X)",
+        s_t_addr.c_str(),
+        t_addr,
+        s_t_group.c_str(),
+        t_group);
     uint32_t timing_addr = (t_group<<15) + (t_addr<<7);
+    //FIXME: Careful with this kind of assignment. If there is anything in that register, it
+    // will be cleared out. For example, anything in other bit ranges will be wiped clean
+
     util::Xil_Out32((uint32_t)(mapped_gpio_base_addr_ + ptb::config::gpio_reg.addr_offset[0]), timing_addr);
 
+    // FIXME: There is a flaw here
+    // If there was an error configuring the specific code, how do we know?
     json feedback;
-    configure_ctb(doc, feedback);
+    bool got_error = false;
+    configure_ctb(doc, feedback,got_error);
     if (!feedback.empty()) {
-      Log(debug,"Received %u messages from configuring the CTB",feedback.size());
+      Log(warning,"Received %u messages from CTB configuration",feedback.size());
       answers.insert(std::end(answers),feedback.begin(),feedback.end());
     }
+
+    if (got_error) has_error = true;
+
     //Sleep for a bit to allow the timing endpoint to cycle through it's state machine
     // --> Resetting the endpoint messes up the timing server, skip the reset
     //usleep(900000);
     //Read the timing status 
     uint32_t timing_reg = 91; //reg_out_1[31:28]
     uint32_t timing_stat = register_map_[timing_reg].value();
+
     Log(debug,"Received %X timing status:  and PLL LoL: %X ",(timing_stat >> 28), ((timing_stat >> 25) & 0x1));
-    std::ostringstream oss0;
-    oss0 << "Recieved timing status: " << (timing_stat >> 28) << " and PLL LoL: " << ((timing_stat >> 25) & 0x1);
+    std::ostringstream msg;
+    msg << "Recieved timing status: " << (timing_stat >> 28)
+        << " [0x" << std::hex <<  (timing_stat >> 28) << std::dec
+        << "] and PLL LoL: " << ((timing_stat >> 25) & 0x1) << " [0x"
+        << std::hex << ((timing_stat >> 25) & 0x1) << std::dec << "]";
     json obj1;
     obj1["type"] = "info";
-    obj1["message"] = oss0.str();
+    obj1["message"] = msg.str().c_str();
     answers.push_back(obj1);
+
     if ((timing_stat >> 28) != 0x8) {
       json obj;
-      std::ostringstream oss;
-      oss << "Timing not initialized! Timing status: " << (timing_stat >> 28);
-      obj["type"] = "Warning";
-      obj["message"] = oss.str();
+      std::ostringstream msg2;
+      msg2 << "Timing not initialized! Timing status: " << (timing_stat >> 28)
+          << " [0x" << std::hex << (timing_stat >> 28) << std::dec << "]";
+      obj["type"] = "warning";
+      obj["message"] = msg2.str();
       answers.push_back(obj);
+      has_error = true;
     }
+
 
 #elif defined(SBND_COMPILATION)
 
@@ -732,14 +722,22 @@ namespace ptb {
     Log(verbose,"Control register before config commit 0x%X", register_map_[0].value() );
     set_config_bit(true);
     Log(debug,"Control register after config commit 0x%08X", register_map_[0].value() );
-    if (!get_config_bit_ACK()) {
+    if (!get_config_bit_ACK() || has_error) {
+
       // If the commit is not ACK then effectively the board is not configured.
       // The best is to reset everything and fail the configuration.
       std::ostringstream msgs_;
-      msgs_ << "ERROR: Failed set to set the configuration bit. ACK not received. Control register : "
+      if (has_error) {
+        msgs_ << "ERROR: Failed to process configuration fragment. Resetting config. ";
+        Log(error,"Error caught processing fragment");
+
+      } else {
+        msgs_ << "Failed to set configuration bit. ACK not received. ";
+        Log(error,"Failed to set configuration bit. ACK not received. Control register %X",register_map_.at(0).value());
+      }
+      msgs_ << " Control register : [0x"
           << std::hex << register_map_.at(0).value() << std::dec
-          << ". Control register after reset : ";
-      Log(warning,"Failed to set configuration bit. ACK not received. Control register %X",register_map_.at(0).value());
+          << "]. Control register after reset : [0x";
 
       set_enable_bit(false);
       Log(debug,"Control after disable: %X", register_map_.at(0).value());
@@ -748,7 +746,6 @@ namespace ptb {
       // the hard reset also includes a complete reset of the local buffers
       set_reset_bit(true);
       Log(debug,"Control after reset enable: %X", register_map_.at(0).value());
-
       // Sleep for 10 microseconds to make sure that reset has taken place
       std::this_thread::sleep_for (std::chrono::microseconds(10));
       set_reset_bit(false);
@@ -760,7 +757,7 @@ namespace ptb {
       set_config_bit(false);
       Log(debug,"Control after disable config again: %X", register_map_.at(0).value());
 
-      msgs_ << std::hex << register_map_.at(0).value() << std::dec;
+      msgs_ << std::hex << register_map_.at(0).value() << std::dec << "]";
       json obj;
       obj["type"] = "error";
       obj["message"] = msgs_.str();
@@ -792,10 +789,12 @@ namespace ptb {
       obj["type"] = "info";
       obj["message"] = "Successful board configuration";
       answers.push_back(obj);
+      Log(info,"Successful board configuration");
+    } else {
+      // -- there are errors. Create a message at the end
+      Log(error,"Errors found while configuring the board. See preceding messages for details.");
 
     }
-    // Most likely the connection will fail at this point. Not a big problem.
-    //    Log(verbose,"Returning from SetConfig with answer [%s]",feedback.c_str());
 
   }
 

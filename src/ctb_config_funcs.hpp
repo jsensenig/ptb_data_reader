@@ -6,14 +6,14 @@ namespace ptb {
     ////////////////////////////////////////////
     // Beam Configuration
 
-    void board_manager::configure_ctb(json& doc, json& answers) {
-
+    void board_manager::configure_ctb(json& doc, json& answers, bool &has_error) {
+      has_error = false;
       try { 
 
         //Keep this greeting, otherwise there will be an error when trying to insert into the empty "answers" object
         json obj;
         obj["type"] = "info";
-        obj["message"] = "Beginning CTB configuration! ";
+        obj["message"] = "Beginning CTB specific configuration! ";
         answers.push_back(obj);
         
         // -- Grab the subsystem & Misc configurations
@@ -63,13 +63,25 @@ namespace ptb {
         json feedback;
         pds_config(pdsconf,feedback);
         if (!feedback.empty()) {
-          Log(debug,"Received %u messages from configuring the PDS",feedback.size());
+          Log(info,"Received %u feedback messages from configuring the PDS",feedback.size());
           answers.insert(answers.end(),feedback.begin(),feedback.end());
         }
                                                                                                 
   #endif
         } //try
-       
+
+       // -- NFB --
+      // the order of declaration of the catch blocks is important
+      catch (json::exception& e) {
+        std::string msg = "Error processing configuration: ";
+        msg += e.what();
+        msg += ". Not committing configuration to CTB.";
+        json obj;
+        obj["type"] = "error";
+        obj["message"] = msg;
+        answers.push_back(obj);
+        has_error = true;
+      }
         catch(std::exception &e) {
          std::string msg = "Error processing configuration: ";
          msg += e.what();
@@ -78,21 +90,14 @@ namespace ptb {
          obj["type"] = "error";
          obj["message"] = msg;
          answers.push_back(obj);
-       }
-       catch (json::exception& e) {
-         std::string msg = "Error processing configuration: ";
-         msg += e.what();
-         msg += ". Not committing configuration to PTB.";
-         json obj;
-         obj["type"] = "error";
-         obj["message"] = msg;
-         answers.push_back(obj);
+         has_error = true;
        }
        catch(...) {
          json obj;
          obj["type"] = "error";
          obj["message"] = "Unknown error processing configuration. Not committing configuration to CTB";
          answers.push_back(obj);
+         has_error = true;
        }
 
     }

@@ -82,7 +82,7 @@ public:
 #if defined(PDUNE_COMPILATION)
 
   // Wrapper function that calls all others
-  void configure_ctb(json& doc, json& feedback);
+  void configure_ctb(json& doc, json& feedback, bool &has_error);
 
   //Misc configs such as timing, pulser, etc
   void misc_config(json & miscconfig, json& feedback);
