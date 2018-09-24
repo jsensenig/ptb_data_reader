@@ -647,14 +647,16 @@ namespace ptb {
 
     // FIXME: There is a flaw here
     // If there was an error configuring the specific code, how do we know?
-    json feedback;
+    json feedbacks;
     bool got_error = false;
-    configure_ctb(doc, feedback,got_error);
-    if (!feedback.empty()) {
-      Log(warning,"Received %u messages from CTB configuration [error : %d]",feedback.size(),((got_error)?1:0));
-      answers.insert(std::end(answers),feedback.begin(),feedback.end());
+    configure_ctb(doc, feedbacks,got_error);
+    if (!feedbacks.empty()) {
+      Log(warning,"Received %u messages from CTB configuration [error : %d]",feedbacks.size(),((got_error)?1:0));
+      Log(warning,"Messages : %s",answers.dump(2).c_str());
+      Log(warning,"Feedback : %s",feedbacks.dump(2).c_str());
+      answers.insert(std::end(answers),feedbacks.begin(),feedbacks.end());
     }
-
+    Log(warning,"Passed over...");
     if (got_error) has_error = true;
 
     //Sleep for a bit to allow the timing endpoint to cycle through it's state machine

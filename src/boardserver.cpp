@@ -331,6 +331,13 @@ namespace ptb {
     // Careful if the client connection in the meantime is lost, the memory will disappear.
     // Have to copy the string into the queue
 
+
+    json tmp;
+    tmp["type"] = "debug";
+    tmp["message"] = "Just a dummy object";
+    msg_answers_.push_back(tmp);
+    
+    
     if (board_manager_ == NULL) {
       //answer.push_back("WARNING: Request received without valid board manager. Queueing the msg.");
       Log(warning,"Attempting to process a transmission without a valid data Manager. Queueing.");
