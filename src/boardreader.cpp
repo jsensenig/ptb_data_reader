@@ -634,11 +634,14 @@ void board_reader::data_transmitter() {
     static size_t wpos = 1;
     // -- If there are DMA feedbacks, inject them here
     if (error_state_.load(std::memory_order_acquire)) {
-      Log(warning,"Caught a DMA error. Sneaking in a feedback word");
       feedback_dma.timestamp = last_timestamp;
       if (error_dma_timeout_.load(std::memory_order_acquire)) feedback_dma.code = 0x1;
       else if (error_dma_claimed_.load(std::memory_order_acquire)) feedback_dma.code = 0x2;
       else feedback_dma.code = 0x3;
+      Log(warning,
+          "DMA error caught. Sneaking in feedback word : \nTS : [%" PRIu64 "]\nSource : [%X]\nCode : [%X]\nPayload : [%" PRIX64 "]\n",
+          feedback_dma.timestamp,feedback_dma.source,feedback_dma.code,feedback_dma.get_payload());
+      //Log(warning,"Caught a DMA error. Sneaking in a feedback word");
 
       std::memcpy(&(eth_buffer[1]),(void*)&feedback_dma,sizeof(feedback_dma));
       wpos = 5;
@@ -710,7 +713,8 @@ void board_reader::data_transmitter() {
 
       // -- release the memory buffer
       pzdud_release(s2mm, dma_buffer.handle, 0);
-      wpos = 1;
+      wpos = 1; // reset the position to write the buffer
+      // should always be 1, except if there is a DMA error
       global_eth_pos += (n_u32_words+4);
       // add 4 bytes of padding just to make sure that there are no overlaps
       // for occasional small packets troubles could happen.
