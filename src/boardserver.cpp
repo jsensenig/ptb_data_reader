@@ -249,7 +249,7 @@ namespace ptb {
             }
 
             catch(SocketException &e) {
-              std::string msg = "Socket excepion caught : ";
+              std::string msg = "Socket exception caught : ";
               msg += e.what();
 
               Log(error,"%s",msg.c_str());
@@ -331,11 +331,14 @@ namespace ptb {
     // Careful if the client connection in the meantime is lost, the memory will disappear.
     // Have to copy the string into the queue
 
-
-    json tmp;
-    tmp["type"] = "debug";
-    tmp["message"] = "Just a dummy object";
-    msg_answers_.push_back(tmp);
+    if (msg_answers_.empty()) {
+      std::vector<std::string> tmpvec;
+      msg_answers_ = json(tmpvec);
+    }
+    //    json tmp;
+    //    tmp["type"] = "debug";
+    //    tmp["message"] = "Just a dummy object";
+    //    msg_answers_.push_back(tmp);
     
     
     if (board_manager_ == NULL) {
