@@ -375,7 +375,7 @@ namespace ptb {
       stat["num_hlt"] = reader_->get_n_gtriggers();
       stat["num_llt"] = reader_->get_n_ltriggers();
       stat["num_tstamp"] = reader_->get_n_timestamps();
-      stat["num_errors"] = reader_->get_n_warns();
+      stat["num_feedback"] = reader_->get_n_feedback();
      
       stat["num_0xC"] = register_map_[12+offset_reg].value();     
       stat["num_0xD"] = register_map_[13+offset_reg].value();     

@@ -640,8 +640,8 @@ void board_reader::data_transmitter() {
       else if (error_dma_claimed_.load(std::memory_order_acquire)) feedback_dma.code = 0x2;
       else feedback_dma.code = 0x3;
       Log(warning,
-          "DMA error caught. Sneaking in feedback word : \nTS : [%" PRIu64 "]\nSource : [%X]\nCode : [%X]\nPayload : [%" PRIX64 "]\n",
-          feedback_dma.timestamp,feedback_dma.source,feedback_dma.code,feedback_dma.get_payload());
+          "DMA error caught. Sneaking in feedback word : \nTS : [%" PRIu64 "]\nCode : [%X]\nSource : [%X]\nPayload : [%" PRIX64 "]\nType : [%X]",
+          feedback_dma.timestamp,feedback_dma.code,feedback_dma.source,feedback_dma.get_payload(),(uint32_t)feedback_dma.word_type);
       //Log(warning,"Caught a DMA error. Sneaking in a feedback word");
 
       std::memcpy(&(eth_buffer[1]),(void*)&feedback_dma,sizeof(feedback_dma));
@@ -667,8 +667,8 @@ void board_reader::data_transmitter() {
          case ptb::content::word::t_fback:
            fbk = reinterpret_cast<ptb::content::word::feedback_t*>(frame);
            Log(warning,
-               "Feedback word caught : \nTS : [%" PRIu64 "]\nSource : [%X]\nCode : [%X]\nPayload : [%" PRIX64 "]\n",
-               fbk->timestamp,fbk->source,fbk->code,fbk->get_payload());
+               "Feedback word caught : \nTS : [%" PRIu64 "]\nCode : [%X]\nSource : [%X]\nPayload : [%" PRIX64 "]\nType : [%X]\n",
+               fbk->timestamp,fbk->source,fbk->code,fbk->get_payload(),(uint32_t)fbk->word_type);
            num_word_feedback_++;
            break;
          case ptb::content::word::t_gt:
