@@ -10,11 +10,6 @@ namespace ptb {
     has_error = false;
     try {
 
-      //Keep this greeting, otherwise there will be an error when trying to insert into the empty "answers" object
-      json obj;
-      obj["type"] = "info";
-      obj["message"] = "Beginning CTB specific configuration! ";
-      answers.push_back(obj);
 
       // -- Grab the subsystem & Misc configurations
       json miscconf = doc.at("ctb").at("misc");

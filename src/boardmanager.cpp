@@ -561,6 +561,11 @@ namespace ptb {
   void board_manager::process_config(json &doc,json &answers) {
     // clear all messages that existed from before (since last stop?)
     feedback_.clear();
+    //Keep this greeting, otherwise there will be an error when trying to insert into the empty "answers" object
+    json obj;
+    obj["type"] = "info";
+    obj["message"] = "Beginning CTB specific configuration! ";
+    answers.push_back(obj);
 
     if ((board_state_ == RUNNING) || get_enable_bit_ACK()) {
       json obj;
