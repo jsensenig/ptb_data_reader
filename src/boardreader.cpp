@@ -625,6 +625,10 @@ void board_reader::data_transmitter() {
        frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]+tpos);
        switch(frame->word_type) {
          case ptb::content::word::t_fback:
+           ptb::content::word::feedback_t*fbk = reinterpret_cast<ptb::content::word::feedback_t*>(frame);
+           Log(warning,
+               "Feedback word caught : \nTS : [%" PRIu64 "]\nSource : [%X]\nCode : [%X]\nPayload : [%" PRIX64 "]\n",
+               fbk->timestamp,fbk->source,fbk->code,fbk->get_payload());
            num_word_feedback_++;
            break;
          case ptb::content::word::t_gt:
