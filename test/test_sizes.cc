@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <bitset>
+#include <cinttypes>
 
 typedef struct low_level_trigger_t {
     uint64_t mask : 61;
@@ -26,28 +27,32 @@ typedef struct header_t {
 
  } header_t;
 
- typedef struct feedback_t {
-     typedef uint64_t ts_size_t;
-     typedef uint16_t code_size_t;
-     typedef uint16_t source_size_t;
-     typedef uint8_t  word_type_t;
-     typedef uint32_t pad_size_t;
+     /// -- Several different structures that can be used to reinterpret the payload depending on
+      /// the word type. All these structures map into the full 16 bytes of the CTB words
+      ///
 
-     ts_size_t     timestamp;
-     code_size_t   code   : 16;
-     source_size_t source : 16;
-     pad_size_t    padding: 29;
-     word_type_t   word_type : 3;
+ // typedef struct feedback_t {
+ //     typedef uint64_t ts_size_t;
+ //     typedef uint16_t code_size_t;
+ //     typedef uint16_t source_size_t;
+ //     typedef uint8_t  word_type_t;
+ //     typedef uint32_t pad_size_t;
+
+ //     ts_size_t     timestamp;
+ //     code_size_t   code   : 16;
+ //     source_size_t source : 16;
+ //     pad_size_t    padding: 29;
+ //     word_type_t   word_type : 3;
 
 
-     static size_t const size_bytes = 2*sizeof(uint64_t);
-     static size_t const size_u32 = size_bytes/sizeof(uint32_t);
+ //     static size_t const size_bytes = 2*sizeof(uint64_t);
+ //     static size_t const size_u32 = size_bytes/sizeof(uint32_t);
 
-     static size_t const n_bits_timestamp  = 64;
-     static size_t const n_bits_payload = 32;
-     static size_t const n_bits_type     = 3;
+ //     static size_t const n_bits_timestamp  = 64;
+ //     static size_t const n_bits_payload = 32;
+ //     static size_t const n_bits_type     = 3;
 
- } feedback_t;
+ // } feedback_t;
 
  typedef struct ch_status_t {
       typedef uint64_t ts_size_t;
@@ -108,8 +113,35 @@ typedef struct header_t {
  } timestamp_t;
 
 
+  typedef struct feedback_t {
+      typedef uint64_t  ts_size_t;
+      typedef uint8_t  code_size_t;
+      typedef uint8_t  source_size_t;
+      typedef uint8_t   wtype_size_t;
+      typedef uint32_t  payload_size_t;
+
+      ts_size_t       timestamp;
+      code_size_t     code      : 8;
+      source_size_t   source    : 8;
+      payload_size_t  payload1   : 16;
+      payload_size_t  payload2   : 29;
+      wtype_size_t    word_type : 3;
+
+      void set_payload(uint64_t pl) {payload1 = (pl & 0xFFFF); payload2 = ((pl >> 16) & 0x1FFFFFFF);}
+      uint64_t get_payload() {return ((((uint64_t)payload2) << 16) | (uint64_t)payload1);}
+      static size_t const size_bytes = 2*sizeof(uint64_t);
+      static size_t const size_u32 = size_bytes/sizeof(uint32_t);
+
+      static size_t const n_bits_timestamp  = 64;
+      static size_t const n_bits_payload = 32;
+      static size_t const n_bits_type     = 3;
+
+  } feedback_t;
+
  using std::cout;
 using std::endl;
+using std::hex;
+using std::dec;
 int main() {
 
   ch_status_t st;
@@ -121,6 +153,24 @@ int main() {
   st.timestamp = 0x0;
 
   cout << "Size :  " << sizeof(ch_status_t) << endl;
+
+
+  feedback_t fb;
+  cout << "Feedback. size : " << sizeof(fb) << endl;
+
+  fb.set_payload(0xAAAAAABBBB);
+  fb.code = 0x3;
+  fb.source = 0x1;
+  fb.timestamp = 1234567890;
+  cout << "Payload parts : 1 : " << std::hex << fb.payload2 << std::dec << " 2 : " << hex << fb.payload1 << dec << endl;
+  cout << "Payload : " << std::hex << fb.get_payload() << std::dec << endl;
+
+  // Now lets play with a printf
+  feedback_t *fbk = &fb;
+  printf("Feedback word caught : \nTS : [%" PRIu64 "]\nSource : [%X]\nCode : [%X]\nPayload : [%" PRIX64 "]\n",
+               fbk->timestamp,fbk->source,fbk->code,fbk->get_payload());
+  
+
 
 //  uint64_t * data = reinterpret_cast<uint64_t*>(&st);
 ////  uint64_t ""
