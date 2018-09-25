@@ -49,12 +49,12 @@ board_reader::board_reader() :
     s2mm(nullptr),
     dma_initialized_(false),
     error_state_(false),
-    error_dma_timeout_(false),
-    error_dma_claimed_(false),
 
     reset_dma_engine_(false),
     keep_transmitting_(true),
     keep_collecting_(true),
+    error_dma_timeout_(false),
+    error_dma_claimed_(false),
     // below this point all these are debugging variables
     num_eth_fragments_(0),
     num_word_chstatus_(0),num_word_gtrigger_(0),num_word_ltrigger_(0),num_word_feedback_(0),
@@ -583,6 +583,7 @@ void board_reader::data_transmitter() {
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
   ptb::content::word::word_t *frame;
+  ptb::content::word::feedback_t*fbk;
   while(keep_transmitting_.load(std::memory_order_acquire)) {
 
     // Set the local pointer to the place pointed by the global pointer
@@ -646,7 +647,7 @@ void board_reader::data_transmitter() {
       std::memcpy(&(eth_buffer[1]),(void*)&feedback_dma,sizeof(feedback_dma));
       wpos = 5;
       num_word_feedback_++;
-      eth_header.word.packet_size = dma_buffer.len + sizeof(feedback_dma) & 0xFFFF;
+      eth_header.word.packet_size = (dma_buffer.len + sizeof(feedback_dma)) & 0xFFFF;
 
     }
 
@@ -664,7 +665,7 @@ void board_reader::data_transmitter() {
        frame = reinterpret_cast<ptb::content::word::word_t*>(buff_addr_[dma_buffer.handle]+tpos);
        switch(frame->word_type) {
          case ptb::content::word::t_fback:
-           ptb::content::word::feedback_t*fbk = reinterpret_cast<ptb::content::word::feedback_t*>(frame);
+           fbk = reinterpret_cast<ptb::content::word::feedback_t*>(frame);
            Log(warning,
                "Feedback word caught : \nTS : [%" PRIu64 "]\nSource : [%X]\nCode : [%X]\nPayload : [%" PRIX64 "]\n",
                fbk->timestamp,fbk->source,fbk->code,fbk->get_payload());
