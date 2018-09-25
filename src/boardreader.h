@@ -188,6 +188,11 @@ namespace ptb {
       std::atomic<bool> keep_transmitting_;
       std::atomic<bool> keep_collecting_;
 
+      // -- Error states for the various DMA errors
+      std::atomic<bool> error_dma_timeout_;
+      std::atomic<bool> error_dma_claimed_;
+
+
       json feedback_messages_;
 
       /// -- Internal run statistics

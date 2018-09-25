@@ -49,6 +49,9 @@ board_reader::board_reader() :
     s2mm(nullptr),
     dma_initialized_(false),
     error_state_(false),
+    error_dma_timeout_(false),
+    error_dma_claimed_(false),
+
     reset_dma_engine_(false),
     keep_transmitting_(true),
     keep_collecting_(true),
@@ -75,6 +78,8 @@ void board_reader::get_feedback(bool &error, json &msgs, const bool reset)
 
   if (reset) {
     error_state_.store(false,std::memory_order_relaxed);
+    error_dma_timeout_.store(false,std::memory_order_relaxed);
+    error_dma_claimed_.store(false,std::memory_order_relaxed);
     feedback_messages_.clear();
   }
 }
@@ -353,6 +358,7 @@ void board_reader::data_collector() {
       // This is dangerous and usually means that something crapped out
       if (dma_buffer.handle == PZDUD_ERROR_TIMEOUT) {
         Log(error,"Failed to acquire data with timeout on iteration %u . Returned %i",counter,dma_buffer.handle);
+        error_dma_timeout_.store(true,std::memory_order_relaxed);
         json obj;
         obj["type"] = "error";
         obj["message"] = "Failed to acquire data with timeout from DMA";
@@ -360,6 +366,7 @@ void board_reader::data_collector() {
       }
       if (dma_buffer.handle == PZDUD_ERROR_CLAIMED) {
         Log(error,"Failed to acquire data due to claimed buffers [iteration %u].",counter);
+        error_dma_claimed_.store(true,std::memory_order_relaxed);
         json obj;
         obj["type"] = "error";
         obj["message"] = "Failed to acquire data due to claimed DMA buffers";
@@ -525,7 +532,14 @@ void board_reader::data_transmitter() {
   // Should correspond to several ethernet packets in worst case scenario
   //uint32_t *global_eth_buffer = new uint32_t[eth_buffer_size_u32_]();
   static uint32_t global_eth_buffer[eth_buffer_size_u32_];
+  // define constant feedback words for these purposes
+  static ptb::content::word::feedback_t feedback_dma;
+  feedback_dma.source = 0x3;
+  feedback_dma.word_type = 0x0;
+  feedback_dma.payload1 = 0x0;
+  feedback_dma.payload2 = 0x0;
 
+  static uint64_t last_timestamp = 0;
 
   // Local pointer that is effectively used to build the eth packet
   // It is just an auxiliary moving pointer
@@ -553,7 +567,7 @@ void board_reader::data_transmitter() {
   static bool first_message = true;
   // Temporary variables that will end up making part of the eth packet
   //  static uint32_t packet_size = 0;
-
+  last_timestamp = 0;
   // pointer to a new word
   ptb::content::buffer_t dma_buffer;
 
@@ -597,6 +611,10 @@ void board_reader::data_transmitter() {
 
     eth_header.word.sequence_id = seq_num_;
 
+    // FIXME: Finish implementing feedback word injection here
+    //if ()
+
+
     // -- Pop a buffer
     if (!buffer_queue_.pop(dma_buffer)) {
       // -- should some sort of wait be put here?
@@ -612,11 +630,29 @@ void board_reader::data_transmitter() {
     /// -- NFB : Using memcpy as I am sure that there is no memory
     ///          overlap, therefore can use the faster version
 
-    // -- copy the header
+
+    static size_t wpos = 1;
+    // -- If there are DMA feedbacks, inject them here
+    if (error_state_.load(std::memory_order_acquire)) {
+      Log(warning,"Caught a DMA error. Sneaking in a feedback word");
+      feedback_dma.timestamp = last_timestamp;
+      if (error_dma_timeout_.load(std::memory_order_acquire)) feedback_dma.code = 0x1;
+      else if (error_dma_claimed_.load(std::memory_order_acquire)) feedback_dma.code = 0x2;
+      else feedback_dma.code = 0x3;
+
+      std::memcpy(&(eth_buffer[1]),(void*)&feedback_dma,sizeof(feedback_dma));
+      wpos = 5;
+      num_word_feedback_++;
+      eth_header.word.packet_size = dma_buffer.len + sizeof(feedback_dma) & 0xFFFF;
+
+    }
+
+    // -- Now copy the header. The reason it is done afterwards is because we
+    // want to first sneak in the feedback word from the DMA error
     std::memcpy(&(eth_buffer[0]),&eth_header,sizeof(eth_header));
 
     // -- copy the whole buffer
-    std::memcpy(&(eth_buffer[1]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
+    std::memcpy(&(eth_buffer[wpos]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
 
     // -- loop over the buffer to collect word statistics
     //FIXME: Might want to do this at the FPGA level
@@ -638,6 +674,7 @@ void board_reader::data_transmitter() {
            num_word_ltrigger_++;
            break;
          case ptb::content::word::t_ts:
+           last_timestamp = frame->timestamp;
            num_word_tstamp_++;
            break;
          case ptb::content::word::t_ch:
@@ -665,7 +702,7 @@ void board_reader::data_transmitter() {
     // -- Send the data
     try {
       //Log(debug,"%X",eth_buffer[0]);
-      n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
+      n_bytes_sent = sizeof(eth_header)+dma_buffer.len + (wpos==5)?16:0;
       n_u32_words = n_bytes_sent/sizeof(uint32_t);
 
       data_socket_->send(eth_buffer,n_bytes_sent);
@@ -673,7 +710,7 @@ void board_reader::data_transmitter() {
 
       // -- release the memory buffer
       pzdud_release(s2mm, dma_buffer.handle, 0);
-
+      wpos = 1;
       global_eth_pos += (n_u32_words+4);
       // add 4 bytes of padding just to make sure that there are no overlaps
       // for occasional small packets troubles could happen.
