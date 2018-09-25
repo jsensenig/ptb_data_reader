@@ -120,7 +120,7 @@ namespace ptb {
       uint32_t get_n_status() {return num_word_chstatus_;};
       uint32_t get_n_gtriggers() {return num_word_gtrigger_;};
       uint32_t get_n_ltriggers() {return num_word_ltrigger_;};
-      uint32_t get_n_warns() {return num_word_feedback_;};
+      uint32_t get_n_feedback() {return num_word_feedback_;};
       uint32_t get_n_timestamps() {return num_word_tstamp_;};
       uint32_t get_sent_bytes() {return bytes_sent_;};
 
