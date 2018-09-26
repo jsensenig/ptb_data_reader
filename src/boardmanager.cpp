@@ -682,6 +682,7 @@ namespace ptb {
     obj1["message"] = msg.str().c_str();
     answers.push_back(obj1);
 
+#if !defined(STANDALONE_TIMING)
     if ((timing_stat >> 28) != 0x8) {
       json obj;
       std::ostringstream msg2;
@@ -693,7 +694,7 @@ namespace ptb {
       answers.push_back(obj);
       has_error = true;
     }
-
+#endif
 
 #elif defined(SBND_COMPILATION)
 

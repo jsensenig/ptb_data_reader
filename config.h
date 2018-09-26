@@ -15,11 +15,14 @@
 
 #define FIRMWARE_REVISION 0x5
 
-//#define NO_PDS_DAC  1
-#undef NO_PDS_DAC
+#define NO_PDS_DAC  1
+//#undef NO_PDS_DAC
 
 #define PDUNE_COMPILATION 1
 #undef SBND_COMPILATION
+
+#define STANDALONE_TIMING 1
+//#undef STANDALONE_TIMING
 
 //#define DEBUG 1
 #undef DEBUG
