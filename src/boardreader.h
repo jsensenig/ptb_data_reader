@@ -38,6 +38,13 @@ class TCPSocket;
 
 namespace ptb {
 
+
+  typedef struct eth_packet {
+      size_t nbytes;
+      size_t nentries;
+      uint32_t data[0xFFFF];
+  } eth_packet;
+
   /**
    * This class is responsible for reading the DMA and transferring the data to
    *  the server.
@@ -203,7 +210,6 @@ namespace ptb {
       uint32_t num_word_feedback_;
       uint32_t num_word_tstamp_;
       uint32_t bytes_sent_;
-
 
   };
 

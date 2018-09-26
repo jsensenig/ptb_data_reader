@@ -532,6 +532,8 @@ void board_reader::data_transmitter() {
   // Should correspond to several ethernet packets in worst case scenario
   //uint32_t *global_eth_buffer = new uint32_t[eth_buffer_size_u32_]();
   static uint32_t global_eth_buffer[eth_buffer_size_u32_];
+  static eth_packet debug_eth_buffer;
+
   // define constant feedback words for these purposes
   static ptb::content::word::feedback_t feedback_dma;
   feedback_dma.source = 0x3;
@@ -632,7 +634,7 @@ void board_reader::data_transmitter() {
     ///          overlap, therefore can use the faster version
 
 
-    static size_t wpos = 1;
+    size_t wpos = 1;
     // -- If there are DMA feedbacks, inject them here
     if (error_state_.load(std::memory_order_acquire)) {
       feedback_dma.timestamp = last_timestamp;
@@ -710,12 +712,18 @@ void board_reader::data_transmitter() {
       n_u32_words = n_bytes_sent/sizeof(uint32_t);
 
       data_socket_->send(eth_buffer,n_bytes_sent);
-      //Log(debug,"Releasing buffer %u",dma_buffer.handle);
 
+      //Log(debug,"Releasing buffer %u",dma_buffer.handle);
+      // -- Do a copy of the data
       // -- release the memory buffer
       pzdud_release(s2mm, dma_buffer.handle, 0);
-      wpos = 1; // reset the position to write the buffer
-      // should always be 1, except if there is a DMA error
+
+      // -- NFB -- Copy the sent buffer to local cache
+      // FIXME Remove this once the crash on BR is debugged
+      debug_eth_buffer.nbytes = n_bytes_sent;
+      debug_eth_buffer.nentries = n_u32_words;
+      std::memcpy(&(debug_eth_buffer.data[0]),&eth_buffer,n_bytes_sent);
+
       global_eth_pos += (n_u32_words+4);
       // add 4 bytes of padding just to make sure that there are no overlaps
       // for occasional small packets troubles could happen.
@@ -746,6 +754,18 @@ void board_reader::data_transmitter() {
       feedback_messages_.push_back(obj);
       keep_collecting_.store(false,std::memory_order_relaxed);
       keep_transmitting_.store(false,std::memory_order_relaxed);
+      // -- dump the previous eth package to disk
+      //FIXME Remove this once the issue with the BR is sorted out
+      char fname[128];
+      strftime(fname, sizeof(fname), "ctb_eth_dump_%Y%m%d_%H%M%S.txt", &now_tm);
+
+      std::ofstream dfout(fname);
+      for (size_t i = 0; i < debug_eth_buffer.nentries; i++) {
+        if (i==0) dfout << std::hex << debug_eth_buffer.data[i] ;
+        dfout << debug_eth_buffer.data[i];
+        if (!(i%4)) dfout << std::dec << "\n";
+      }
+      dfout.close();
     }
     catch(...) {
       Log(error,"Unknown exception caught sending data");
@@ -765,6 +785,20 @@ void board_reader::data_transmitter() {
       feedback_messages_.push_back(obj);
       keep_collecting_.store(false,std::memory_order_relaxed);
       keep_transmitting_.store(false,std::memory_order_relaxed);
+
+      // -- dump the previous eth package to disk
+      //FIXME Remove this once the issue with the BR is sorted out
+      char fname[128];
+      strftime(fname, sizeof(fname), "ctb_eth_dump_%Y%m%d_%H%M%S.txt", &now_tm);
+
+      std::ofstream dfout(fname);
+      for (size_t i = 0; i < debug_eth_buffer.nentries; i++) {
+        if (i==0) dfout << std::hex << debug_eth_buffer.data[i] ;
+        dfout << debug_eth_buffer.data[i];
+        if (!(i%4)) dfout << std::dec << "\n";
+      }
+      dfout.close();
+
 
     }
 
