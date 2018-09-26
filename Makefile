@@ -99,7 +99,7 @@ TEST_BIN := $(patsubst $(TEST_DIR)/%.cpp,$(TEST_DIR)/%,$(TEST_SRC))
 UTL_SRC := $(wildcard $(UTL_DIR)/*.cpp)
 UTL_BIN := $(patsubst $(UTL_DIR)/%.cpp,$(BIN)/%,$(UTL_SRC))
 
-all: dir $(TCP_OBJ) $(PTB_OBJ) $(TEST_BIN) $(APP_BIN)
+all: dir $(TCP_OBJ) $(PTB_OBJ) $(APP_BIN)
 
 dir:
 	test -d $(OBJ) || mkdir $(OBJ)
@@ -135,7 +135,7 @@ $(APP_DIR)/%: $(APP_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)
 	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
 
 # Compile tests
-$(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)
+#$(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)
 #	echo " <: $< "
 #	echo " @: $@ "
 #	echo " ?: $? "
@@ -143,7 +143,7 @@ $(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)
 #	echo " ^: $^ "
 #	echo " *:  $*"
 #	echo " $(GEN_OBJ)"
-	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
+#	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
 
 # Compile server
 
