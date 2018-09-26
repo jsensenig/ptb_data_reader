@@ -330,6 +330,10 @@ namespace ptb {
   // -- Writes everything to the feedback
   void board_manager::stop_run() {
     Log(debug,"Stopping the run" );
+    if (feedback_.empty() || feedback_.is_null()) {
+      std::vector<std::string> tmpvec;
+      feedback_ = json(tmpvec);
+    }
 
     // Check is the run is running
 

@@ -331,7 +331,7 @@ namespace ptb {
     // Careful if the client connection in the meantime is lost, the memory will disappear.
     // Have to copy the string into the queue
 
-    if (msg_answers_.empty()) {
+    if (msg_answers_.empty() || msg_answers_.is_null()) {
       std::vector<std::string> tmpvec;
       msg_answers_ = json(tmpvec);
     }
