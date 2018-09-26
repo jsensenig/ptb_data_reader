@@ -19,7 +19,7 @@
     },
     "misc":{
       "randomtrigger":{
-        "enable":true,
+        "enable":false,
         "fixed_freq":true,
         "beam_mode":true,
         "period":100000
@@ -43,7 +43,7 @@
           "description": "Beam trigger, veto with high-rate muon CRT around beam pipe",
           "enable":true,
           "minc" : "0x1",
-          "mexc" : "0x2",
+          "mexc" : "0x0",
           "prescale" : "0x1"
         },
         { "id":"HLT_2",
@@ -164,7 +164,7 @@
           { "id":"LLT_1",
             "description": "Beam particle trigger",
             "enable":true,
-            "mask" : "0x67"
+            "mask" : "0x2"
           },
           { "id":"LLT_3",
             "description": "Mask in all BI, except Cherenkov detector",
