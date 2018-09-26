@@ -42,7 +42,7 @@ namespace ptb {
   typedef struct eth_packet {
       size_t nbytes;
       size_t nentries;
-      uint32_t data[0xFFFF];
+    uint32_t data[0x20000]; // 512 kb 
   } eth_packet;
 
   /**
@@ -163,8 +163,8 @@ namespace ptb {
       /// -- DMA parameters
 
       pzdud_t *s2mm;
-      static const size_t eth_buffer_size_bytes_ = 0x40000;// 256 kB
-      static const size_t eth_buffer_size_u32_ = 0xFFFF; // 256 kB
+      static const size_t eth_buffer_size_bytes_ = 0x80000;// 512 kb //0x40000;// 256 kB
+      static const size_t eth_buffer_size_u32_ = 0x20000; // 512 kb in 4 byte words // 0xFFFF; // 256 kB
 
       //static uint32_[eth_buffer_size_u32_];
       static const size_t num_buffs_ = 4096; // number of allocated buffers for the DMA

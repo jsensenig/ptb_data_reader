@@ -528,7 +528,7 @@ void board_reader::data_transmitter() {
   Log(debug, "Starting data transmitter\n");
 
   //FIXME: Implement fragmentation
-  // this builds an array of 64k ints = 256 kbytes
+  // this builds an array of 128k ints = 512 kbytes
   // Should correspond to several ethernet packets in worst case scenario
   //uint32_t *global_eth_buffer = new uint32_t[eth_buffer_size_u32_]();
   static uint32_t global_eth_buffer[eth_buffer_size_u32_];
@@ -634,7 +634,6 @@ void board_reader::data_transmitter() {
     ///          overlap, therefore can use the faster version
 
 
-    size_t wpos = 1;
     // -- If there are DMA feedbacks, inject them here
     if (error_state_.load(std::memory_order_acquire)) {
       feedback_dma.timestamp = last_timestamp;
@@ -646,10 +645,10 @@ void board_reader::data_transmitter() {
           feedback_dma.timestamp,feedback_dma.code,feedback_dma.source,feedback_dma.get_payload(),(uint32_t)feedback_dma.word_type);
       //Log(warning,"Caught a DMA error. Sneaking in a feedback word");
 
-      std::memcpy(&(eth_buffer[1]),(void*)&feedback_dma,sizeof(feedback_dma));
-      wpos = 5;
-      num_word_feedback_++;
-      eth_header.word.packet_size = (dma_buffer.len + sizeof(feedback_dma)) & 0xFFFF;
+      //std::memcpy(&(eth_buffer[1]),(void*)&feedback_dma,sizeof(feedback_dma));
+      //wpos = 5;
+      //num_word_feedback_++;
+      //eth_header.word.packet_size = (dma_buffer.len + sizeof(feedback_dma)) & 0xFFFF;
 
     }
 
@@ -658,7 +657,7 @@ void board_reader::data_transmitter() {
     std::memcpy(&(eth_buffer[0]),&eth_header,sizeof(eth_header));
 
     // -- copy the whole buffer
-    std::memcpy(&(eth_buffer[wpos]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
+    std::memcpy(&(eth_buffer[1]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
 
     // -- loop over the buffer to collect word statistics
     //FIXME: Might want to do this at the FPGA level
@@ -708,7 +707,7 @@ void board_reader::data_transmitter() {
     // -- Send the data
     try {
       //Log(debug,"%X",eth_buffer[0]);
-      n_bytes_sent = sizeof(eth_header)+dma_buffer.len + (wpos==5)?16:0;
+      n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
       n_u32_words = n_bytes_sent/sizeof(uint32_t);
 
       data_socket_->send(eth_buffer,n_bytes_sent);
@@ -727,8 +726,13 @@ void board_reader::data_transmitter() {
       global_eth_pos += (n_u32_words+4);
       // add 4 bytes of padding just to make sure that there are no overlaps
       // for occasional small packets troubles could happen.
-      if ((global_eth_pos+(4*n_u32_words)) > eth_buffer_size_u32_) {
-        // reset the pointer to the beginning
+      //if ((global_eth_pos+(4*n_u32_words)) > eth_buffer_size_u32_) {
+      // if there is less than 4kb at the end of the global buffer move back to the beggining
+      // don't use the last 4kb of the global buffer
+      // if there are less than 1024 (0x400)positions available in the global buffer
+      // move back to the beginning
+      if ((global_eth_pos+0x400) > eth_buffer_size_u32_) {
+      // reset the pointer to the beginning
         global_eth_pos = 0;
       }
 
@@ -758,13 +762,13 @@ void board_reader::data_transmitter() {
       //FIXME Remove this once the issue with the BR is sorted out
       char fname[128];
       strftime(fname, sizeof(fname), "ctb_eth_dump_%Y%m%d_%H%M%S.txt", &now_tm);
-
+      Log(warning,"Writing ethernet cache to file : %s. It has %u entries",fname,debug_eth_buffer.nentries);
       std::ofstream dfout(fname);
       for (size_t i = 0; i < debug_eth_buffer.nentries; i++) {
-        if (i==0) dfout << std::hex << debug_eth_buffer.data[i] ;
-        dfout << debug_eth_buffer.data[i];
+        dfout << std::hex << debug_eth_buffer.data[i] ;
         if (!(i%4)) dfout << std::dec << "\n";
       }
+      dfout << '\n';
       dfout.close();
     }
     catch(...) {
@@ -793,10 +797,10 @@ void board_reader::data_transmitter() {
 
       std::ofstream dfout(fname);
       for (size_t i = 0; i < debug_eth_buffer.nentries; i++) {
-        if (i==0) dfout << std::hex << debug_eth_buffer.data[i] ;
-        dfout << debug_eth_buffer.data[i];
+        dfout << std::hex << debug_eth_buffer.data[i] ;
         if (!(i%4)) dfout << std::dec << "\n";
       }
+      dfout << '\n';
       dfout.close();
 
 

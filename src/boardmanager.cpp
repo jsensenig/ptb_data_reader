@@ -656,7 +656,8 @@ namespace ptb {
 
     // FIXME: There is a flaw here
     // If there was an error configuring the specific code, how do we know?
-    json feedbacks;
+    std::vector<std::string> tmpvec;
+    json feedbacks = json(tmpvec);
     bool got_error = false;
     configure_ctb(doc, feedbacks,got_error);
     if (!feedbacks.empty()) {
