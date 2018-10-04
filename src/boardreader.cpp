@@ -61,7 +61,8 @@ board_reader::board_reader() :
     num_word_tstamp_(0),bytes_sent_(0)
 {
 
-
+  // this does nothing but gets rid of a compilation warning
+  (void)ptb::content::format_version;
 
 }
 
