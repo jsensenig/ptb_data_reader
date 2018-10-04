@@ -19,6 +19,7 @@
 #include <bitset>
 #include <cmath>
 #include <cinttypes>
+#include <sstream>
 
 #include "boost/date_time/posix_time/posix_time.hpp"
 

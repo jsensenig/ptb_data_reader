@@ -85,18 +85,18 @@ public:
   void configure_ctb(json& doc, json& feedback, bool &has_error);
 
   //Misc configs such as timing, pulser, etc
-  void misc_config(json & miscconfig, json& feedback);
+  void misc_config(json & miscconfig, json& feedback, bool &has_error);
 
   //HLT configs 
-  void hlt_config(json & hltconfig, json& feedback);
+  void hlt_config(json & hltconfig, json& feedback, bool &has_error);
 
-  void pds_config(json & pdsconfig, json& feedback);
+  void pds_config(json & pdsconfig, json& feedback, bool &has_error);
 
   //Loads the Beam config into FW regs
-  void beam_config(json & beamconfig, json& feedback);
+  void beam_config(json & beamconfig, json& feedback, bool &has_error);
 
   //Loads the CRT config into FW regs
-  void crt_config(json & crtconfig, json& feedback);
+  void crt_config(json & crtconfig, json& feedback, bool &has_error);
 
 
 #elif defined(SBND_COMPILATION)
