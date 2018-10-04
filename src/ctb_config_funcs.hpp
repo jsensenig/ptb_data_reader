@@ -1,5 +1,3 @@
-#include
-
 namespace ptb {
 
 #define NBEAM_CH 9
@@ -148,14 +146,14 @@ namespace ptb {
     uint32_t reshape_len = beamconfig.at("reshape_length").get<unsigned int>();
     Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
     if (reshape_len >= (1<<6)) {
-      std::ostringstream oss;
-      oss << "Reshaping legth value of " << reshape_len << " above maximum allwed [2^6 - 1]. Truncating to maximum.";
+      std::ostringstream msg;
+      msg << "Reshaping legth value of " << reshape_len << " above maximum allwed [2^6 - 1]. Truncating to maximum.";
       json fobj;
       fobj["type"] = "warning";
-      fobj["message"] = oss.str();
+      fobj["message"] = msg.str();
       feedback.push_back(fobj);
 
-      Log(warning,"%s", oss8.str());
+      Log(warning,"%s", msg.str().c_str());
       reshape_len = (1<<6)-1;
     }
 
@@ -366,7 +364,7 @@ namespace ptb {
       std::ostringstream msg;
       msg << "CRT channel mask set for 0x0.";
       Log(warning,"%s", msg.str().c_str());
-      jsob tobj;
+      json tobj;
       tobj["type"] = "warning";
       tobj["message"] = msg.str();
       feedback.push_back(tobj);
@@ -527,7 +525,7 @@ namespace ptb {
         set_bit_range_register(73,0,8,llt_reg);
         set_bit_range_register(74,0,32,llt_mask);
       } else if (llt_id == "LLT_20") {
-        set_bit(72,1,12,llt_en);
+        set_bit(72,1,llt_en);
         set_bit_range_register(75,0,8,llt_reg);
         set_bit_range_register(76,0,32,llt_mask);
       } else if (llt_id == "LLT_21") {
@@ -1234,16 +1232,16 @@ namespace ptb {
     Log(debug,"Random Trigger Module 1 : Config  en %u fix_freq %u beam_mode %u",rndm_tr_en,rndm_tr_ff,rndm_tr_bm);
     Log(debug,"Random Trigger Module 1 : Period [%d] (%u) [0x%X][%s]",rndm_tr_per,rndm_tr_per,rndm_tr_per, std::bitset<26>(rndm_tr_per).to_string().c_str());
 
-    if (rndm_tr_per > ((0x1<<32)-1)) {
-      std::ostringstream msg;
-      msg << "Random trigger (1) period of " << rndm_tr_per << " above max allowed [2^32-1]. Truncating to max.";
-      Log(warning,"%s",msg.str().c_str());
-      json tobj;
-      tobj["type"] = "warning";
-      tobj["message"] = msg.str();
-      feedback.push_back(tobj);
-      rndm_tr_per = 0xFFFFFFFF;
-    }
+    // if (rndm_tr_per > ((0x1<<32)-1)) {
+    //   std::ostringstream msg;
+    //   msg << "Random trigger (1) period of " << rndm_tr_per << " above max allowed [2^32-1]. Truncating to max.";
+    //   Log(warning,"%s",msg.str().c_str());
+    //   json tobj;
+    //   tobj["type"] = "warning";
+    //   tobj["message"] = msg.str();
+    //   feedback.push_back(tobj);
+    //   rndm_tr_per = 0xFFFFFFFF;
+    // }
 
     set_bit(27,0,rndm_tr_en);
     set_bit(62,2,rndm_tr_ff);
@@ -1262,16 +1260,16 @@ namespace ptb {
       Log(debug,"Random Trigger Module 2 : Config  en %u fix_freq %u beam_mode %u",rndm_tr_en,rndm_tr_ff,rndm_tr_bm);
       Log(debug,"Random Trigger Module 2 : Period [%d] (%u) [0x%X][%s]",rndm_tr_per,rndm_tr_per,rndm_tr_per, std::bitset<26>(rndm_tr_per).to_string().c_str());
 
-      if (rndm_tr_per > ((0x1<<32)-1)) {
-        std::ostringstream msg;
-        msg << "Random trigger (2) period of " << rndm_tr_per << " above max allowed [2^32-1]. Truncating to max.";
-        Log(warning,"%s",msg.str().c_str());
-        json tobj;
-        tobj["type"] = "warning";
-        tobj["message"] = msg.str();
-        feedback.push_back(tobj);
-        rndm_tr_per = 0xFFFFFFFF;
-      }
+      // if (rndm_tr_per > ((0x1<<32)-1)) {
+      //   std::ostringstream msg;
+      //   msg << "Random trigger (2) period of " << rndm_tr_per << " above max allowed [2^32-1]. Truncating to max.";
+      //   Log(warning,"%s",msg.str().c_str());
+      //   json tobj;
+      //   tobj["type"] = "warning";
+      //   tobj["message"] = msg.str();
+      //   feedback.push_back(tobj);
+      //   rndm_tr_per = 0xFFFFFFFF;
+      // }
 
       set_bit(71,31,rndm_tr_en);
       set_bit(71,30,rndm_tr_ff);
@@ -1329,10 +1327,10 @@ namespace ptb {
     json timingconf = miscconfig.at("timing");
     //    std::string s_t_addr = timingconf.at("address").get<std::string>();
     //    std::string s_t_group = timingconf.at("group").get<std::string>();
-    std::string s_cmd_lockout = timingconf.at("lockout").get<std::string>();
+    //std::string s_cmd_lockout = timingconf.at("lockout").get<std::string>();
     //    uint32_t t_addr = (uint32_t)strtoul(s_t_addr.c_str(),NULL,0);
     //    uint32_t t_group = (uint32_t)strtoul(s_t_group.c_str(),NULL,0);
-    uint32_t cmd_lockout = (uint32_t)strtoul(s_cmd_lockout.c_str(),NULL,0);
+    //uint32_t cmd_lockout = (uint32_t)strtoul(s_cmd_lockout.c_str(),NULL,0);
 
 
     uint32_t cmd_lockout = (uint32_t)strtoul(timingconf.at("lockout").get<std::string>().c_str(),NULL,0);
@@ -1379,7 +1377,7 @@ namespace ptb {
 //    size_t err_msgs = 14;
 //    std::vector< std::pair< std::string, std::string > > tmp(err_msgs);
 
-    Log(info"Configuring CTB HLTs");
+    Log(info,"Configuring CTB HLTs");
 
     json trigs = hltconfig.at("trigger");
 

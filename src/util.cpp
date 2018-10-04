@@ -19,6 +19,25 @@
 namespace ptb {
   namespace util {
 
+        char llt_cop_tochar(const uint32_t val) {
+      char res;
+      switch(val) {
+      case 0x1:
+        res = '>';
+        break;
+      case 0x2:
+        res = '=';
+        break;
+      case 0x4:
+        res = '<';
+        break;
+      default:
+        res = '?';
+        break;
+      }
+      return res;
+    }
+
     void print_bits(void* memstart, size_t nbytes) {
 
       std::cout << "The " << nbytes << "-byte chunk of memory beginning at "
