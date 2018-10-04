@@ -68,6 +68,9 @@ void run() {
 }
 
 int main() {
+  // this does nothing but gets rid of a compilation warning
+  (void)ptb::content::format_version;
+
 	// Register a signal handler
 	std::signal(SIGPIPE, SIG_IGN);
 	std::signal(SIGINT,handler);

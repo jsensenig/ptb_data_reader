@@ -656,7 +656,7 @@ namespace ptb {
     //FIXME: Careful with this kind of assignment. If there is anything in that register, it
     // will be cleared out. For example, anything in other bit ranges will be wiped clean
 
-    util::Xil_Out32((uint32_t)(mapped_gpio_base_addr_ + (uint32_t)ptb::config::gpio_reg.addr_offset[0]), timing_addr);
+    util::Xil_Out32((uint32_t)((uint32_t)mapped_gpio_base_addr_ + ptb::config::gpio_reg.addr_offset[0]), timing_addr);
 
     // FIXME: There is a flaw here
     // If there was an error configuring the specific code, how do we know?
