@@ -3,18 +3,6 @@ namespace ptb {
 #define NBEAM_CH 9
 #define NPDS_CH 24
 
-
-  ////////////////////////////////////////////
-  // Beam Configuration
-
-  typedef struct llt_info_mask {
-    uint32_t en_reg;
-    bool en;
-    uint32_t mask;
-    uint32_t mask_reg;
-  } llt_info_mask;
-
-
   void board_manager::configure_ctb(json& doc, json& answers, bool &has_error) {
     has_error = false;
     try {
