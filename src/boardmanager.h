@@ -266,7 +266,7 @@ private:
 
   state board_state_;
 
-  static const uint8_t num_registers_ = 102;
+  static const uint32_t num_registers_ = 256;
   static const uint8_t num_gpio_reg_ = 1;
   //static const char *default_config_;
   json config_;
@@ -293,9 +293,15 @@ private:
 /// 17th bit (bit 16, since bits start at 0).
 
 inline void board_manager::set_bit_range_register(const uint32_t reg, const uint32_t pos, const uint32_t len,const uint32_t value) {
+  Log(debug,"Reading reg %u ...",reg);
   // Create a mask based on pos and len
   uint32_t mask = (((uint32_t)1 << len)-1) << pos;
-  register_map_[reg].value() = (register_map_[reg].value() & ~mask) | (mask & value);
+  uint32_t old_reg = register_map_[reg].value();
+  uint32_t new_reg = (old_reg & ~mask) | (mask & value);
+  Log(debug,"Transforming [%08X] --> [%08X]",old_reg,new_reg);
+  //register_map_[reg].value() = (register_map_[reg].value() & ~mask) | (mask & value);
+  register_map_[reg].value() = new_reg;
+  Log(debug,"Reg %u readback : [%08X]",reg,register_map_[reg].value());
 }
 
 inline void board_manager::set_bit(const uint32_t reg, const uint32_t bit, bool status) {

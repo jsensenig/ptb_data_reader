@@ -1387,7 +1387,7 @@ namespace ptb {
 
       // -- Now make consistency checks
       if (hlt_en) {
-        Log(info,"%s status is enabled.");
+        Log(info,"%s status is enabled.",hlt_id.c_str());
         // Inc mask is 0x0. Same as disabling it
         if (hlt_minc == 0x0) {
           std::ostringstream msg;
@@ -1423,7 +1423,7 @@ namespace ptb {
         }
 
       } else {
-        Log(debug,"%s status is disabled. No checks on its contents");
+        Log(debug,"%s status is disabled. No checks on its contents", hlt_id.c_str());
 
       }
 
@@ -1522,10 +1522,10 @@ namespace ptb {
 
         feedback.push_back(obj);
       }
-
+      
 
     }
-
+      Log(info,"Completed configuration of HLTs");
 
 //
 //    bool hlt1_enable = trigs.at(0).at("enable").get<bool>();

@@ -479,7 +479,7 @@ namespace ptb {
 
     Log(debug,"Received virtual address for configuration : 0x%08X\n",reinterpret_cast<uint32_t>(mapped_conf_base_addr_));
     // Cross check that we have at least as many offsets as registers expected
-    if (ptb::config::conf_reg.n_registers < num_registers_) {
+    if (ptb::config::conf_reg.n_registers != num_registers_) {
       Log(warning,"Have less configured registers than the ones required. (%u != %u)",ptb::config::conf_reg.n_registers,num_registers_);
     }
     
