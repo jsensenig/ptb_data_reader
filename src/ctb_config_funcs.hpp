@@ -1202,7 +1202,7 @@
         msg << " Masks C and D have HLTs masked in both. This cannot happen. [C:" 
         << std::hex << mask_C << std::dec << " | D:" 
         << std::hex << mask_D << std::dec << " | common:"
-        << std::hex << mask_C & mask_D << std::dec << "]. This is not possible. Disabling HLT.";
+        << std::hex << static_cast<uint32_t>(mask_C & mask_D) << std::dec << "]. This is not possible. Disabling HLT.";
         hlt_en = false;
         Log(error,"%s",msg.str().c_str());
         json tobj;
@@ -1217,7 +1217,7 @@
         msg << " Masks C and E have HLTs masked in both. This cannot happen. [C:" 
         << std::hex << mask_C << std::dec << " | E:" 
         << std::hex << mask_E << std::dec << " | common:"
-        << std::hex << mask_C & mask_E << std::dec << "]. This is not possible. Disabling HLT.";
+        << std::hex << static_cast<uint32_t>(mask_C & mask_E) << std::dec << "]. This is not possible. Disabling HLT.";
         hlt_en = false;
         Log(error,"%s",msg.str().c_str());
         json tobj;
@@ -1232,7 +1232,7 @@
         msg << " Masks C and F have HLTs masked in both. This cannot happen. [C:" 
         << std::hex << mask_C << std::dec << " | F:" 
         << std::hex << mask_F << std::dec << " | common:"
-        << std::hex << mask_C & mask_F << std::dec << "]. This is not possible. Disabling HLT.";
+        << std::hex << static_cast<uint32_t>(mask_C & mask_F) << std::dec << "]. This is not possible. Disabling HLT.";
         hlt_en = false;
         Log(error,"%s",msg.str().c_str());
         json tobj;
@@ -1247,7 +1247,7 @@
         msg << " Masks D and F have HLTs masked in both. This cannot happen. [D:" 
         << std::hex << mask_D << std::dec << " | F:" 
         << std::hex << mask_F << std::dec << " | common:"
-        << std::hex << mask_D & mask_F << std::dec << "]. This is not possible. Disabling HLT.";
+        << std::hex << static_cast<uint32_t>(mask_D & mask_F) << std::dec << "]. This is not possible. Disabling HLT.";
         hlt_en = false;
         Log(error,"%s",msg.str().c_str());
         json tobj;
@@ -1262,7 +1262,7 @@
         msg << " Masks D and E have HLTs masked in both. This cannot happen. [D:" 
         << std::hex << mask_D << std::dec << " | E:" 
         << std::hex << mask_E << std::dec << " | common:"
-        << std::hex << mask_D & mask_E << std::dec << "]. This is not possible. Disabling HLT.";
+        << std::hex << static_cast<uint32_t>(mask_D & mask_E) << std::dec << "]. This is not possible. Disabling HLT.";
         hlt_en = false;
         Log(error,"%s",msg.str().c_str());
         json tobj;
@@ -1277,7 +1277,7 @@
         msg << " Masks E and F have HLTs masked in both. This cannot happen. [E:" 
         << std::hex << mask_E << std::dec << " | F:" 
         << std::hex << mask_F << std::dec << " | common:"
-        << std::hex << mask_E & mask_F << std::dec << "]. This is not possible. Disabling HLT.";
+        << std::hex << static_cast<uint32_t>(mask_E & mask_F) << std::dec << "]. This is not possible. Disabling HLT.";
         hlt_en = false;
         Log(error,"%s",msg.str().c_str());
         json tobj;
