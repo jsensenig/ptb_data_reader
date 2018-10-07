@@ -1183,13 +1183,13 @@
 
       Log(info,"Processing HLT masks into each timing command.");
       // -- map HLTs into the different commands
-      json cmd_masks = trig.at("command_mask");
+      json cmd_masks = trigs.at("command_mask");
       // this is a json doc on its own, mapping the letter of the command
       // to the HLT mask
-      uint32_t mask_C = static_cast<uint32_t>(strtoul(it->at("C").get<std::string>().c_str(),NULL,0));
-      uint32_t mask_D = static_cast<uint32_t>(strtoul(it->at("D").get<std::string>().c_str(),NULL,0));
-      uint32_t mask_E = static_cast<uint32_t>(strtoul(it->at("E").get<std::string>().c_str(),NULL,0));
-      uint32_t mask_F = static_cast<uint32_t>(strtoul(it->at("F").get<std::string>().c_str(),NULL,0));
+      uint32_t mask_C = static_cast<uint32_t>(strtoul(cmd_masks.at("C").get<std::string>().c_str(),NULL,0));
+      uint32_t mask_D = static_cast<uint32_t>(strtoul(cmd_masks.at("D").get<std::string>().c_str(),NULL,0));
+      uint32_t mask_E = static_cast<uint32_t>(strtoul(cmd_masks.at("E").get<std::string>().c_str(),NULL,0));
+      uint32_t mask_F = static_cast<uint32_t>(strtoul(cmd_masks.at("F").get<std::string>().c_str(),NULL,0));
 
       Log(info,"Command C HLT mask : [0x%X]",mask_C);
       Log(info,"Command D HLT mask : [0x%X]",mask_D);
