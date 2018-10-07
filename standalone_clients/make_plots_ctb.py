@@ -40,16 +40,16 @@ def pickle_data(input="ctb_pds_output_3.root",output="ctb_pds_output_3.pickle"):
     data_ts.append(event.timestamp)
     data_payload.append(event.payload)
     if new_tree_format:
-      data_type.append(event.type)
+      data_type.append(event.word_type)
       data_beam.append(event.beam_status)
       data_crt.append(event.crt_status)
     else:
-      data_type.append(event.type)
+      data_type.append(event.word_type)
       data_beam.append(0)
       data_crt.append(0)
 
   #for event in fin.data:
-  #  evt = {"type":event.type,"ts":event.timestamp,"payload":event.payload, "bi":event.beam}
+  #  evt = {"type":event.word_type,"ts":event.timestamp,"payload":event.payload, "bi":event.beam}
   #  data.append(evt)
 
   ## Now picke the data

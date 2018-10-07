@@ -8,6 +8,7 @@
 #include <cerrno>
 
 extern "C" {
+#include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <linux/i2c-dev.h>
@@ -15,7 +16,7 @@ extern "C" {
 
 #include "Logger.h"
 
-
+//extern int  i2c_smbus_write_word_data(const struct i2c_client * client, uint8_t command, uint16_t value);
 extern int com_serial;
 extern int failcount;
 

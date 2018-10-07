@@ -2,8 +2,8 @@
   "ctb":{
     "sockets":{
         "receiver":{
-            "rollover":50000,
-            "host":"localhost",
+            "rollover":150000,
+            "host":"128.141.151.14",
             "port":8992
       },
       "monitor":{
@@ -20,7 +20,7 @@
     "misc":{
       "randomtrigger_1":{
         "description":"Random trigger that can optionally be set to fire only during beam spill",
-        "enable":false,
+        "enable":true,
         "fixed_freq":true,
         "beam_mode":true,
         "period":100000
@@ -46,6 +46,12 @@
       "standalone_enable": true
     },
     "HLT":{
+      "command_mask" : {
+        "C" : "0x6",
+        "D" : "0x0",
+        "E" : "0x1",
+        "F" : "0x0"
+      },
       "trigger": [
         { "id":"HLT_1",
           "description": "Reconstructable track beam trigger, no PDS selection, no CRT selection",

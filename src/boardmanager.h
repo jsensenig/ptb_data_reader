@@ -82,21 +82,21 @@ public:
 #if defined(PDUNE_COMPILATION)
 
   // Wrapper function that calls all others
-  void configure_ctb(json& doc, json& feedback, bool &has_error);
+  void configure_ctb(const json& doc, json& feedback, bool &has_error);
 
   //Misc configs such as timing, pulser, etc
-  void misc_config(json & miscconfig, json& feedback, bool &has_error);
+  void config_misc(const json & miscconfig, json& feedback, bool &has_error);
 
   //HLT configs 
-  void hlt_config(json & hltconfig, json& feedback, bool &has_error);
+  void confg_hlt(const json & hltconfig, json& feedback, bool &has_error);
 
-  void pds_config(json & pdsconfig, json& feedback, bool &has_error);
+  void config_pds(const json & pdsconfig, json& feedback, bool &has_error);
 
   //Loads the Beam config into FW regs
-  void beam_config(json & beamconfig, json& feedback, bool &has_error);
+  void config_beam(const json & bdoc, json& feedback, bool &has_error);
 
   //Loads the CRT config into FW regs
-  void crt_config(json & crtconfig, json& feedback, bool &has_error);
+  void config_crt(const json & crtconfig, json& feedback, bool &has_error);
 
 
 #elif defined(SBND_COMPILATION)
