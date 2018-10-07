@@ -88,7 +88,7 @@ public:
   void config_misc(const json & miscconfig, json& feedback, bool &has_error);
 
   //HLT configs 
-  void confg_hlt(const json & hltconfig, json& feedback, bool &has_error);
+  void config_hlt(const json & hltconfig, json& feedback, bool &has_error);
 
   void config_pds(const json & pdsconfig, json& feedback, bool &has_error);
 

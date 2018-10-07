@@ -21,7 +21,7 @@
         // Otherwise we have no way to know if the configuration fails
 
         json mfeedback;
-        misc_config(miscconf, mfeedback, has_error);
+        config_misc(miscconf, mfeedback, has_error);
         if (!mfeedback.empty()) {
           Log(debug,"Received %u messages from configuring the Misc Configs",mfeedback.size());
           answers.insert(answers.end(),mfeedback.begin(),mfeedback.end());
@@ -32,7 +32,7 @@
         }
 
         json hfeedback;
-        hlt_config(hltconf, hfeedback, has_error);
+        config_hlt(hltconf, hfeedback, has_error);
         if (!hfeedback.empty()) {
           Log(debug,"Received %u messages from configuring the HLTs",hfeedback.size());
           answers.insert(answers.end(),hfeedback.begin(),hfeedback.end());
@@ -43,7 +43,7 @@
         }
 
         json bfeedback;
-        beam_config(beamconf, bfeedback, has_error);
+        config_beam(beamconf, bfeedback, has_error);
         if (!bfeedback.empty()) {
           Log(debug,"Received %u messages from configuring the Beam",bfeedback.size());
           answers.insert(answers.end(),bfeedback.begin(),bfeedback.end());
@@ -54,7 +54,7 @@
         }
 
         json cfeedback;
-        crt_config(crtconf, cfeedback, has_error);
+        config_crt(crtconf, cfeedback, has_error);
         if (!cfeedback.empty()) {
           Log(debug,"Received %u messages from configuring the CRT",cfeedback.size());
           answers.insert(answers.end(),cfeedback.begin(),cfeedback.end());
@@ -70,7 +70,7 @@
       #else
 
         json feedback;
-        pds_config(pdsconf,feedback, has_error);
+        config_pds(pdsconf,feedback, has_error);
         if (!feedback.empty()) {
           Log(info,"Received %u feedback messages from configuring the PDS",feedback.size());
           answers.insert(answers.end(),feedback.begin(),feedback.end());
@@ -129,7 +129,7 @@
       // -- Grab the channel mask for the beam inputs
       // std::string s_channelmask = bdoc.at("channel_mask").get<std::string>();
       // uint32_t ch_mask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
-      uint32_t ch_mask = static_cast<uint32_t>(strtoul(bdoc.at("channel_mask").get<std:;string>().c_str(),NULL,0));
+      uint32_t ch_mask = static_cast<uint32_t>(strtoul(bdoc.at("channel_mask").get<std::string>().c_str(),NULL,0));
 
       // -- get the reshape length (aka trigger gate)
       uint32_t reshape_len = bdoc.at("reshape_length").get<unsigned int>();
@@ -352,18 +352,18 @@
       } 
 
       // -- Check that the mask is not bigger than the max allowed by the number of channels
-      if (((0x1 <<NCRT_CH)-1) < ch_mask) {
-        std::ostringstream msg;
-        msg << "CRT channel mask larger than maximum possible (" << std::hex << ch_mask << std::dec
-        << "vs " << std::hex << ((0x1 <<CRT_CH)-1) << std::dec << ").";
-        Log(error,"%s", msg.str().c_str());
-        json tobj;
-        tobj["type"] = "error";
-        tobj["message"] = msg.str();
-        feedback.push_back(tobj);
-        has_error = true;
-        return;
-      }
+      // if (((0x1 <<NCRT_CH)-1) < ch_mask) {
+      //   std::ostringstream msg;
+      //   msg << "CRT channel mask larger than maximum possible (" << std::hex << ch_mask << std::dec
+      //   << "vs " << std::hex << ((0x1 <<NCRT_CH)-1) << std::dec << ").";
+      //   Log(error,"%s", msg.str().c_str());
+      //   json tobj;
+      //   tobj["type"] = "error";
+      //   tobj["message"] = msg.str();
+      //   feedback.push_back(tobj);
+      //   has_error = true;
+      //   return;
+      // }
 
       if (delays.size() != NCRT_CH) {
         std::ostringstream msg;
@@ -618,7 +618,7 @@
       if (((0x1 <<NPDS_CH)-1) < ch_mask) {
         std::ostringstream msg;
         msg << "PDS channel mask larger than maximum possible (" << std::hex << ch_mask << std::dec
-        << "vs " << std::hex << ((0x1 <<PDS_CH)-1) << std::dec << ").";
+        << "vs " << std::hex << ((0x1 <<NPDS_CH)-1) << std::dec << ").";
         Log(error,"%s", msg.str().c_str());
         json tobj;
         tobj["type"] = "error";
@@ -1202,7 +1202,7 @@
         msg << " Masks C and D have HLTs masked in both. This cannot happen. [C:" 
         << std::hex << mask_C << std::dec << " | D:" 
         << std::hex << mask_D << std::dec << " | common:"
-        << std::hex << mask_C & mask_D << std::dec << "."] has the same LLT masked in the inclusion and exclusion masks. This is not possible. Disabling HLT.";
+        << std::hex << mask_C & mask_D << std::dec << "]. This is not possible. Disabling HLT.";
         hlt_en = false;
         Log(error,"%s",msg.str().c_str());
         json tobj;
@@ -1212,7 +1212,81 @@
         has_error = true;
         return;        
       }
-
+      if (mask_C & mask_E) {
+        std::ostringstream msg;
+        msg << " Masks C and E have HLTs masked in both. This cannot happen. [C:" 
+        << std::hex << mask_C << std::dec << " | E:" 
+        << std::hex << mask_E << std::dec << " | common:"
+        << std::hex << mask_C & mask_E << std::dec << "]. This is not possible. Disabling HLT.";
+        hlt_en = false;
+        Log(error,"%s",msg.str().c_str());
+        json tobj;
+        tobj["type"] = "error";
+        tobj["message"] = msg.str();
+        feedback.push_back(tobj);
+        has_error = true;
+        return;        
+      }
+      if (mask_C & mask_F) {
+        std::ostringstream msg;
+        msg << " Masks C and F have HLTs masked in both. This cannot happen. [C:" 
+        << std::hex << mask_C << std::dec << " | F:" 
+        << std::hex << mask_F << std::dec << " | common:"
+        << std::hex << mask_C & mask_F << std::dec << "]. This is not possible. Disabling HLT.";
+        hlt_en = false;
+        Log(error,"%s",msg.str().c_str());
+        json tobj;
+        tobj["type"] = "error";
+        tobj["message"] = msg.str();
+        feedback.push_back(tobj);
+        has_error = true;
+        return;        
+      }
+      if (mask_D & mask_F) {
+        std::ostringstream msg;
+        msg << " Masks D and F have HLTs masked in both. This cannot happen. [D:" 
+        << std::hex << mask_D << std::dec << " | F:" 
+        << std::hex << mask_F << std::dec << " | common:"
+        << std::hex << mask_D & mask_F << std::dec << "]. This is not possible. Disabling HLT.";
+        hlt_en = false;
+        Log(error,"%s",msg.str().c_str());
+        json tobj;
+        tobj["type"] = "error";
+        tobj["message"] = msg.str();
+        feedback.push_back(tobj);
+        has_error = true;
+        return;        
+      }
+      if (mask_D & mask_E) {
+        std::ostringstream msg;
+        msg << " Masks D and E have HLTs masked in both. This cannot happen. [D:" 
+        << std::hex << mask_D << std::dec << " | E:" 
+        << std::hex << mask_E << std::dec << " | common:"
+        << std::hex << mask_D & mask_E << std::dec << "]. This is not possible. Disabling HLT.";
+        hlt_en = false;
+        Log(error,"%s",msg.str().c_str());
+        json tobj;
+        tobj["type"] = "error";
+        tobj["message"] = msg.str();
+        feedback.push_back(tobj);
+        has_error = true;
+        return;        
+      }
+      if (mask_F & mask_E) {
+        std::ostringstream msg;
+        msg << " Masks E and F have HLTs masked in both. This cannot happen. [E:" 
+        << std::hex << mask_E << std::dec << " | F:" 
+        << std::hex << mask_F << std::dec << " | common:"
+        << std::hex << mask_E & mask_F << std::dec << "]. This is not possible. Disabling HLT.";
+        hlt_en = false;
+        Log(error,"%s",msg.str().c_str());
+        json tobj;
+        tobj["type"] = "error";
+        tobj["message"] = msg.str();
+        feedback.push_back(tobj);
+        has_error = true;
+        return;        
+      }
       Log(info,"Completed configuration of HLTs");
 
     } // HLT configs
