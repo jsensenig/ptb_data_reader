@@ -1183,7 +1183,8 @@
 
       Log(info,"Processing HLT masks into each timing command.");
       // -- map HLTs into the different commands
-      json cmd_masks = trigs.at("command_mask");
+	// hltconfig.at
+      json cmd_masks = hltconfig.at("command_mask");
       // this is a json doc on its own, mapping the letter of the command
       // to the HLT mask
       uint32_t mask_C = static_cast<uint32_t>(strtoul(cmd_masks.at("C").get<std::string>().c_str(),NULL,0));
