@@ -26,7 +26,7 @@ make_freq_plot = True # Use the available date to calculate an average frequency
 make_channel_dist = True # Use the available data to show number of signals
 
 
-limit_time_sample = 1  # Time sample in seconds
+limit_time_sample = -1  # Time sample in seconds
 
 def pickle_data(input="ctb_pds_output_3.root",output="ctb_pds_output_3.pickle"):
   data_type = []
