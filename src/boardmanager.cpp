@@ -658,8 +658,6 @@ namespace ptb {
 
     util::Xil_Out32((uint32_t)((uint32_t)mapped_gpio_base_addr_ + ptb::config::gpio_reg.addr_offset[0]), timing_addr);
 
-    // FIXME: There is a flaw here
-    // If there was an error configuring the specific code, how do we know?
     std::vector<std::string> tmpvec;
     json feedbacks = json(tmpvec);
     bool got_error = false;
