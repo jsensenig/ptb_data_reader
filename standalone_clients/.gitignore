@@ -1,0 +1,11 @@
+*.pdf
+*.png
+*.root
+*.pickle
+
+# The exisiting binaries
+standalone_run
+standalone_run_root
+standalone_run_boost
+
+

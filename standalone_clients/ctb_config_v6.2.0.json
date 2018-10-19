@@ -1,0 +1,373 @@
+{
+  "ctb":{
+    "description" : "Typical configuration for the CTB to use software and firmware version v6.2.0",
+    "sockets":{
+        "receiver":{
+            "description":"Settings to configure the conditions for the data transmission socket.",
+            "rollover":150000,
+            "host":"128.91.42.105",
+            "port":8992
+      },
+      "monitor":{
+        "description":"Socket that would send a second copy of the data stream, possibly with a trimmed version of the data.Not implemented yet",
+        "enable" : false,
+        "host": "localhost",
+        "port": 8993
+        },
+      "statistics": {
+        "description":"Socket that would periodically send a json object with collected statistics. Not implemented yet.",
+        "enable":false,
+        "port":8994,
+        "updt_period": 1
+      }
+    },
+    "misc":{
+      "randomtrigger_1":{
+        "description":"Random trigger that can optionally be set to fire only during beam spill",
+        "enable":false,
+        "fixed_freq":true,
+        "beam_mode":false,
+        "period":100000
+      },
+      "randomtrigger_2":{
+        "description":"Random trigger that can optionally be set to fire only outside beam spill",
+        "enable":false,
+        "fixed_freq":true,
+        "beam_mode":false,
+        "period":100000
+      },
+      "pulser":{
+        "description":"Test pulser that is routed to the fiber output (back panel)",
+        "enable":true,
+        "frequency":50
+      },
+      "timing":{
+        "description":"Configuration parameters for the timing system",
+        "address":"0x0",
+        "group":"0x0",
+        "triggers":true,
+        "lockout":"0x10"
+      },
+      "ch_status":false,
+      "standalone_enable": true
+    },
+    "HLT":{
+      "command_mask" : {
+        "description":"Masks which HLTs correspond to each command. No overlaps are allowed. C=HLT_1, D=HLT_2,E=HLT_4,5,F=HLT_3",
+        "C" : "0x2",
+        "D" : "0x4",
+        "E" : "0x30",
+        "F" : "0x8"
+      },
+      "trigger": [
+        { "id":"HLT_1",
+          "description": "LLT_1",
+          "enable":true,
+          "minc" : "0x2",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_2",
+          "description": "LLT_14",
+          "enable":true,
+          "minc" : "0x4000",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_3",
+          "description": "LLT_1 and LLT_14",
+          "enable":true,
+          "minc" : "0x4002",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_4",
+          "description": "LLT_1 and not LLT_14",
+          "enable":true,
+          "minc" : "0x2",
+          "mexc" : "0x4000",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_5",
+          "description": "not LLT_1 and LLT_14",
+          "enable":true,
+          "minc" : "0x4000",
+          "mexc" : "0x2",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_6",
+          "description": "Pure Cosmic trigger, coincidence US/DS, selection only Saleve side",
+          "enable":false,
+          "minc" : "0x3000",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_7",
+          "description": "CRT+Beam trigger Coincidence US/DS on Saleve side, particle trigger",
+          "enable":false,
+          "minc" : "0x3002",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_8",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        },
+        { "id":"HLT_9",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        },
+        { "id":"HLT_10",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        },
+        { "id":"HLT_11",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        },
+        { "id":"HLT_12",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        },
+        { "id":"HLT_13",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        },
+        { "id":"HLT_14",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        },
+        { "id":"HLT_15",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        },
+        { "id":"HLT_16",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        },
+        { "id":"HLT_17",
+          "description": "Spare",
+          "enable":false,
+          "minc" : "0x0",
+          "mexc" : "0x0",
+          "prescale" : "0x0"
+        }
+      ]
+    },
+    "subsystems":{
+      "pds":{
+        "channel_mask":"0xFFFFFF",
+        "reshape_length" : 50,
+        "delays":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "dac_thresholds":[2185,2194,2170,2176,2167,2200,2179,2197,2188,2179,2185,2191,2176,2182,2191,2182,2176,2173,2200,2185,2182,2176,2191,2167],
+        "triggers": [
+          { "id":"LLT_14",
+            "description": "At least one channel fires",
+            "enable":true,
+            "mask" : "0xFFFFFF",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_17",                   
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x3",
+            "type" : "0x2",
+            "count" : "0x2"
+          },
+          { "id":"LLT_22",                   
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0",
+            "type" : "0x2",
+            "count" : "0x2"
+          },
+          { "id":"LLT_23",                   
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x3",
+            "type" : "0x2",
+            "count" : "0x2"
+          },
+          { "id":"LLT_24",                   
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x3",
+            "type" : "0x2",
+            "count" : "0x2"
+          }
+        ]
+      },
+      "crt":{
+        "channel_mask": "0xFFFFFFFF",
+        "pixelate": true,
+        "reshape_length" : 50,
+        "delays":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "triggers": [
+          { "id":"LLT_11",
+            "description": "Select CRT pixels around beam pipe (upstream)",
+            "enable":false,
+            "mask" : "0xF000",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_12",
+            "description": "Any upstream CRT Saleve side",
+            "enable":false,
+            "mask" : "0x60FC",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_13",
+            "description": "Any downstream CRT Saleve side ",
+            "enable":false,
+            "mask" : "0x9F030000",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_15",
+            "description": "Any upstream CRT Jura side",
+            "enable":false,
+            "mask" : "0x9F03",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_16",
+            "description": "Any downstream CRT Jura side",
+            "enable":false,
+            "mask" : "0x60FC0000",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_18",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_19",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_20",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_21",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0",
+            "type" : "0x1",
+            "count" : "0x0"
+          }
+        ]
+      },
+      "beam":{
+        "channel_mask": "0x1FF",
+        "reshape_length" : 50,
+        "delays":[0,0,0,0,0,0,0,0,0],
+        "triggers": [
+          { "id":"LLT_1",
+            "description": "BI_0",
+            "enable":true,
+            "mask" : "0x1"
+          },
+          { "id":"LLT_2",
+            "description": "BI_3 and BI_4",
+            "enable":true,
+            "mask" : "0xC"
+          },
+          { "id":"LLT_3",
+            "description": "Mask in Low Pressure Cherenkov (C716)",
+            "enable":false,
+            "mask" : "0x10"
+          },
+          { "id":"LLT_4",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0"
+          },
+          { "id":"LLT_5",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0"
+          },
+          { "id":"LLT_6",
+            "description": "Beam gate selection",
+            "enable":true,
+            "mask" : "0x2"
+          },
+          { "id":"LLT_7",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0"
+          },
+          { "id":"LLT_8",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0"
+          },
+          { "id":"LLT_8",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0"
+          },
+          { "id":"LLT_9",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0"
+          },
+          { "id":"LLT_10",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0"
+          },
+          { "id":"LLT_25",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0"
+          },
+          { "id":"LLT_26",
+            "description": "Spare",
+            "enable":false,
+            "mask" : "0x0"
+          }
+        ]
+      }
+    }
+  }
+}
