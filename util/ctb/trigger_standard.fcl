@@ -1,0 +1,286 @@
+ 
+#include "routing_config.fcl" 
+
+daq: {
+
+fragment_receiver: {
+
+generator: TriggerBoardReader 
+
+destinations: {
+
+}
+routing_table_config: @local::routing_table_config_BRs 
+
+request_mode: "Window" # the other interesting possibility which is discussed is the "Buffer" mode
+
+request_port: 3001 
+
+request_address: "227.128.12.26" # Multicast request address
+
+request_window_width: 150000000 # 3 s of window width. This is an ideally infinite window mode
+# 3 s of window width. This is an ideally infinite window mode
+request_window_offset: 149875000 # Request message contains tzero. Window will be from tzero - offset to tz-o + width
+
+request_window_are_unique: true 
+
+separate_data_thread: true 
+
+circular_buffer_mode: true 
+
+data_buffer_depth_fragments: 12000 ### Default 1000 
+
+board_address: "np04-ctb-1" 
+
+control_port: 8991 ## Default 8991
+
+group_size: 1 ## this sets how many pakages from the board should be grouped to form a fragment. Default 1
+
+word_buffer_size: 10000 ## default 5000
+
+metric_TS_interval: 50 
+
+throw_exception: true 
+
+calibration_stream_output: "/scratch/ctb_calib" 
+
+receiver_timeout_scaling: 4 ## default 2
+
+board_config: '{
+  "ctb":{
+    "sockets":{
+        "receiver":{
+            "rollover":125000,
+            "host":"localhost",
+            "port":8992
+      },
+      "monitor":{
+        "enable" : false,
+        "host": "localhost",
+        "port": 8993
+        },
+      "statistics": {
+        "enable":false,
+        "port":8994,
+        "updt_period": 1
+      }
+    },
+    "misc":{
+      "randomtrigger":{
+        "enable":false,
+        "fixed_freq":true,
+        "beam_mode":false,
+        "period":50000000
+      },
+      "pulser":{
+        "enable":false,
+        "frequency":50
+      },
+      "timing":{
+        "address":"0xF0",
+        "group":"0x0",
+        "triggers":true,
+        "lockout":"0x10"
+      },
+      "ch_status":false,
+      "standalone_enable": true
+    },
+    "HLT":{
+      "trigger": [
+        { "id":"HLT_1",
+          "description": "Beam trigger, veto with high-rate muon CRT around beam pipe",
+          "enable":false,
+          "minc" : "0x1",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_2",
+          "description": "Reconstructable track beam trigger, high-rate muon veto with CRT around beam pipe",
+          "enable":false,
+          "minc" : "0x1",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_3",
+          "description": "Medium beam energy pion trigger, cherenkov particle selection, no CRT, no PDS",
+          "enable":false,
+          "minc" : "0x1",
+          "mexc" : "0x2",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_4",
+          "description": "Beam trigger with PDS (SSPs on APA 3)",
+          "enable":false,
+          "minc" : "0x9",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_5",
+          "description": "Cosmic trigger, high to lower, up to down stream muon on Jura-side CRT and PDS (no Beam)",
+          "enable":false,
+          "minc" : "0xE",
+          "mexc" : "0x1",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_6",
+          "description": "Low beam energy electron trigger, coincidence on C1 and C2, no PDS, no CRT",
+          "enable":true,
+          "minc" : "0x1",
+          "mexc" : "0x0",
+          "prescale" : "0x1"
+        },
+        { "id":"HLT_7",
+          "description": "Low beam energy hadron trigger, no hits on C1 or C2 , no PDS, no CRT",
+          "enable":false,
+          "minc" : "0x1",
+          "mexc" : "0x2",
+          "prescale" : "0x1"
+        }
+      ]
+    },
+    "subsystems":{
+      "pds":{
+        "channel_mask":"0xF",
+        "reshape_length" : 50,
+        "delays":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        "dac_thresholds":[2185,2194,2170,2176,2167,2200,2179,2197,2188,2179,2185,2191,2176,2182,2191,2182,2176,2173,2200,2185,2182,2176,2191,2167],
+        "triggers": [
+          { "id":"LLT_14",
+            "description": "PDS coincidence of APA 1 to 4",
+            "enable":true,
+            "mask" : "0xF",
+            "type" : "0x1",
+            "count" : "0x2"
+          },
+          { "id":"LLT_17",                   
+            "description": "PDS include 2 SSPs near the beam plug",
+            "enable":true,
+            "mask" : "0x3",
+            "type" : "0x2",
+            "count" : "0x2"
+          }
+        ]
+      },
+      "crt":{
+        "channel_mask": "0x0",
+        "pixelate": false,
+        "reshape_length" : 1,
+        "delays":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        "triggers": [
+          { "id":"LLT_11",
+            "description": "Select CRT pixels around beam pipe",
+            "enable":true,
+            "mask" : "0xF000",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_12",
+            "description": "CRT for through-going muons (upstream)",
+            "enable":false,
+            "mask" : "0x6000",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_13",
+            "description": "CRT for through-going muons (downstream)",
+            "enable":true,
+            "mask" : "0x60000000",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_15",
+            "description": "CRT upstream upper half of Jura supermodule",
+            "enable":true,
+            "mask" : "0x201C",
+            "type" : "0x1",
+            "count" : "0x0"
+          },
+          { "id":"LLT_16",
+            "description": "CRT downstream lower half of Jura supermodule",
+            "enable":true,
+            "mask" : "0x40E00000",
+            "type" : "0x1",
+            "count" : "0x0"
+          }
+        ]
+      },
+      "beam":{
+        "channel_mask": "0x1FF",
+        "reshape_length" : 50,
+        "delays":[1,1,1,1,1,1,1,1,1],
+        "triggers": [
+          { "id":"LLT_1",
+            "description": "Beam particle trigger",
+            "enable":true,
+            "mask" : "0x183"
+          },
+          { "id":"LLT_3",
+            "description": "Mask in all BI, except Cherenkov detector",
+            "enable":true,
+            "mask" : "0x1E3"
+          },
+          { "id":"LLT_4",
+            "description": "Mask in all BI except C1",
+            "enable":true,
+            "mask" : "0x1F3"
+          },
+          { "id":"LLT_5",
+            "description": "Mask in C1",
+            "enable":true,
+            "mask" : "0x8"
+          },
+          { "id":"LLT_6",
+            "description": "Beam gate selection",
+            "enable":true,
+            "mask" : "0x2"
+          },
+          { "id":"LLT_7",
+            "description": "Mask in all BI for trigger inclusion",
+            "enable":true,
+            "mask" : "0x1FB"
+          },
+          { "id":"LLT_8",
+            "description": "Select only the Cherenkov detectors",
+            "enable":true,
+            "mask" : "0x18"
+          }
+        ]
+      }
+    }
+  }
+}' 
+
+nADCcounts: 100 
+
+throttle_usecs: 100 # Wait this many usecs before creating the next event
+# Wait this many usecs before creating the next event
+distribution_type: 1 
+
+fragment_ids: [0] 
+# In the case of just one fragment, "fragment_id: 0" would also work
+board_id: 999 
+
+}
+metrics: {
+
+dim: {
+
+metricPluginType: dim 
+
+level: 5 
+
+reporting_interval: 5.0 
+
+Verbose: false 
+
+DNSPort: 2505 
+
+DNSNode: "np04-srv-024.cern.ch" 
+
+DIMServerName: TriggerBoardReader 
+
+IDName: trigger_0 
+
+}
+}
+}
