@@ -134,7 +134,7 @@
       // -- get the reshape length (aka trigger gate)
       uint32_t reshape_len = bdoc.at("reshape_length").get<unsigned int>();
       
-      Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
+      Log(debug,"Beam reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
       // FIXME: We should think about increasing this. It is not outside the realm of possibility to attemp to do 
       //        a trigger gate of 2-3 us
       if (reshape_len > ((0x1<<6)-1)) {
@@ -388,7 +388,7 @@
       }
 
       uint32_t reshape_len = crtconfig.at("reshape_length").get<unsigned int>();
-      Log(debug,"Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
+      Log(debug,"CRT Reshape length [%d] (%u) [0x%X][%s]",reshape_len,reshape_len,reshape_len, std::bitset<6>(reshape_len).to_string().c_str());
       if (reshape_len > ((1<<6)-1)) {
         std::ostringstream msg;
         msg << "CRT reshape length of " << reshape_len << " above maximum [2^6 - 1]. Truncating to maximum.";
@@ -942,7 +942,7 @@
         set_bit(71,31,rndm_tr_en);
         set_bit(71,30,rndm_tr_ff);
         set_bit(71,29,rndm_tr_bm);
-        set_bit_range_register(72,0,32,rndm_tr_per);
+        set_bit_range_register(138,0,32,rndm_tr_per);
 
 
       }
@@ -1288,6 +1288,15 @@
         has_error = true;
         return;        
       }
+
+      // attach the masks to the registers
+      set_bit_range_register(134,0,32,mask_C);
+      set_bit_range_register(135,0,32,mask_D);
+      set_bit_range_register(136,0,32,mask_E);
+      set_bit_range_register(137,0,32,mask_F);
+
+
+
       Log(info,"Completed configuration of HLTs");
 
     } // HLT configs
