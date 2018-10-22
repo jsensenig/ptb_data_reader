@@ -14,6 +14,7 @@
 #include <csignal>
 #include <cstdint>
 #include <sstream>
+#include <cstdio>
 
 #include "content.h"
 #include "json.hpp"
@@ -281,10 +282,13 @@ int main(int argc, char**argv) {
 
   std::cout.setf(std::ios::unitbuf);
   size_t vlvl = 0;
+  bool custom_config_ = false;
+
   //std::string cfile = "ctb_config.json";
   std::string outfname = "ctb_output";
   std::string destination = "localhost:8991";
   std::string confname = "ctb_config.json";
+  std::string receiver = "";
 
 #ifdef USE_CXXOPTS
 
@@ -394,7 +398,7 @@ int main(int argc, char**argv) {
   };
 
 
-  enum  optionIndex { UNKNOWN, CONFIG, HELP, VERBOSITY, OUTPUT, DESTINATION};
+  enum  optionIndex { UNKNOWN, CONFIG, HELP, VERBOSITY, OUTPUT, DESTINATION, RECEIVER};
   const option::Descriptor usage[] =
   {
     {UNKNOWN,     0, "","",           Arg::None,        "USAGE: standalone_run_root [options]\n\n"
@@ -404,6 +408,7 @@ int main(int argc, char**argv) {
     {VERBOSITY,   0,"v","verbose",    Arg::Numeric,     "-v <number>,     --verbose=<number>       \tSet verbosity level." },
     {OUTPUT,      0,"o","output",     Arg::Required,    "-o <file>,       --output=<file>          \tSet ROOT output file name (without extension) [default: ctb_output]." },
     {DESTINATION, 0,"d","destination",Arg::Required,    "-d <host:port>,  --destination=<host:port>\tSet destination host/IP and port [default: localhost:8991]." },
+    {RECEIVER,    0,"r","receiver",   Arg::Required,    "-r <host:port>   --receiver=<host:port>   \tSet receiver location. Defaults to localhost:8992"},
     {UNKNOWN,     0,"", "",           option::Arg::None,"\nExamples:\n"
         "  standalone_run_root -o my_output \n"
         "  standalone_run_root -c ctb_config.json -o output.root\n" },
@@ -453,6 +458,10 @@ int main(int argc, char**argv) {
         fprintf(stdout, "main:: Setting CTB host to '%s'\n", opt.arg);
         destination = opt.arg;
         break;
+      case RECEIVER:
+        fprintf(stdout,"main:: Overriding the data receiver host to '%s'\n",opt.arg);
+        receiver = opt.arg;
+        break;
       case UNKNOWN:
         // not possible because Arg::Unknown returns ARG_ILLEGAL
         // which aborts the parse with an error
@@ -469,32 +478,70 @@ int main(int argc, char**argv) {
 #else
 #error "Couldn't find a matching option parser. Program will refuse to compile"
 #endif
+  std::string temp_conf = "/tmp/tmp_";
+  temp_conf += confname;
 
   try {
-    std::string host = "localhost";
-    //    uint16_t port = 8991;
-    std::string port = "8991";
-    size_t colon_pos = destination.find(':');
+    std::string host  = "localhost";
+    std::string port  = "8991";
+    std::string rhost = "";
+    std::string rport = "8992";
+    uint16_t pport    = 8992;
+
+    size_t colon_pos  = destination.find(':');
     if(colon_pos != std::string::npos) {
       host = destination.substr(0,colon_pos);
       port = destination.substr(colon_pos+1);
-      //      std::stringstream parser(portpart);
-      //      if( parser >> port )
-      //      {
-      //        printf("Port set to %hu\n",port);
-      //      }
-      //      else {
-      //        printf("Couldn't understand the port. Setting it to default 8991\n");
-      //      }
-
     }
     printf("main:: Connecting to the CTB at [%s:%s]\n",host.c_str(),port.c_str());
+
+    if (receiver.length() > 0) {
+      custom_config_ = true;
+      colon_pos = receiver.find(':');
+      if(colon_pos != std::string::npos) {
+        rhost = receiver.substr(0,colon_pos);
+        rport = receiver.substr(colon_pos+1);
+      } else {
+        rhost = receiver.substr(0,colon_pos);
+      }
+      printf("main:: Customizing the configuration to set the receiver location at [%s:%s]\n",rhost.c_str(),rport.c_str());
+
+      std::ifstream cfin;
+      std::ofstream cfout;
+
+      json conf;
+      cfin.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
+      cfin.open(confname);
+      cfin >> conf;
+      cfin.close();
+      conf["ctb"]["sockets"]["receiver"]["host"] = rhost;
+      std::stringstream sport;
+      sport << rport;
+      sport >> pport;
+      conf["ctb"]["sockets"]["receiver"]["port"] = pport;
+
+      cout << "Dumping interim configuration : " << endl;
+      cout << conf.dump(2) << endl;
+
+      cfout.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
+      cfout.open(temp_conf);
+      cfout << conf.dump(2);
+      cfout.close();
+
+
+
+    }
+
     printf("main:: Starting robot...\n");
     //ctb_robot robot("128.91.41.238",8991);
     //    ctb_robot robot(host.c_str(),port);
-    ctb_robot robot(host.c_str(),port,8992,vlvl,5);
+    ctb_robot robot(host.c_str(),port,pport,vlvl,5);
     robot.output_filename_ = outfname;
-    robot.config_filename_ = confname;
+    if (custom_config_) {
+      robot.config_filename_  = temp_conf;
+    } else {
+      robot.config_filename_ = confname;
+    }
     printf("main:: Starting the loop...\n");
     robot.run();
     printf("main:: All done...\n");
@@ -508,6 +555,10 @@ int main(int argc, char**argv) {
     //  robot.run();
     //  cout << "All done" << endl;
   }
+  catch (const std::ifstream::failure& e)
+  {
+    printf("main : ** Failure opening/reading the configuration file: %s\n",e.what());
+  }
   catch(json::exception &e) {
     printf("ERROR: Caught a JSON exception: %s\n",e.what());
   }
@@ -518,7 +569,11 @@ int main(int argc, char**argv) {
     printf("ERROR: Caught an unknown exception\n");
   }
 
-
+  // -- if there were customizations, delete the temporary file
+  if (custom_config_) {
+    cout << "Deleting temporary customizations." << endl;
+    std::remove(temp_conf.c_str());
+  }
   return 0;
 }
 
