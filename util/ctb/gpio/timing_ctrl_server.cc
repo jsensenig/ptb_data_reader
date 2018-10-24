@@ -67,7 +67,7 @@ typedef boost::shared_ptr<tcp::socket> socket_ptr;
 
 
 void session(socket_ptr sock);
-void server(boost::asio::io_context& io_context, unsigned short port);
+void server(boost::asio::io_service& io_service, unsigned short port);
 void process_request(const json &req, json &answer);
 void read_register(json &answer,const uint32_t reg);
 void read_timing_status(json &answer);
@@ -171,12 +171,12 @@ void session(socket_ptr sock)
 }
 
 // -- represents a simple TCP server
-void server(boost::asio::io_context& io_context, unsigned short port)
+void server(boost::asio::io_service& io_service, unsigned short port)
 {
-  tcp::acceptor a(io_context, tcp::endpoint(tcp::v4(), port));
+  tcp::acceptor a(io_service, tcp::endpoint(tcp::v4(), port));
   for (;;)
   {
-    socket_ptr sock(new tcp::socket(io_context));
+    socket_ptr sock(new tcp::socket(io_service));
     a.accept(*sock);
     auto now = std::chrono::system_clock::now();
     std::time_t now_time = std::chrono::system_clock::to_time_t(now);
@@ -282,8 +282,8 @@ int main() {
   keep_running_ = true;
   try
   {
-    boost::asio::io_context io_context;
-    server(io_context, 9000);
+    boost::asio::io_service io_service;
+    server(io_service, 9000);
 
     // boost::asio::io_service io_service;
     // // listen on port 9000
