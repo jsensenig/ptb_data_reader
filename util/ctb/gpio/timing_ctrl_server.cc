@@ -2,25 +2,23 @@
 #include <ctime>
 #include <iostream>
 #include <string>
+#include <cstdio>
+#include <cstdint>
+#include <chrono>
+#include <ctime>
+#include <thread>
 
-#include <stdint.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <iostream>
-#include <csignal>
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <sys/mman.h> //mmap
-#include <unistd.h> //close
-#include <signal.h> 
+// #include <sys/ioctl.h>
+// #include <sys/types.h>
+// #include <fcntl.h>
+// #include <sys/mman.h> //mmap
+// #include <unistd.h> //close
+// #include <signal.h> 
 
 #include <boost/bind.hpp>
 #include <boost/smart_ptr.hpp>
 #include <boost/asio.hpp>
 #include <boost/thread/thread.hpp>
-#include <chrono>
-#include <ctime>
 
 // -- json
 #include <json.hpp>
