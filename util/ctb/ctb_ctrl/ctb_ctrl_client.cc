@@ -38,8 +38,8 @@ using boost::asio::ip::tcp;
 
 // -- global variable that holds the time
 char g_time[128];
-//const char *g_ctb_ip = "10.73.138.28";
-std::string g_ctb_ip = "128.91.41.224";
+std::string g_ctb_ip = "10.73.138.28";
+//std::string g_ctb_ip = "128.91.41.224";
 //const char *g_ctb_ip = "localhost";
 const char *g_ctb_port = "8990";
 
