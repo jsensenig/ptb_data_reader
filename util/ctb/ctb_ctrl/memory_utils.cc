@@ -11,7 +11,7 @@ extern "C" {
 #include <sys/mman.h> //mmap
 };
 
-namespace util {
+//namespace util {
 // -- File descriptor for memory mapping
 int g_mem_fd;
 
@@ -59,4 +59,4 @@ void write_reg32(uint32_t addr, uint32_t val) {
 
 
 
-};
+//};
