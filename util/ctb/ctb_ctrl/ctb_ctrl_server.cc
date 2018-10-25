@@ -272,8 +272,8 @@ void reset_timing_status(json &answer, bool force) {
             nmsg = answer.at("extra").get<std::string>();
           }
           nmsg += " The CTB timing endpoint is already in a good state (0x8).";
+          answer["extra"] = nmsg;
         }
-        answer["extra"] = nmsg;
       }
       void * mmap_addr = NULL;
       mmap_addr = map_phys_mem(GPIO_BASEADDR,GPIO_HIGHADDR);
