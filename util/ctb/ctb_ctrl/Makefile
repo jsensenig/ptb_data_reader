@@ -6,9 +6,9 @@ CC = g++
 DEF_CFLAGS = -std=c++11 -Wall -O3
 
 BOOST_INCS = 
-BOOST_LIBS = -lboost_system -lboost_thread
+BOOST_LIBS = -lboost_system -lboost_thread -pthread
 #Compiled for Microzed
-CFLAGS = -g -m32 $(DEF_CFLAGS)
+CFLAGS = -g $(DEF_CFLAGS)
 INCLUDES = -I./
 #SRCS = test_ep_gpio.cc
 #SRCS = read_config.cc
