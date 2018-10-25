@@ -266,13 +266,13 @@ void reset_timing_status(json &answer, bool force) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
       reg_val = 0x0;
       write_reg32((uint32_t)mmap_addr + GPIO_CH0_OFFSET, reg_val);
+      // -- sleep for a bit to give the endpoint time to initialize
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
       // -- Now check the endpoint status
       read_timing_status(answer);
-      auto now = std::chrono::system_clock::now();
-      std::time_t now_time = std::chrono::system_clock::to_time_t(now);
       if (answer.at("status") == "OK") {
         printf("%s : Timing status register after reset : [%X].\n",
-               std::ctime(&now_time),
+               mtime(),
                answer.at("message").get<uint32_t>());
       } else {
         printf("%s : Failed to read timing status after reset. Return message : %s\n",mtime(),answer.at("message").get<std::string>().c_str());

@@ -6,7 +6,7 @@
  */
 // -- STD includes
 #include <ctime>
-
+#include <algorithm>
 
 #include "json.hpp"
 
@@ -24,7 +24,8 @@
 using json = nlohmann::json;
 using boost::asio::ip::tcp;
 
-#define DEBUG 0
+//#define DEBUG 1
+#undef DEBUG
 //#include <boost/bind.hpp>
 //#include <boost/smart_ptr.hpp>
 //#include <boost/asio.hpp>
@@ -37,8 +38,8 @@ using boost::asio::ip::tcp;
 // -- global variable that holds the time
 char g_time[128];
 //const char *g_ctb_ip = "10.73.138.28";
-//const char *g_ctb_ip = "128.91.41.224";
-const char *g_ctb_ip = "localhost";
+const char *g_ctb_ip = "128.91.41.224";
+//const char *g_ctb_ip = "localhost";
 const char *g_ctb_port = "8990";
 
 char* mtime()
@@ -75,8 +76,10 @@ void communicate(json &c, json &r)
   }
 #ifdef DEBUG
   else {
-    printf("%s : Received %u bytes\n",mtime(),nbytes);
+    printf("%s : Received %zu bytes\n",mtime(),nbytes);
   }
+#else
+  (void)nbytes;
 #endif
 
   std::istream response_stream(&response);
@@ -93,9 +96,10 @@ void communicate(json &c, json &r)
   }
   // -- put the delimiter there again
   json a = json::parse(resp);
+#ifdef DEBUG
   printf("%s : Received answer: \n",mtime());
   printf("%s\n",a.dump(2).c_str());
-
+#endif
   r = a;
 }
 
@@ -147,7 +151,7 @@ void check_registers()
   {
     printf("%s : Status of configuration registers :\n\n",mtime());
     std::vector<uint32_t> regs = a.at("message");
-
+    std::vector<uint32_t> nzero;
     // -- do a pretty print of the registers
     // -- we know there are 256, so we can split them into 6 columns of 42 entries
     // -- alternatively we can not show the status of registers above 150
@@ -163,15 +167,26 @@ void check_registers()
         // entry is tricky. I want to print
         // 0  25  50  75
         e = i*nrows+j;
-        printf("%02u=%08X",e,regs.at(e));
+        printf("%02zu=[%08X]  ",e,regs.at(e));
+        if (regs.at(e) != 0x0)
+        {
+          nzero.push_back(e);
+        }
       }
       printf("\n");
     }
-
-    //std::cout << a.at("message") << std::endl;
-    //uint32_t val = a.at("message").get<uint32_t>();
-    //printf("\t Full register : 0x%X\n",val);
-    //printf("\t Timing state  : 0x%X\n\n",(val >> 28));
+    // sort the entries
+    // Sorting the int vector
+    if (nzero.size())
+    {
+      std::sort(nzero.begin(), nzero.end());
+      printf("\n%s : List of non-zero registers:\n\n",mtime());
+      for (size_t i = 0; i < nzero.size(); i++)
+      {
+        printf(" %u,",nzero.at(i));
+      }
+      printf("\n");
+    }
   } else {
     printf("%s : Failed to read configuration registers.\n\n",mtime());
     printf("Message : %s\n",a.at("message").get<std::string>().c_str());
@@ -204,11 +219,10 @@ void reset_endpoint(bool force)
   // -- there is an answer. Print it
   if (a.at("status") == "OK")
   {
-    printf("%s : Timing endpoint successfully reset :\n\n",mtime());
-    std::cout << a.at("message") << std::endl;
-    //uint32_t val = a.at("message").get<uint32_t>();
-    //printf("\t Full register : 0x%X\n",val);
-    //printf("\t Timing state  : 0x%X\n\n",(val >> 28));
+    printf("%s : Timing endpoint successfully reset. Final state :\n\n",mtime());
+    uint32_t val = a.at("message").get<uint32_t>();
+    printf("\t Full register : 0x%X\n",val);
+    printf("\t Timing state  : 0x%X\n\n",(val >> 28));
   } else {
     printf("%s : Failed to reset the CTB timing endpoint.\n\n",mtime());
     printf("Message : %s\n",a.at("message").get<std::string>().c_str());
