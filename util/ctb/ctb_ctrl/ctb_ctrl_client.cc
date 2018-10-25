@@ -27,10 +27,6 @@ using boost::asio::ip::tcp;
 
 //#define DEBUG 1
 #undef DEBUG
-//#include <boost/bind.hpp>
-//#include <boost/smart_ptr.hpp>
-//#include <boost/asio.hpp>
-//#include <boost/thread/thread.hpp>
 
 
 // -- Define the essential to run a network client
@@ -40,7 +36,6 @@ using boost::asio::ip::tcp;
 char g_time[128];
 std::string g_ctb_ip = "10.73.138.28";
 //std::string g_ctb_ip = "128.91.41.224";
-//const char *g_ctb_ip = "localhost";
 const char *g_ctb_port = "8990";
 
 char* mtime()
@@ -397,35 +392,10 @@ int main(int argc, char**argv)
       reset_endpoint(force);
       break;
     case none:
-      printf("%s: No command was specified. One of -s, -d or -r must be used.\n");
+      printf("%s: No command was specified. One of -s, -d or -r must be used.\n",mtime());
       break;
     default:
       break;
   }
-//
-//  if (argc != 2)
-//  {
-//    printf("%s : Usage: ctb_control <option>\n",mtime());
-//    return 0;
-//  }
-//
-//  switch(atoi(argv[1]))
-//  {
-//    case 0: // read timing status
-//      check_timing_status();
-//      break;
-//    case 1: //
-//      check_registers();
-//      break;
-//    case 2:
-//      reset_endpoint(false);
-//      break;
-//    case 3:
-//      reset_endpoint(true);
-//      break;
-//    default:
-//      printf("%s : Options : \n\t0 : Check timing status\n\t1 : Check all configuration registers\n\t2 : Reset the timing endpoint\n\t3 : Force reset the timing endpoint\n",mtime());
-//  }
-
   return 0;
 }
