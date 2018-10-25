@@ -39,9 +39,8 @@ void *map_phys_mem(uint32_t base_addr, uint32_t high_addr) {
 }
 
 void release_mem () {
-  if (g_mem_fd != -1) {
+  if (g_mem_fd > 0) {
     close(g_mem_fd);
-    g_mem_fd = -1;
   }
 }
 

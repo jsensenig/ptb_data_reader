@@ -39,6 +39,7 @@ const int max_length = 1024;
 // -- External stuff that should be built at link time
 
 // -- Map a physical address into a virtual one
+extern int g_mem_fd;
 extern void *map_phys_mem(uint32_t base_addr, uint32_t high_addr);
 extern void release_mem();
 extern uint32_t read_reg32(uint32_t addr);
@@ -234,7 +235,6 @@ void read_register(json &answer,const uint32_t reg) {
     std::ostringstream msg;
     msg << "Register=" << reg << ", baseaddr="<< std::hex << CONFIG_BASEADDR<< std::dec << ", highaddr=" << std::hex << CONFIG_HIGHADDR << std::dec << ", ret="<<mapped_addr;
     answer["extra"] = msg.str();
-    release_mem();
     //printf("Returning\n");
     return;
   }
@@ -246,7 +246,6 @@ void read_register(json &answer,const uint32_t reg) {
   
   printf("%s : Status of register %u : %u [%X]\n",std::ctime(&now_time),reg,config,config);
 
-  release_mem();
 }
 
 
@@ -332,6 +331,7 @@ void reset_timing_status(json &answer, bool force) {
 
 int main() {
   keep_running_ = true;
+  g_mem_fd = 0;
   try
   {
     boost::asio::io_service io_service;
@@ -358,6 +358,8 @@ int main() {
     std::time_t now_time = std::chrono::system_clock::to_time_t(now);
     printf("%s : Caught exception in timing control server : %s\n",std::ctime(&now_time),e.what());
   }
+  release_mem();
+
   return 0;
 }
 
