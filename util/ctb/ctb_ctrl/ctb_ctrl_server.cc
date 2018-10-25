@@ -284,7 +284,7 @@ void reset_timing_status(json &answer, bool force) {
       reg_val = 0x0;
       write_reg32((uint32_t)mmap_addr + GPIO_CH0_OFFSET, reg_val);
       // -- sleep for a bit to give the endpoint time to initialize
-      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
       // -- Now check the endpoint status
       read_timing_status(answer);
       if (answer.at("status") == "OK") {
