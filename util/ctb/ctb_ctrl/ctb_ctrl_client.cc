@@ -296,8 +296,8 @@ int main(int argc, char**argv)
     {UNKNOWN,     0,"", "",           option::Arg::None,"\nExamples:\n"
         "  ctb_control -c localhost -s   : print the timing status assuming the CTB is running on localhost\n"
         "  ctb_control -d                : Dump the status of all configuration registers in the production CTB\n"
-        "  ctb_control -d                : Reset the CTB\n"
-        "  ctb_control -d -f             : Force reset the CTB, even if the registers show it is running\n" },
+        "  ctb_control -r                : Reset the CTB\n"
+        "  ctb_control -r -f nothepwd    : Force reset the CTB, even if the registers show it is running\n" },
         {0,0,0,0,0,0}
   };
 
