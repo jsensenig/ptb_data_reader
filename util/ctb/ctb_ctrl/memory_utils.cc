@@ -30,7 +30,7 @@ void *map_phys_mem(uint32_t base_addr, uint32_t high_addr) {
   // Map into user space the area of memory containing the device
   mapped_addr = mmap(0, (high_addr-base_addr), PROT_READ | PROT_WRITE, MAP_SHARED, g_mem_fd, dev_base & ~(high_addr-base_addr-1));
   if ( mapped_addr == MAP_FAILED) {
-    printf("Failed to map register [0x%08X 0x%08X] into virtual address.",base_addr,high_addr);
+    printf("Failed to map register [0x%08X 0x%08X] into virtual address.\n",base_addr,high_addr);
     printf("Error returned : %d : %s\n",errno,strerror(errno));
     mapped_addr = NULL;
   }
@@ -39,8 +39,10 @@ void *map_phys_mem(uint32_t base_addr, uint32_t high_addr) {
 }
 
 void release_mem () {
-        if (g_mem_fd != -1)
-                close(g_mem_fd);
+  if (g_mem_fd != -1) {
+    close(g_mem_fd);
+    g_mem_fd = -1;
+  }
 }
 
 // -- Release a physical memory map
