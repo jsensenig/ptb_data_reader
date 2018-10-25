@@ -3,7 +3,7 @@
 ########################################################################
 CC = g++
 
-DEF_CFLAGS = -std=c++11 -Wall -O3
+DEF_CFLAGS = -std=c++11 -Wall -O2
 
 BOOST_INCS = 
 BOOST_LIBS = -lboost_system -lboost_thread -pthread

@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include "json.hpp"
+#include "optionparser.h"
 
 //FIXME: Add header to parse command line options
 //#include ""
@@ -38,7 +39,7 @@ using boost::asio::ip::tcp;
 // -- global variable that holds the time
 char g_time[128];
 //const char *g_ctb_ip = "10.73.138.28";
-const char *g_ctb_ip = "128.91.41.224";
+std::string g_ctb_ip = "128.91.41.224";
 //const char *g_ctb_ip = "localhost";
 const char *g_ctb_port = "8990";
 
@@ -55,7 +56,7 @@ void communicate(json &c, json &r)
   boost::system::error_code error;
   boost::asio::io_service io_service;
   tcp::resolver resolver(io_service);
-  tcp::resolver::query query(tcp::v4(), g_ctb_ip,g_ctb_port);
+  tcp::resolver::query query(tcp::v4(), g_ctb_ip.c_str(),g_ctb_port);
   tcp::resolver::iterator iterator = resolver.resolve(query);
   tcp::socket s(io_service);
   boost::asio::connect(s, iterator);
@@ -239,29 +240,192 @@ int main(int argc, char**argv)
 {
 
   printf("%s : Starting\n",mtime());
-  if (argc != 2)
+
+  struct Arg: public option::Arg
   {
-    printf("%s : Usage: ctb_control <option>\n",mtime());
+      static void printError(const char* msg1, const option::Option& opt, const char* msg2)
+      {
+        fprintf(stderr, "%s", msg1);
+        fwrite(opt.name, opt.namelen, 1, stderr);
+        fprintf(stderr, "%s", msg2);
+      }
+
+      static option::ArgStatus Unknown(const option::Option& option, bool msg)
+      {
+        if (msg) printError("Unknown option '", option, "'\n");
+        return option::ARG_ILLEGAL;
+      }
+
+      static option::ArgStatus Required(const option::Option& option, bool msg)
+      {
+        if (option.arg != 0)
+          return option::ARG_OK;
+
+        if (msg) printError("Option '", option, "' requires an argument\n");
+        return option::ARG_ILLEGAL;
+      }
+
+      static option::ArgStatus NonEmpty(const option::Option& option, bool msg)
+      {
+        if (option.arg != 0 && option.arg[0] != 0)
+          return option::ARG_OK;
+
+        if (msg) printError("Option '", option, "' requires a non-empty argument\n");
+        return option::ARG_ILLEGAL;
+      }
+
+      static option::ArgStatus Numeric(const option::Option& option, bool msg)
+      {
+        char* endptr = 0;
+        if (option.arg != 0 && strtol(option.arg, &endptr, 10)){};
+        if (endptr != option.arg && *endptr == 0)
+          return option::ARG_OK;
+
+        if (msg) printError("Option '", option, "' requires a numeric argument\n");
+        return option::ARG_ILLEGAL;
+      }
+  };
+
+
+  enum  optionIndex { UNKNOWN, CTB, HELP, TSTATUS, RSTATUS, RESET, FORCE};
+  const option::Descriptor usage[] =
+  {
+    {UNKNOWN,     0, "","",           Arg::None,        "USAGE: ctb_control [options]\n\n"
+    "Options:" },
+    {CTB,         0,"c","ctb",        Arg::Required,    "-c <CTB ip>,     --ctb=<CTB ip>          \tDestination of the CTB (optional)."},
+    {HELP,        0,"h","help",       Arg::None,        "-h,              --help                   \tPrint usage and exit." },
+    {TSTATUS,     0,"s","state",      Arg::None,        "-s,              --state                  \tCheck timing endpoint state." },
+    {RSTATUS,     0,"d","dump",       Arg::None,        "-d,              --dump                   \tDump status of all registers." },
+    {RESET,       0,"r","reset",      Arg::None,        "-r,              --reset                  \tReset the timing endpoint." },
+    {FORCE,       0,"f","force",      Arg::Required,    "-f <password>,   --force=<password>       \tForce the reset even if the board *thinks* it is taking data. WARNING: Will cause CTB operation to stop. This operation requires a super secret password."},
+    {UNKNOWN,     0,"", "",           option::Arg::None,"\nExamples:\n"
+        "  ctb_control -c localhost -s   : print the timing status assuming the CTB is running on localhost\n"
+        "  ctb_control -d                : Dump the status of all configuration registers in the production CTB\n"
+        "  ctb_control -d                : Reset the CTB\n"
+        "  ctb_control -d -f             : Force reset the CTB, even if the registers show it is running\n" },
+        {0,0,0,0,0,0}
+  };
+
+  argc -= (argc>0); argv += (argc>0); // skip program name argv[0] if present
+  option::Stats stats(usage,argc,argv);
+  std::vector<option::Option> options(stats.options_max);
+  std::vector<option::Option> buffer(stats.buffer_max);
+  option::Parser parse(usage, argc, argv, &options[0], &buffer[0]);
+
+  if (parse.error())
+  {
+    printf("main:: Failed to parse options.\n");
+    return 1;
+  }
+
+  if (options[HELP] || argc == 0)
+  {
+    int columns = getenv("COLUMNS")? atoi(getenv("COLUMNS")) : 100;
+    option::printUsage(fwrite, stdout, usage, columns);
     return 0;
   }
 
-  switch(atoi(argv[1]))
+  enum action{none=0,dump,tstat,treset};
+  action a = none;
+  bool force = false;
+  for (int i = 0; i < parse.optionsCount(); ++i)
   {
-    case 0: // read timing status
+    option::Option& opt = buffer[i];
+    printf("Argument #%d is ", i);
+    switch (opt.index())
+    {
+      case HELP:
+        // not possible, because handled further above and exits the program
+      case CTB:
+        printf("main:: Setting CTB host to %s\n", opt.arg);
+        g_ctb_ip = opt.arg;
+        break;
+      case TSTATUS:
+        printf("main:: Checking timing status\n");
+        if (a != none) {
+          printf("ERROR: Cannot request more than one action (dump, check, reset) at once!\n");
+          return 0;
+        }
+        a = tstat;
+        break;
+      case RSTATUS:
+        printf("main:: Checking status of all registers\n");
+        if (a != none) {
+          printf("ERROR: Cannot request more than one action (dump, check, reset) at once!\n");
+          return 0;
+        }
+        a=dump;
+        break;
+      case RESET:
+        printf("main:: Resetting the CTB timing endpoint\n");
+        if (a != none) {
+          printf("ERROR: Cannot request more than one action (dump, check, reset) at once!\n");
+          return 0;
+        }
+        a=treset;
+        break;
+      case FORCE:
+        printf("main:: Enable the use of the Force\n");
+        force = true;
+        break;
+      case UNKNOWN:
+        // not possible because Arg::Unknown returns ARG_ILLEGAL
+        // which aborts the parse with an error
+        break;
+    }
+  }
+
+  // deal with unknown options
+  for (option::Option* opt = options[UNKNOWN]; opt; opt = opt->next())
+    printf("Unknown option: [%s]\n",opt->name);
+
+  for (int i = 0; i < parse.nonOptionsCount(); ++i)
+    printf("Non-option #%d : %s\n",i,parse.nonOption(i));
+
+
+  printf("%s : Initiating operation.\n",mtime());
+
+  switch(a)
+  {
+    case dump:
+      check_registers();
+            break;
+    case tstat:
       check_timing_status();
       break;
-    case 1: //
-      check_registers();
+    case treset:
+      reset_endpoint(force);
       break;
-    case 2:
-      reset_endpoint(false);
-      break;
-    case 3:
-      reset_endpoint(true);
+    case none:
+      printf("%s: No command was specified. One of -s, -d or -r must be used.\n");
       break;
     default:
-      printf("%s : Options : \n\t0 : Check timing status\n\t1 : Check all configuration registers\n\t2 : Reset the timing endpoint\n\t3 : Force reset the timing endpoint\n",mtime());
+      break;
   }
+//
+//  if (argc != 2)
+//  {
+//    printf("%s : Usage: ctb_control <option>\n",mtime());
+//    return 0;
+//  }
+//
+//  switch(atoi(argv[1]))
+//  {
+//    case 0: // read timing status
+//      check_timing_status();
+//      break;
+//    case 1: //
+//      check_registers();
+//      break;
+//    case 2:
+//      reset_endpoint(false);
+//      break;
+//    case 3:
+//      reset_endpoint(true);
+//      break;
+//    default:
+//      printf("%s : Options : \n\t0 : Check timing status\n\t1 : Check all configuration registers\n\t2 : Reset the timing endpoint\n\t3 : Force reset the timing endpoint\n",mtime());
+//  }
 
   return 0;
 }

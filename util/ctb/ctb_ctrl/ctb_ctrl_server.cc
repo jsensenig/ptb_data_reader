@@ -258,6 +258,22 @@ void reset_timing_status(json &answer, bool force) {
         printf("%s : Forcing to reset timing while CTB is taking data. The Force is strong on this request.",mtime());
         answer["extra"] = "Forcing reset regardless of CTB taking data.";
       }
+      // -- check the status of the timing.
+      json tmpj;
+      read_timing_status(tmpj);
+      if (tmpj.at("status") == "OK")
+      {
+        uint32_t state = tmpj.at("message").get<uint32_t>();
+        if ((state >> 28) == 0x8)
+        {
+          std::string nmsg = "";
+          if (answer.find("extra") != answer.end())
+          {
+            nmsg = answer.at("extra").get<std::string>();
+          }
+          nmsg += " The CTB timing endpoint is already in a good state (0x8).";
+        }
+      }
       void * mmap_addr = NULL;
       mmap_addr = map_phys_mem(GPIO_BASEADDR,GPIO_HIGHADDR);
       uint32_t reg_val = 0x20;
@@ -267,7 +283,7 @@ void reset_timing_status(json &answer, bool force) {
       reg_val = 0x0;
       write_reg32((uint32_t)mmap_addr + GPIO_CH0_OFFSET, reg_val);
       // -- sleep for a bit to give the endpoint time to initialize
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       // -- Now check the endpoint status
       read_timing_status(answer);
       if (answer.at("status") == "OK") {
