@@ -44,6 +44,12 @@ void release_mem () {
   }
 }
 
+void unmap_phys_mem(void * address, uint32_t base_addr, uint32_t high_addr) {
+  if ((g_mem_fd > 0) && (address != NULL)) {
+    munmap(address,(high_addr-base_addr));
+  }
+}
+
 // -- Release a physical memory map
 void unmap_phys_mem(void * address, size_t size) {
   // If it is open
