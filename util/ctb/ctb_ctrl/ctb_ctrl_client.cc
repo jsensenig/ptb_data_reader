@@ -132,7 +132,7 @@ void check_timing_status()
 
 void check_registers()
 {
-  printf("%s : Checking status of timing endpoint\n",mtime());
+  printf("%s : Checking status of CTB registers\n",mtime());
   json a;
   json c;
   c["command"] = "check_registers";
@@ -222,10 +222,10 @@ void reset_endpoint(bool force)
   } else {
     printf("%s : Failed to reset the CTB timing endpoint.\n\n",mtime());
     printf("Message : %s\n",a.at("message").get<std::string>().c_str());
-    if (a.find("extra") != a.end()) {
-      // there is an extra message
-      printf("Additional information : %s\n",a.at("extra").get<std::string>().c_str());
-    }
+  }
+  if (a.find("extra") != a.end()) {
+    // there is an extra message
+    printf("\nAdditional information : %s\n",a.at("extra").get<std::string>().c_str());
   }
   printf("\n\n");
 
@@ -281,7 +281,7 @@ int main(int argc, char**argv)
       }
   };
 
-
+  const std::string scode = "ctbru1es";
   enum  optionIndex { UNKNOWN, CTB, HELP, TSTATUS, RSTATUS, RESET, FORCE};
   const option::Descriptor usage[] =
   {
@@ -326,7 +326,7 @@ int main(int argc, char**argv)
   for (int i = 0; i < parse.optionsCount(); ++i)
   {
     option::Option& opt = buffer[i];
-    printf("Argument #%d is ", i);
+    //printf("Argument #%d is ", i);
     switch (opt.index())
     {
       case HELP:
@@ -360,8 +360,14 @@ int main(int argc, char**argv)
         a=treset;
         break;
       case FORCE:
-        printf("main:: Enable the use of the Force\n");
-        force = true;
+        if (std::string(opt.arg) == scode)
+        {
+          printf("main:: Enable the use of the Force\n");
+          force = true;
+        } else {
+          printf("main:: The Force is weak in you. Please use the correct password with force mode.\n");
+          return 0;
+        }
         break;
       case UNKNOWN:
         // not possible because Arg::Unknown returns ARG_ILLEGAL

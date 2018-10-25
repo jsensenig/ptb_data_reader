@@ -15,7 +15,7 @@ INCLUDES = -I./
 
 CTB_SERVER = ctb_ctrl_server
 CTB_SERVER_SRCS = memory_utils.cc ctb_ctrl_server.cc
-CTB_CLIENT = ctb_ctrl
+CTB_CLIENT = ctb_control
 CTB_CLIENT_SRCS = ctb_ctrl_client.cc
 PRBS_CHECK = prbs_check
 PRBS_CHECK_SRCS = prbs_check.cc
