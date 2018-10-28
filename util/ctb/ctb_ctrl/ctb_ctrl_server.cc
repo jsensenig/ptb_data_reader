@@ -81,6 +81,9 @@ void session(tcp::socket &sock)
   {
 
     json msg, answer;
+    answer["status"] = "";
+    answer["message"] = "";
+    answer["extra"] = json(std::vector<std::string>());
     boost::system::error_code error;
 
     boost::asio::streambuf tcpmsg;
@@ -195,7 +198,7 @@ void read_register(json &answer,const uint32_t reg) {
     answer["message"] = "Failed to map memory to register. Contact CTB expert.";
     std::ostringstream msg;
     msg << "Register=" << reg << ", baseaddr="<< std::hex << CONFIG_BASEADDR<< std::dec << ", highaddr=" << std::hex << CONFIG_HIGHADDR << std::dec << ", ret="<<mapped_addr;
-    answer["extra"] = msg.str();
+    answer["extra"].push_back(msg.str());
   } else {
     printf("%s : Received pointer to config reg %u at %p\n",mtime(),reg, mapped_addr);
 
@@ -236,70 +239,157 @@ void dump_registers(json &answer)
   answer["message"] = json(regs);
 }
 
+void reset_ctb(json &answer)
+{
+  void * mmap_addr = NULL;
+  mmap_addr = map_phys_mem(GPIO_BASEADDR,GPIO_HIGHADDR);
+  uint32_t reg_val = 0x20;
+  write_reg32((uint32_t)mmap_addr + GPIO_CH0_OFFSET, reg_val);
+  // -- sleep for a millisecond
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  reg_val = 0x0;
+  write_reg32((uint32_t)mmap_addr + GPIO_CH0_OFFSET, reg_val);
+  // -- sleep for a bit to give the endpoint time to initialize
+  std::this_thread::sleep_for(std::chrono::milliseconds(700));
+  // -- Now check the endpoint status
+  read_timing_status(answer);
+  if (answer.at("status") == "OK") {
+    printf("%s : Timing status register after reset : [%X].\n",
+           mtime(),
+           answer.at("message").get<uint32_t>());
+  } else {
+    printf("%s : Failed to read timing status after reset. Return message : %s\n",mtime(),answer.at("message").get<std::string>().c_str());
+  }
+  if (mmap_addr)
+  {
+    unmap_phys_mem(mmap_addr,GPIO_BASEADDR,GPIO_HIGHADDR);
+  }
+
+}
+
+void apply_timing_reset(bool force, json &answer)
+{
+  // -- check the status of the timing.
+  json tmpj;
+  tmpj["extra"] = json(std::vector<std::string>());
+  read_timing_status(tmpj);
+  if (tmpj.at("status") == "OK")
+  {
+    uint32_t state = tmpj.at("message").get<uint32_t>();
+    if ((state >> 28) == 0x8)
+    {
+      answer["extra"].push_back("The CTB timing endpoint is already in a good state (0x8).");
+      // -- if the force is applied. Reset anyway
+      if (!force)
+      {
+        answer["status"] = "ERROR";
+        answer["message"] = "Refusing to reset CTB. Status is already 0x8.If you really want to do this use the 'force' option";
+        return;
+      } else {
+        answer["extra"].push_back("The Force is being used. Reset applied anyway.");
+        json tmp;
+        tmp["extra"] = json(std::vector<std::string>());
+        reset_ctb(tmp);
+        // -- pass the respective messages
+        answer["status"] = tmp.at("status");
+        answer["message"] = tmp.at("message");
+        if (tmp.at("extra").size() != 0)
+        {
+          // -- append any extra messages
+          answer["extra"].insert(answer.at("extra").end(),tmp.at("extra").begin(),tmp.at("extra").end());
+        }
+      }
+    } else {
+      // the board is not in a good state.
+      // don't care if force has been called
+      json tmp;
+      tmp["extra"] = json(std::vector<std::string>());
+      reset_ctb(tmp);
+      // -- pass the respective messages
+      answer["status"] = tmp.at("status");
+      answer["message"] = tmp.at("message");
+      if (tmp.at("extra").size() != 0)
+      {
+        // -- append any extra messages
+        answer["extra"].insert(answer.at("extra").end(),tmp.at("extra").begin(),tmp.at("extra").end());
+      }
+    }
+  } else {
+    // -- failed to query the timing status
+    // -- Return the error
+    answer["status"] = tmpj.at("status");
+    answer["message"] = tmpj.at("message");
+    if (tmpj.at("extra").size() != 0)
+    {
+      // -- append any extra messages
+      answer["extra"].insert(answer.at("extra").end(),tmpj.at("extra").begin(),tmpj.at("extra").end());
+    }
+
+  }
+}
+
+
 void reset_timing_status(json &answer, bool force) {
   printf("%s : Resetting timing state\n",mtime());
 
   // -- first check if the board is (or thinks it is ) running
   json dummy;
+  dummy["extra"] = json(std::vector<std::string>());
   read_register(dummy,0);
   uint32_t tmp_val = 0x0;
   if (dummy.at("status") == "OK") {
     tmp_val = dummy.at("message").get<uint32_t>();
-    if ((tmp_val & (0x1 << 31)) && (!force)) {
-      // -- a run is ongoing. Fail
-      printf("%s : Refusing to reset timing while CTB is taking data. The Force is weak on this request.",mtime());
-      answer["status"] = "ERROR";
-      answer["message"] = "Trying to reset timing while CTB is taking data. If you really want to do this use the 'force' command";
-      return;
-      // -- no run ongoing. Reset the endpoint
-    } else {
-      if (force)
-      {
+    if (tmp_val & (0x1 << 31)) {
+      // the CTB is taking data
+      if (force) {
+        // the force is being applied. Just reset regardless of anything else
         printf("%s : Forcing to reset timing while CTB is taking data. The Force is strong on this request.",mtime());
-        answer["extra"] = "Forcing reset regardless of CTB taking data.";
-      }
-      // -- check the status of the timing.
-      json tmpj;
-      read_timing_status(tmpj);
-      if (tmpj.at("status") == "OK")
-      {
-        uint32_t state = tmpj.at("message").get<uint32_t>();
-        if ((state >> 28) == 0x8)
-        {
-          std::string nmsg = "";
-          if (answer.find("extra") != answer.end())
-          {
-            nmsg = answer.at("extra").get<std::string>();
-          }
-          nmsg += " The CTB timing endpoint is already in a good state (0x8).";
-          answer["extra"] = nmsg;
-        }
-      }
-      void * mmap_addr = NULL;
-      mmap_addr = map_phys_mem(GPIO_BASEADDR,GPIO_HIGHADDR);
-      uint32_t reg_val = 0x20;
-      write_reg32((uint32_t)mmap_addr + GPIO_CH0_OFFSET, reg_val);
-      // -- sleep for a millisecond
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
-      reg_val = 0x0;
-      write_reg32((uint32_t)mmap_addr + GPIO_CH0_OFFSET, reg_val);
-      // -- sleep for a bit to give the endpoint time to initialize
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
-      // -- Now check the endpoint status
-      read_timing_status(answer);
-      if (answer.at("status") == "OK") {
-        printf("%s : Timing status register after reset : [%X].\n",
-               mtime(),
-               answer.at("message").get<uint32_t>());
-      } else {
-        printf("%s : Failed to read timing status after reset. Return message : %s\n",mtime(),answer.at("message").get<std::string>().c_str());
-      }
-      if (mmap_addr)
-      {
-        unmap_phys_mem(mmap_addr,GPIO_BASEADDR,GPIO_HIGHADDR);
-      }
+        answer["extra"].push_back("Forcing reset regardless of CTB taking data.");
+        apply_timing_reset(force, answer);
 
+      } else {
+        answer["status"] = "ERROR";
+        answer["message"] = "Refusing to apply reset while CTB is taking data. The Force is weak in you.";
+        answer["extra"].push_back("If you really want to reset the CTB use the 'force' option.");
+      }
+    } else {
+      // the CTB is not taking data
+      apply_timing_reset(force, answer);
     }
+//
+//
+//    if ((tmp_val & (0x1 << 31)) && (!force)) {
+//      // -- a run is ongoing. Fail
+//      printf("%s : Refusing to reset timing while CTB is taking data. The Force is weak on this request.",mtime());
+//      answer["status"] = "ERROR";
+//      answer["message"] = "Trying to reset timing while CTB is taking data. If you really want to do this use the 'force' command";
+//      return;
+//      // -- no run ongoing. Reset the endpoint
+//    } else {
+//      if (force)
+//      {
+//        printf("%s : Forcing to reset timing while CTB is taking data. The Force is strong on this request.",mtime());
+//        answer["extra"] = "Forcing reset regardless of CTB taking data.";
+//      }
+//      // -- check the status of the timing.
+//      json tmpj;
+//      read_timing_status(tmpj);
+//      if (tmpj.at("status") == "OK")
+//      {
+//        uint32_t state = tmpj.at("message").get<uint32_t>();
+//        if ((state >> 28) == 0x8)
+//        {
+//          std::string nmsg = "";
+//          if (answer.find("extra") != answer.end())
+//          {
+//            nmsg = answer.at("extra").get<std::string>();
+//          }
+//          nmsg += " The CTB timing endpoint is already in a good state (0x8).";
+//          answer["extra"] = nmsg;
+//        }
+//      }
+//
+//    }
   } else {
     // failed even to check register
     printf("%s : Failed to read CTB status. Message : %s\n",mtime(),dummy.at("message").get<std::string>().c_str());
@@ -307,7 +397,11 @@ void reset_timing_status(json &answer, bool force) {
     msg += dummy.at("message").get<std::string>();
     answer["message"] = msg;
     answer["status"] = dummy.at("status");
-    answer["extra"] = dummy.at("extra");
+    if (dummy.at("extra").size() != 0)
+    {
+      answer["extra"].insert(answer.at("extra").end(),dummy.at("extra").begin(),dummy.at("extra").end());
+      //answer["extra"] = dummy.at("extra");
+    }
   }
 }
 

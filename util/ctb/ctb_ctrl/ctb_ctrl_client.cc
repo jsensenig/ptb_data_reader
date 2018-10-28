@@ -122,11 +122,20 @@ void check_timing_status()
   } else {
     printf("%s : Failed to read timing endpoint status.\n\n",mtime());
     printf("Message : %s\n",a.at("message").get<std::string>().c_str());
-    if (a.find("extra") != a.end()) {
+  }
+  if (a.find("extra") != a.end()) {
+    if (a.at("extra").size() > 0)
+    {
       // there is an extra message
-      printf("Additional information : %s\n",a.at("extra").get<std::string>().c_str());
+      printf("Additional information : \n");
+      std::vector<std::string> aa = a.at("extra").get<std::vector<std::string> >();
+      for (size_t i = 0; i < aa.size(); i++)
+      {
+        printf("  %zu : %s\n",i+1,aa.at(i).c_str());
+      }
     }
   }
+
   printf("\n\n");
 }
 
@@ -186,11 +195,24 @@ void check_registers()
   } else {
     printf("%s : Failed to read configuration registers.\n\n",mtime());
     printf("Message : %s\n",a.at("message").get<std::string>().c_str());
-    if (a.find("extra") != a.end()) {
+//    if (a.find("extra") != a.end()) {
+//      // there is an extra message
+//      printf("Additional information : %s\n",a.at("extra").get<std::string>().c_str());
+//    }
+  }
+  if (a.find("extra") != a.end()) {
+    if (a.at("extra").size() > 0)
+    {
       // there is an extra message
-      printf("Additional information : %s\n",a.at("extra").get<std::string>().c_str());
+      printf("Additional information : \n");
+      std::vector<std::string> aa = a.at("extra").get<std::vector<std::string> >();
+      for (size_t i = 0; i < aa.size(); i++)
+      {
+        printf("  %zu : %s\n",i+1,aa.at(i).c_str());
+      }
     }
   }
+
   printf("\n\n");
 
 }
@@ -223,10 +245,23 @@ void reset_endpoint(bool force)
     printf("%s : Failed to reset the CTB timing endpoint.\n\n",mtime());
     printf("Message : %s\n",a.at("message").get<std::string>().c_str());
   }
+//  if (a.find("extra") != a.end()) {
+//    // there is an extra message
+//    printf("\nAdditional information : %s\n",a.at("extra").get<std::string>().c_str());
+//  }
   if (a.find("extra") != a.end()) {
-    // there is an extra message
-    printf("\nAdditional information : %s\n",a.at("extra").get<std::string>().c_str());
+    if (a.at("extra").size() > 0)
+    {
+      // there is an extra message
+      printf("Additional information : \n");
+      std::vector<std::string> aa = a.at("extra").get<std::vector<std::string> >();
+      for (size_t i = 0; i < aa.size(); i++)
+      {
+        printf("  %zu : %s\n",i+1,aa.at(i).c_str());
+      }
+    }
   }
+
   printf("\n\n");
 
 }
