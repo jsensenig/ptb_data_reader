@@ -1,0 +1,15 @@
+[Unit]
+Description=CTB register control
+Documentation=man:ptb(1)
+Wants=network.target
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/ptbreader/bin/ctb_ctrl_server
+Restart=on-failure
+;PIDFile=/var/run/ptb.pid
+
+[Install]
+WantedBy=multi-user.target
+
