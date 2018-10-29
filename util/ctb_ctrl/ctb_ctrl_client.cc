@@ -123,7 +123,7 @@ void check_timing_status()
     if (a.at("extra").size() > 0)
     {
       // there is an extra message
-      printf("Additional information : \n");
+      printf("\nAdditional information : \n");
       std::vector<std::string> aa = a.at("extra").get<std::vector<std::string> >();
       for (size_t i = 0; i < aa.size(); i++)
       {
@@ -196,7 +196,7 @@ void check_registers()
     if (a.at("extra").size() > 0)
     {
       // there is an extra message
-      printf("Additional information : \n");
+      printf("\nAdditional information : \n");
       std::vector<std::string> aa = a.at("extra").get<std::vector<std::string> >();
       for (size_t i = 0; i < aa.size(); i++)
       {
@@ -241,7 +241,7 @@ void reset_endpoint(bool force)
     if (a.at("extra").size() > 0)
     {
       // there is an extra message
-      printf("Additional information : \n");
+      printf("\nAdditional information : \n");
       std::vector<std::string> aa = a.at("extra").get<std::vector<std::string> >();
       for (size_t i = 0; i < aa.size(); i++)
       {
