@@ -7,13 +7,6 @@
 // -- STD includes
 #include <ctime>
 #include <algorithm>
-
-#include "json.hpp"
-#include "optionparser.h"
-
-//FIXME: Add header to parse command line options
-//#include ""
-
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -21,6 +14,9 @@
 #include <thread>
 
 #include <boost/asio.hpp>
+
+#include "json.hpp"
+#include "optionparser.h"
 
 using json = nlohmann::json;
 using boost::asio::ip::tcp;
@@ -35,7 +31,6 @@ using boost::asio::ip::tcp;
 // -- global variable that holds the time
 char g_time[128];
 std::string g_ctb_ip = "10.73.138.28";
-//std::string g_ctb_ip = "128.91.41.224";
 const char *g_ctb_port = "8990";
 
 char* mtime()
@@ -123,7 +118,8 @@ void check_timing_status()
     printf("%s : Failed to read timing endpoint status.\n\n",mtime());
     printf("Message : %s\n",a.at("message").get<std::string>().c_str());
   }
-  if (a.find("extra") != a.end()) {
+  if (a.find("extra") != a.end())
+  {
     if (a.at("extra").size() > 0)
     {
       // there is an extra message
@@ -195,10 +191,6 @@ void check_registers()
   } else {
     printf("%s : Failed to read configuration registers.\n\n",mtime());
     printf("Message : %s\n",a.at("message").get<std::string>().c_str());
-//    if (a.find("extra") != a.end()) {
-//      // there is an extra message
-//      printf("Additional information : %s\n",a.at("extra").get<std::string>().c_str());
-//    }
   }
   if (a.find("extra") != a.end()) {
     if (a.at("extra").size() > 0)
@@ -245,10 +237,6 @@ void reset_endpoint(bool force)
     printf("%s : Failed to reset the CTB timing endpoint.\n\n",mtime());
     printf("Message : %s\n",a.at("message").get<std::string>().c_str());
   }
-//  if (a.find("extra") != a.end()) {
-//    // there is an extra message
-//    printf("\nAdditional information : %s\n",a.at("extra").get<std::string>().c_str());
-//  }
   if (a.find("extra") != a.end()) {
     if (a.at("extra").size() > 0)
     {
