@@ -2,15 +2,37 @@
 ## Simple Makefile for compiling GPIO setup test application
 ########################################################################
 CC = g++
+UNAME = $(shell uname)
+MACHINE = $(shell uname -m)
 
-DEF_CFLAGS = -std=c++11 -Wall -O2
+DEF_CFLAGS = -std=c++11 -Wall -O2 
 
-BOOST_INCS = 
-BOOST_LIBS = -lboost_system -lboost_thread -pthread
+
+BOOST_INCS_OSX = -I/usr/local/boost/1.66.00/include
+BOOST_LIBS_OSX = -L/usr/local/boost/1.66.00/lib -lboost_system -lboost_thread -pthread
+
+BOOST_INCS_LINUX = 
+BOOST_LIBS_LINUX = -lboost_system -lboost_thread -pthread
+
+ifeq ($(UNAME),Darwin)
+	BOOST_INCS = $(BOOST_INCS_OSX)
+	BOOST_LIBS = $(BOOST_LIBS_OSX)
+else
+	BOOST_INCS = $(BOOST_INCS_LINUX)
+	BOOST_LIBS = $(BOOST_LIBS_LINUX)
+endif
+
+ifneq ($(MACHINE),armv7l)
+	DEFEXTRA = -m32
+else
+	DEFEXTRA = 
+endif
+
 
 #Compiled for Microzed
 #CFLAGS = -g $(DEF_CFLAGS)
-CFLAGS = $(DEF_CFLAGS)
+CFLAGS = $(DEF_CFLAGS) $(DEFEXTRA)
+
 INCLUDES = -I./
 
 CTB_SERVER = ctb_ctrl_server
@@ -33,10 +55,10 @@ client:$(CTB_CLIENT)
 
 
 $(CTB_CLIENT): $(CTB_CLIENT_SRCS)
-	$(CC) $(CFLAGS) $(INCLUDES) $(BOOST_INCS)-o $@ $^ $(BOOST_LIBS) -pthread
+	$(CC) $(CFLAGS) $(INCLUDES) $(BOOST_INCS) -o $@ $^ $(BOOST_LIBS) -pthread
 
 $(CTB_SERVER): $(CTB_SERVER_SRCS)
-	$(CC) $(CFLAGS) $(INCLUDES) $(BOOST_INCS)-o $@ $^ $(BOOST_LIBS) 
+	$(CC) $(CFLAGS) $(INCLUDES) $(BOOST_INCS) -o $@ $^ $(BOOST_LIBS) 
 
 $(PRBS_CHECK): $(PRBS_CHECK_SRCS)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ 
