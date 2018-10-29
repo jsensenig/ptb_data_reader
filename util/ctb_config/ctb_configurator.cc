@@ -1,3 +1,9 @@
+/**
+ * @author Nuno Barros
+ * @name ctb_configurator
+ * @brief This tool generates a new configuration based on an existing template.
+ */
+
 #include <iostream>
 #include <fstream>
 #include <cinttypes>
