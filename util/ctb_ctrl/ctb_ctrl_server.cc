@@ -55,6 +55,8 @@ void server(boost::asio::io_service& io_service, unsigned short port);
 void process_request(const json &req, json &answer);
 void read_register(json &answer,const uint32_t reg);
 void read_timing_status(json &answer);
+void apply_reset_ctb_timing(json &answer);
+void apply_timing_reset(bool force, json &answer);
 void reset_timing_status(json &answer, bool force);
 void dump_registers(json &answer);
 
@@ -239,7 +241,7 @@ void dump_registers(json &answer)
   answer["message"] = json(regs);
 }
 
-void reset_ctb(json &answer)
+void apply_reset_ctb_timing(json &answer)
 {
   void * mmap_addr = NULL;
   mmap_addr = map_phys_mem(GPIO_BASEADDR,GPIO_HIGHADDR);
@@ -289,7 +291,7 @@ void apply_timing_reset(bool force, json &answer)
         answer["extra"].push_back("The Force is being used. Reset applied anyway.");
         json tmp;
         tmp["extra"] = json(std::vector<std::string>());
-        reset_ctb(tmp);
+        apply_reset_ctb_timing(tmp);
         // -- pass the respective messages
         answer["status"] = tmp.at("status");
         answer["message"] = tmp.at("message");
@@ -304,7 +306,7 @@ void apply_timing_reset(bool force, json &answer)
       // don't care if force has been called
       json tmp;
       tmp["extra"] = json(std::vector<std::string>());
-      reset_ctb(tmp);
+      apply_reset_ctb_timing(tmp);
       // -- pass the respective messages
       answer["status"] = tmp.at("status");
       answer["message"] = tmp.at("message");

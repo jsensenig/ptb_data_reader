@@ -22,11 +22,11 @@ else
 	BOOST_LIBS = $(BOOST_LIBS_LINUX)
 endif
 
-ifneq ($(MACHINE),armv7l)
-	DEFEXTRA = -m32
-else
-	DEFEXTRA = 
-endif
+#ifeq ($(MACHINE),armv7l)
+#	DEFEXTRA = -m32
+#else
+#	DEFEXTRA = 
+#endif
 
 
 #Compiled for Microzed
