@@ -126,8 +126,8 @@
 
       // Get the delays
       std::vector<uint32_t> delays = bdoc.at("delays").get<std::vector<uint32_t>>();
-      std::vector<uint32_t> spare_delays;
-      std::vector<uint32_t> beam_delays;
+      std::vector<uint32_t> spare_delays(NSPARE_CH);
+      std::vector<uint32_t> beam_delays(NBEAM_CH);
       
 
       // -- Grab the channel mask for the beam inputs
@@ -164,10 +164,10 @@
       }
 
       // -- Check that the mask is not bigger than the max allowed by the number of channels
-      if (((0x1 <<NBEAM_CH+NSPARE_CH)-1) < ch_mask) {
+      if (((0x1 <<(NBEAM_CH+NSPARE_CH))-1) < ch_mask) {
         std::ostringstream msg;
         msg << "Beam channel mask larger than maximum possible (" << std::hex << ch_mask << std::dec
-        << "vs " << std::hex << ((0x1 <<NBEAM_CH+NSPARE_CH)-1) << std::dec << ").";
+	    << "vs " << std::hex << ((0x1 <<(NBEAM_CH+NSPARE_CH))-1) << std::dec << ").";
         Log(error,"%s", msg.str().c_str());
         json tobj;
         tobj["type"] = "error";
@@ -177,7 +177,7 @@
         return;
       }
 
-      if ((delays.size() != NBEAM_CH) && (delays.size() != (NBEAM_CH+NSPARES_CH))) {
+      if ((delays.size() != NBEAM_CH) && (delays.size() != (NBEAM_CH+NSPARE_CH))) {
         std::ostringstream msg;
         msg << "Number of beam delays (" << delays.size() << ") doesn't match number of beam channels (" << NBEAM_CH << " or " << NBEAM_CH+NSPARE_CH<<  ")";
         Log(error,"%s", msg.str().c_str());
@@ -200,11 +200,13 @@
       /// values
 
       if (delays.size() == NSPARE_CH+NBEAM_CH) {
-        // Newer format...we have all 16 inputs in the delays
-        vector<uint32_t>::const_iterator last = delays.begin() + NBEAM_CH;
-        vector<uint32_t>::const_iterator first = delays.begin()+ NBEAM_CH + 1;
-        beam_delays(delays.begin(),last);
-        spare_delays(first,delays.end());
+	std::copy(delays.begin(),delays.begin()+ NBEAM_CH + 1,std::back_inserter(beam_delays));
+	std::copy(delays.begin()+ NBEAM_CH + 1,delays.begin()+ NBEAM_CH + NSPARE_CH + 1, std::back_inserter(spare_delays));
+	// Newer format...we have all 16 inputs in the delays
+        //vector<uint32_t>::const_iterator last = delays.begin() + NBEAM_CH;
+        //vector<uint32_t>::const_iterator first = delays.begin()+ NBEAM_CH + 1;
+        //beam_delays = std::vector<uint32_t>(delays.begin(),last);
+        //spare_delays = std::vector<uint32_t>(first,delays.end());
       } else if (delays.size() == NBEAM_CH) {
         // legacy mode. Drop a warning so we know what happened
         // Add no delays in the spare channels
@@ -214,6 +216,15 @@
         spare_delays = std::vector<uint32_t>(NSPARE_CH,0);
       }
 
+      Log(info,"Beam delays : ");
+      for (size_t i = 0; i < beam_delays.size(); i++) {
+	Log(info," CH %u : %u",i,beam_delays[i]);
+      }
+
+      Log(info,"Spare delays : ");
+      for (size_t i = 0; i < spare_delays.size(); i++) {
+	Log(info," CH %u : %u",i,spare_delays[i]);
+      }
 
       // Commit the masks to the registers
       /// 1-3-2019 : NFB : Increased from 9 to 16. Register is used exclusively for this
