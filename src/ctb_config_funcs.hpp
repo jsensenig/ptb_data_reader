@@ -3,6 +3,7 @@
   #define NBEAM_CH 9
   #define NPDS_CH 24
   #define NCRT_CH 32
+  #define NSPARE_CH 7
 
     void board_manager::configure_ctb(const json& doc, json& answers, bool &has_error) {
       has_error = false;
@@ -125,7 +126,10 @@
 
       // Get the delays
       std::vector<uint32_t> delays = bdoc.at("delays").get<std::vector<uint32_t>>();
+      std::vector<uint32_t> spare_delays;
+      std::vector<uint32_t> beam_delays;
       
+
       // -- Grab the channel mask for the beam inputs
       // std::string s_channelmask = bdoc.at("channel_mask").get<std::string>();
       // uint32_t ch_mask = (uint32_t)strtoul(s_channelmask.c_str(),NULL,0);
@@ -160,10 +164,10 @@
       }
 
       // -- Check that the mask is not bigger than the max allowed by the number of channels
-      if (((0x1 <<NBEAM_CH)-1) < ch_mask) {
+      if (((0x1 <<NBEAM_CH+NSPARE_CH)-1) < ch_mask) {
         std::ostringstream msg;
         msg << "Beam channel mask larger than maximum possible (" << std::hex << ch_mask << std::dec
-        << "vs " << std::hex << ((0x1 <<NBEAM_CH)-1) << std::dec << ").";
+        << "vs " << std::hex << ((0x1 <<NBEAM_CH+NSPARE_CH)-1) << std::dec << ").";
         Log(error,"%s", msg.str().c_str());
         json tobj;
         tobj["type"] = "error";
@@ -173,9 +177,9 @@
         return;
       }
 
-      if (delays.size() != NBEAM_CH) {
+      if ((delays.size() != NBEAM_CH) && (delays.size() != (NBEAM_CH+NSPARES_CH))) {
         std::ostringstream msg;
-        msg << "Number of beam delays (" << delays.size() << ") doesn't match number of beam channels (" << NPDS_CH << ")";
+        msg << "Number of beam delays (" << delays.size() << ") doesn't match number of beam channels (" << NBEAM_CH << " or " << NBEAM_CH+NSPARE_CH<<  ")";
         Log(error,"%s", msg.str().c_str());
         json tobj;
         tobj["type"] = "error";
@@ -185,10 +189,36 @@
         return;
       }
 
+      /// -- Note that if it arrived here, the delays array has either 9 or 16 inputs.
+      ///    Everything should go well from here on
+
+      /// NFB: 03-01-2019 : Adding a protection for backwards compatibility.
+      /// The delays array is split in the legacy 9 beam inputs and the newly routed
+      /// 7 TTL spares. If the size of the input array is only 9, the spares
+      /// are all set to a zero delay.
+      /// If all 16 inputs are passed, the inputs are all set to the corresponding
+      /// values
+
+      if (delays.size() == NSPARE_CH+NBEAM_CH) {
+        // Newer format...we have all 16 inputs in the delays
+        vector<uint32_t>::const_iterator last = delays.begin() + NBEAM_CH;
+        vector<uint32_t>::const_iterator first = delays.begin()+ NBEAM_CH + 1;
+        beam_delays(delays.begin(),last);
+        spare_delays(first,delays.end());
+      } else if (delays.size() == NBEAM_CH) {
+        // legacy mode. Drop a warning so we know what happened
+        // Add no delays in the spare channels
+        Log(warning,"Using a configuration in legacy mode.");
+        Log(warning,"Only %u inputs found in delay array. All others considered as 0.",delays.size());
+        beam_delays = delays;
+        spare_delays = std::vector<uint32_t>(NSPARE_CH,0);
+      }
 
 
       // Commit the masks to the registers
-      set_bit_range_register(3,0,9,ch_mask);
+      /// 1-3-2019 : NFB : Increased from 9 to 16. Register is used exclusively for this
+      ///                  so there should be no conflict
+      set_bit_range_register(3,0,16,ch_mask);
       set_bit_range_register(24,0,6,reshape_len);
 
       // -- Now load the beam LLT configuration
@@ -309,19 +339,39 @@
       //       cause troubles down the line if one wants to expand
       Log(debug,"Setting beam delays...");    
       const uint32_t dbits = 7;
-      const size_t n_regs = static_cast<size_t>(delays.size()/4);
+      //const size_t n_regs = static_cast<size_t>(delays.size()/4);
+      const size_t n_regs = 3; /// NFB: This was made a constant to keep compatibility
+       // the new inputs will go into entirely new delay configurations
+
       // Beam delays 9ch * 7b = 63b --> 3 regs
+      // For new inputs : 7 new inputs ==> 7*7 = 49 bits -->
       for(size_t i=0; i<n_regs; i++) {
 
         int j = i * 4;
         uint32_t reg = i + 21;
         //uint32_t dval = (delays[j+3] << dbits*3) | (delays[j+2] << dbits*2) | (delays[j+1] << dbits) | delays[j];
-        uint32_t dval = ((delays[j+3] & 0x7F) << dbits*3) | ((delays[j+2] & 0x7F) << dbits*2) | ((delays[j+1] & 0x7F) << dbits) | (delays[j] & 0x7F);
+        uint32_t dval = ((beam_delays[j+3] & 0x7F) << dbits*3) | ((beam_delays[j+2] & 0x7F) << dbits*2) | ((beam_delays[j+1] & 0x7F) << dbits) | (beam_delays[j] & 0x7F);
         Log(debug,"Setting reg %u to [%08X]",reg,dval);
         set_bit_range_register(reg,0,dbits*4,dval);
       }
       // -- Set the last register that sits alone 
-      set_bit_range_register(23,0,dbits,delays[delays.size()-1]);
+      set_bit_range_register(23,0,dbits,beam_delays[beam_delays.size()-1]);
+
+      /// -- Now add the registers for the spare delays
+      /// We have 7 of them, so 4 go into the first register, and 3 into the second
+      uint32_t val_reg_lsb = 0x0;
+      for (int i = 3; i >= 0; i--) {
+        val_reg_lsb |= (spare_delays[i] & 0x7F) << dbits*i;
+      }
+      Log(debug,"Setting reg %u to [%08X]",139,val_reg_lsb);
+      set_bit_range_register(139,0,dbits*4,val_reg_lsb);
+      // -- now the MSB
+      uint32_t val_reg_msb = 0x0;
+      for (int i = 2; i >= 0; i--) {
+        val_reg_msb |= (spare_delays[i+4] & 0x7F) << dbits*i;
+      }
+      set_bit_range_register(140,0,dbits*3,val_reg_msb);
+      Log(debug,"Setting reg %u to [%08X]",140,val_reg_msb);
       Log(debug,"Done with the beam config.");
     } //Beam config
 
