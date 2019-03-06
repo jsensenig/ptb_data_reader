@@ -166,8 +166,9 @@
       // -- Check that the mask is not bigger than the max allowed by the number of channels
       if (((0x1 <<(NBEAM_CH+NSPARE_CH))-1) < ch_mask) {
         std::ostringstream msg;
-        msg << "Beam channel mask larger than maximum possible (" << std::hex << ch_mask << std::dec
-	    << "vs " << std::hex << ((0x1 <<(NBEAM_CH+NSPARE_CH))-1) << std::dec << ").";
+        msg << "Beam channel mask larger than maximum possible (" 
+	    << std::hex << ((0x1 <<(NBEAM_CH+NSPARE_CH))-1)  << std::dec 
+	    << " vs " << std::hex << ch_mask << std::dec  << ").\n NBEAM_CH : " << NBEAM_CH << ", NSPARE_CH : " << NSPARE_CH;
         Log(error,"%s", msg.str().c_str());
         json tobj;
         tobj["type"] = "error";
