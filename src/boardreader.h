@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <thread>
 #if defined(BOOST)
-#include <boost/lockfree/spsc_queue.hpp>
+//FIXME replace with folly queue
 #elif defined(LOCKFREE)
 #include "atomicops.h"
 #include "readerwriterqueue.h"
@@ -28,7 +28,9 @@
 
 #include "util.h"
 #include "pothos_zynq_dma_driver.h"
+#include "ProducerConsumerQueue.h"
 
+#include "zmq.hpp"
 #include "content.h"
 #include "json.hpp"
 #include <atomic>
@@ -71,22 +73,7 @@ namespace ptb {
         ready_ = ready;
       }
 
-      const std::string& get_tcp_host() const {
-        return tcp_host_;
-      }
-
-      void set_tcp_host(const std::string& tcpHost) {
-        tcp_host_ = tcpHost;
-      }
-
-      unsigned short get_tcp_port() const {
-        return tcp_port_;
-      }
-
-      void set_tcp_port(unsigned short tcpPort) {
-        tcp_port_ = tcpPort;
-      }
-
+      void init_data_connection();
      /**
        * Stop the client threads without touching the mutex.
        * Important in the case that one wants to delete the object
@@ -110,17 +97,6 @@ namespace ptb {
        * Resets the buffers. The run should already be stopped.
        */
       void reset_buffers();
-
-      /** Start the connection to the board reader **/
-      void init_data_connection(bool force = false);
-      void close_data_connection();
-
-      bool test_socket();
-
-      bool get_data_connection_valid() const {
-        // This might not be necessarily the best option
-        return (data_socket_ != NULL);
-      }
 
       // -- Statistics methods:
       uint32_t get_n_sent_frags() {return num_eth_fragments_;};
@@ -147,13 +123,6 @@ namespace ptb {
       void init_dma();
     private:
 
-      // -- Structures for data socket connection
-
-      unsigned short  tcp_port_;
-      std::string     tcp_host_;
-
-      TCPSocket *     data_socket_;
-
       std::thread     *client_thread_collector_;
       std::thread     *client_thread_transmitter_;
 
@@ -172,15 +141,19 @@ namespace ptb {
       uint32_t buff_addr_[num_buffs_];
 
 #if defined(BOOST)
-      boost::lockfree::spsc_queue<ptb::content::buffer_t, boost::lockfree::capacity<num_buffs_> > buffer_queue_;
+      //boost::lockfree::spsc_queue<ptb::content::buffer_t, boost::lockfree::capacity<num_buffs_> > buffer_queue_;
 #elif defined(LOCKFREE)
       moodycamel::ReaderWriterQueue<uint32_t*> buffer_queue_;
 #else
       std::queue<uint32_t*> buffer_queue_;
 #endif
 
+      folly::ProducerConsumerQueue<ptb::content::buffer_t> buffer_queue_{100000};
 
       bool dma_initialized_;
+
+      zmq::context_t ctx_;
+      zmq::socket_t sock_;
 
       /// -- these are controlled through the weak locks
       /// for more information see:

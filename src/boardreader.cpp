@@ -8,7 +8,6 @@
 #include "boardreader.h"
 
 #include "Logger.h"
-#include "PracticalSocket.h"
 #include "util.h"
 #include "ptb_registers.h"
 
@@ -41,15 +40,13 @@ using namespace ptb;
 //      and use the respective
 
 board_reader::board_reader() :
-    tcp_port_(0), tcp_host_(""),
-    data_socket_(nullptr),
     client_thread_collector_(0),
     client_thread_transmitter_(0),
     ready_(false),
     s2mm(nullptr),
     dma_initialized_(false),
     error_state_(false),
-
+	sock_(ctx_, zmq::socket_type::pub),
     reset_dma_engine_(false),
     keep_transmitting_(true),
     keep_collecting_(true),
@@ -144,6 +141,9 @@ void board_reader::stop_data_taking() {
   Log(info,"Resetting existing buffers");
   reset_buffers();
 
+  // Close zmq connection
+  sock_.close();
+
   Log(info,"Data taking stopped.");
 }
 
@@ -195,140 +195,29 @@ void board_reader::reset_buffers() {
   Log(warning,"Resetting the software buffers.");
   uint32_t counter = 0;
 
-  while(buffer_queue_.pop()) {
+  while(!buffer_queue_.isEmpty()) {
+	buffer_queue_.popFront();
     counter++;
   }
   Log(info,"Popped %u entries from the buffer queue.",counter);
 }
 
-// Only does one thing and that is killing the data connection.
-void board_reader::close_data_connection() {
-  bool socket_good = test_socket();
-  // only call for delete if the socket is good
-  if ((data_socket_ != nullptr) && socket_good) delete data_socket_;
-  data_socket_ = nullptr;
-  ready_ = false;
-}
-
-bool board_reader::test_socket() {
-  // -- test if the socket yields something usable
-  bool socket_good = true;
-  try {
-    data_socket_->getForeignPort();
-  }
-  catch(...) {
-    // if an exception is caught here, then the socket is no longer good.
-    socket_good = false;
-  }
-  return socket_good;
-}
-
 /// -- This is one of the main calls from the manager.
 /// NOTE: Any state reset should the done here
-void board_reader::init_data_connection(bool force) {
+void board_reader::init_data_connection() {
   // -- reset the state machine
 
   //-- If a connection exists, assume it is correct and continue to use it
   // NOTE: A ghost connection can exist
   // Try first if the connection is good
-  if (data_socket_ != nullptr) {
-    bool socket_good = test_socket();
-
-    if (socket_good) {
-      if (force) {
-        Log(warning,"Destroying existing socket!");
-        json obj;
-        obj["type"] = "warning";
-        obj["message"] = "Stale data socket found. Destroying existing socket!";
-        feedback_messages_.push_back(obj);
-        delete data_socket_;
-        data_socket_ = nullptr;
-      } else {
-        Log(info,"Reusing existing connection.");
-        return;
-      }
-    }
+  try {
+    sock_.bind("inproc://test");
   }
-
-  // Check if the server data is set up, and compute
-  if (tcp_host_ != "" && tcp_port_ != 0) {
-
-    try{
-      Log(debug, "Opening socket connection : %s : %hu",tcp_host_.c_str(),tcp_port_ );
-      data_socket_ = new TCPSocket(tcp_host_.c_str(),tcp_port_);
-
-      if (data_socket_ == nullptr) {
-        Log(error,"Unable to establish the client socket. Failing." );
-        json obj;
-        obj["type"] = "error";
-        obj["message"] = "Unable to establish the client socket";
-        feedback_messages_.push_back(obj);
-        error_state_.store(true);
-        ready_ = false;
-      }
-      // Otherwise just tell we're ready and start waiting for data.
-      ready_ = true;
-
-    }
-    // -- Catch and convert the exceptions into meaningful returnable messages
-    catch(SocketException &e) {
-      Log(error,"Socket exception caught : %s",e.what() );
-      json obj;
-      obj["type"] = "error";
-      std::string emsg = "Socket exception caught creating data connection : ";
-      emsg += e.what();
-      obj["message"] =  emsg;
-      feedback_messages_.push_back(obj);
-      error_state_.store(true,std::memory_order_relaxed);
-      ready_ = false;
-      if (data_socket_) delete data_socket_;
-      data_socket_ = nullptr;
-    }
-    catch(std::exception &e) {
-      ready_ = false;
-      if (data_socket_) delete data_socket_;
-      data_socket_ = nullptr;
-      Log(error,"STD exception caught : %s",e.what() );
-      json obj;
-      obj["type"] = "error";
-      std::string emsg = "STL exception caught creating data connection : ";
-      emsg += e.what();
-      obj["message"] =  emsg;
-      feedback_messages_.push_back(obj);
-      error_state_.store(true,std::memory_order_relaxed);
-    }
-    catch(...) {
-      ready_ = false;
-      if (data_socket_) delete data_socket_;
-      data_socket_ = nullptr;
-      Log(error,"Unknown exception caught." );
-      json obj;
-      obj["type"] = "error";
-      obj["message"] = "Unknown exception caught creating data connection";
-      feedback_messages_.push_back(obj);
-      error_state_.store(true,std::memory_order_relaxed);
-    }
-  } else {
-    Log(error,"Calling to start connection without defining connection parameters." );
-    json obj;
-    obj["type"] = "error";
-    obj["message"] = "Calling to start connection without defining connection parameters";
-    feedback_messages_.push_back(obj);
-    error_state_.store(true,std::memory_order_relaxed);
-
-    ready_ = false;
-    if (data_socket_) delete data_socket_;
-    data_socket_ = nullptr;
+  catch(...) {
+	  ready_ = false;
   }
-
-  if (error_state_.load(std::memory_order_acquire)) {
-    Log(error,"Data connection failed to be established. See previous messages.");
-  } else {
-    Log(debug,"Connection opened successfully");
-  }
-
+  ready_ = true;
 }
-
 
 void board_reader::data_collector() {
   Log(info, "Starting data collector");
@@ -396,7 +285,7 @@ void board_reader::data_collector() {
 
     //Log(verbose,"Acquired %u (%u bytes) on %u iterations",dma_buffer.handle,dma_buffer.len,counter);
     dma_buffer.len = len;
-    buffer_queue_.push(dma_buffer);
+    buffer_queue_.write(dma_buffer);
   }
   Log(info,"Stopping the data collection");
 }
@@ -620,12 +509,17 @@ void board_reader::data_transmitter() {
 
 
     // -- Pop a buffer
-    if (!buffer_queue_.pop(dma_buffer)) {
+    // FIXME replace with folly queue
+    //if (!buffer_queue_.pop(dma_buffer)) {
+    if(buffer_queue_.isEmpty()) {
       // -- should some sort of wait be put here?
       // Might hurt since it will require some sort of mutex
       std::this_thread::sleep_for (std::chrono::microseconds(10));
       continue;
     }
+    // Copies data from buffer, but since it is only a handle
+    // to data in memory not much overhead is created
+    buffer_queue_.read(dma_buffer);
 
     // -- at this point there is a buffer available
     // Assign the size to the header
@@ -706,106 +600,55 @@ void board_reader::data_transmitter() {
     }
 
     // -- Send the data
-    try {
-      //Log(debug,"%X",eth_buffer[0]);
-      n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
-      n_u32_words = n_bytes_sent/sizeof(uint32_t);
+    // add words to the queue here
+    n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
 
-      data_socket_->send(eth_buffer,n_bytes_sent);
+    sock_.send(zmq::buffer(eth_buffer,n_bytes_sent));
 
+
+    n_u32_words = n_bytes_sent/sizeof(uint32_t);
       //Log(debug,"Releasing buffer %u",dma_buffer.handle);
       // -- Do a copy of the data
       // -- release the memory buffer
-      pzdud_release(s2mm, dma_buffer.handle, 0);
+    pzdud_release(s2mm, dma_buffer.handle, 0);
 
-      // -- NFB -- Copy the sent buffer to local cache
-      // FIXME Remove this once the crash on BR is debugged
-      debug_eth_buffer.nbytes = n_bytes_sent;
-      debug_eth_buffer.nentries = n_u32_words;
-      std::memcpy(&(debug_eth_buffer.data[0]),&eth_buffer,n_bytes_sent);
+    bytes_sent_ += n_bytes_sent;
+    num_eth_fragments_++;
 
-      global_eth_pos += (n_u32_words+4);
-      // add 4 bytes of padding just to make sure that there are no overlaps
-      // for occasional small packets troubles could happen.
-      //if ((global_eth_pos+(4*n_u32_words)) > eth_buffer_size_u32_) {
-      // if there is less than 4kb at the end of the global buffer move back to the beggining
-      // don't use the last 4kb of the global buffer
-      // if there are less than 1024 (0x400)positions available in the global buffer
-      // move back to the beginning
-      if ((global_eth_pos+0x400) > eth_buffer_size_u32_) {
-      // reset the pointer to the beginning
-        global_eth_pos = 0;
-      }
-
-      bytes_sent_ += n_bytes_sent;
-      num_eth_fragments_++;
-    }
-    catch(SocketException &e) {
-      Log(error,"Socket exception : %s",e.what() );
-      error_state_.store(true, std::memory_order_relaxed);
-      std::string err_msg;
-      err_msg = "Data socket exception [";
-      std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-      std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-      std::tm now_tm = *std::localtime(&now_c);
-      char date[128];
-      strftime(date, sizeof(date), "%A %c", &now_tm);
-      err_msg += date;
-      err_msg += "] : ";
-      err_msg += e.what();
-      json obj;
-      obj["type"] = "error";
-      obj["message"] = err_msg;
-      feedback_messages_.push_back(obj);
-      keep_collecting_.store(false,std::memory_order_relaxed);
-      keep_transmitting_.store(false,std::memory_order_relaxed);
-      // -- dump the previous eth package to disk
-      //FIXME Remove this once the issue with the BR is sorted out
-      char fname[128];
-      strftime(fname, sizeof(fname), "ctb_eth_dump_%Y%m%d_%H%M%S.txt", &now_tm);
-      Log(warning,"Writing ethernet cache to file : %s. It has %u entries",fname,debug_eth_buffer.nentries);
-      std::ofstream dfout(fname);
-      for (size_t i = 0; i < debug_eth_buffer.nentries; i++) {
-        dfout << std::hex << debug_eth_buffer.data[i] ;
-        if (!(i%4)) dfout << std::dec << "\n";
-      }
-      dfout << '\n';
-      dfout.close();
-    }
-    catch(...) {
-      Log(error,"Unknown exception caught sending data");
-      error_state_.store(true, std::memory_order_relaxed);
-      std::string err_msg;
-      err_msg = "Unknown exception [";
-      std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-      std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-      std::tm now_tm = *std::localtime(&now_c);
-      char date[128];
-      strftime(date, sizeof(date), "%A %c", &now_tm);
-      err_msg += date;
-      err_msg += "]";
-      json obj;
-      obj["type"] = "error";
-      obj["message"] = err_msg;
-      feedback_messages_.push_back(obj);
-      keep_collecting_.store(false,std::memory_order_relaxed);
-      keep_transmitting_.store(false,std::memory_order_relaxed);
-
-      // -- dump the previous eth package to disk
-      //FIXME Remove this once the issue with the BR is sorted out
-      char fname[128];
-      strftime(fname, sizeof(fname), "ctb_eth_dump_%Y%m%d_%H%M%S.txt", &now_tm);
-
-      std::ofstream dfout(fname);
-      for (size_t i = 0; i < debug_eth_buffer.nentries; i++) {
-        dfout << std::hex << debug_eth_buffer.data[i] ;
-        if (!(i%4)) dfout << std::dec << "\n";
-      }
-      dfout << '\n';
-      dfout.close();
-
-
-    }
+      //TODO implement error handling
+//      Log(error,"Unknown exception caught sending data");
+//      error_state_.store(true, std::memory_order_relaxed);
+//      std::string err_msg;
+//      err_msg = "Unknown exception [";
+//      std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+//      std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+//      std::tm now_tm = *std::localtime(&now_c);
+//      char date[128];
+//      strftime(date, sizeof(date), "%A %c", &now_tm);
+//      err_msg += date;
+//      err_msg += "]";
+//      json obj;
+//      obj["type"] = "error";
+//      obj["message"] = err_msg;
+//      feedback_messages_.push_back(obj);
+//      keep_collecting_.store(false,std::memory_order_relaxed);
+//      keep_transmitting_.store(false,std::memory_order_relaxed);
+//
+//      // -- dump the previous eth package to disk
+//      //FIXME Remove this once the issue with the BR is sorted out
+//      char fname[128];
+//      strftime(fname, sizeof(fname), "ctb_eth_dump_%Y%m%d_%H%M%S.txt", &now_tm);
+//
+//      std::ofstream dfout(fname);
+//      for (size_t i = 0; i < debug_eth_buffer.nentries; i++) {
+//        dfout << std::hex << debug_eth_buffer.data[i] ;
+//        if (!(i%4)) dfout << std::dec << "\n";
+//      }
+//      dfout << '\n';
+//      dfout.close();
+//
+//
+//    }
 
     // increment the sequence number
     seq_num_++;
@@ -827,9 +670,8 @@ void board_reader::data_transmitter() {
 
   // Finish the connection
   Log(info,"Closing data socket.");
-  close_data_connection();
   Log(info,"Data socket closed.");
-}
 
+}
 
 

@@ -27,3 +27,4 @@ test/test_tree
 .DS_Store
 *.d
 
+/Default/

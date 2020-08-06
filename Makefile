@@ -2,7 +2,6 @@
 MACHINE    := $(shell uname -m)
 CC         := g++
 BIN        := $(PWD)/bin
-DEF_CFLAGS := -std=c++11 -Wall -I$(PWD)/contrib/PracticalSocket 
 DEF_CFLAGS += -I$(PWD)/contrib/linux_dma/pothos-zynq/driver -I$(PWD)/contrib/linux_dma/pothos-zynq/kernel
 DEF_CFLAGS += -I$(PWD)/src -I./
 #DEF_CFLAGS += -I$(PWD)/contrib/pugixml/pugixml-1.6/src
@@ -69,12 +68,6 @@ endif
 #XML_HDR := $(wildcard $(XML_DIR)/*.hpp)
 #XML_OBJ := $(patsubst $(XML_DIR)/%.cpp,$(OBJ)/%.o,$(XML_SRC))
 
-# Practical Socket
-TCP_DIR := $(PWD)/contrib/PracticalSocket
-TCP_SRC := $(wildcard $(TCP_DIR)/*.cpp)
-TCP_HDR := $(wildcard $(TCP_DIR)/*.h)
-TCP_OBJ := $(patsubst $(TCP_DIR)/%.cpp,$(OBJ)/%.o,$(TCP_SRC))
-
 # My own sources
 PTB_DIR := $(PWD)/src
 PTB_SRC := $(wildcard $(PTB_DIR)/*.cpp)
@@ -89,7 +82,7 @@ APP_OBJ := $(patsubst $(APP_DIR)/%.cpp,$(OBJ)/%.o,$(APP_SRC))
 APP_BIN := $(patsubst $(APP_DIR)/%.cpp,$(APP_DIR)/%,$(APP_SRC))
 
 # Tests
-TEST_DIR := $(PWD)/test
+TEST_DIR := $(PWD)/test/dma_test
 TEST_SRC := $(wildcard $(TEST_DIR)/*.cpp)
 TEST_HDR := $(wildcard $(TEST_DIR)/*.h)
 TEST_OBJ := $(patsubst $(TEST_DIR)/%.cpp,$(OBJ)/%.o,$(TEST_SRC))
@@ -118,10 +111,6 @@ server_clean:
 #$(OBJ)/%.o: $(XML_DIR)/%.cpp $(XML_DIR)/%.hpp
 #	$(CC) -c $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) -o $@ $<
 
-# Compile TCP socket Sources
-$(OBJ)/%.o: $(TCP_DIR)/%.cpp $(TCP_DIR)/%.h
-	$(CC) -c $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) -o $@ $<
-
 # Compile PTB Sources
 $(OBJ)/%.o: $(PTB_DIR)/%.cpp $(PTB_DIR)/%.h
 	$(CC) -c $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) -o $@ $<
@@ -130,9 +119,14 @@ $(OBJ)/%.o: $(PTB_DIR)/%.cpp $(PTB_DIR)/%.h
 #$(BIN)/%: $(UTL_DIR)/%.cpp $(XML_OBJ) $(TCP_OBJ) $(PTB_OBJ)
 #	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
 
-# Compile tests
+# Compile PTB app
 $(APP_DIR)/%: $(APP_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)
 	$(CC) $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) $(OBJ)/* -o $@ $< $(LFLAGS) 
+
+# Compile PTB tests
+#$(OBJ)/%.o: $(TEST_DIR)/%.cpp $(TEST_DIR)/%.h
+#	$(CC) -c $(CFLAGS) -D__FILENAME__=\"$(notdir $<)\" $(DEF) -o $@ $<
+
 
 # Compile tests
 #$(TEST_DIR)/%: $(TEST_DIR)/%.cpp $(XML_OBJ) $(PTB_OBJ) $(TCP_OBJ)
