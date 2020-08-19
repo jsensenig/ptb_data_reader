@@ -56,6 +56,8 @@ void DMATest::Start() {
     }
     //sock_(ctx_, zmq::socket_type::sub);
     sock_.connect("inproc://test");
+    // Subscribe to ALL messages
+    sock_.setsockopt(ZMQ_SUBSCRIBE, "", 0);
 
     std::cout << "Starting data taking" << std::endl;
 
@@ -83,19 +85,19 @@ void DMATest::Start() {
 }
 
 void DMATest::data_receiver() {
+
   // Loop over the data from the ZMQ connection
-
-  const size_t size = 1024;
-  // Create receiving buffer
-  void* buf_ptr = malloc(size);
-
-  zmq::mutable_buffer recv_mbuf = zmq::buffer(buf_ptr, size);
+  zmq::message_t rmsg;
 
   while (run_) {
-	auto recv_bytes = sock_.recv(recv_mbuf, zmq::recv_flags::none);
-	//if (recv_bytes) {
-	  //std::cout << "Bytes received " << std::endl;
-	//}
+    auto recvd = sock_.recv(rmsg, zmq::recv_flags::none);
+
+	if(true) {
+	  std::cout << "Received message size: " << rmsg.size() << std::endl;
+	  // Recast data into original type
+	  const uint32_t *iptr = rmsg.data<uint32_t>();
+	  std::cout << "Received message: " << *iptr << std::endl;
+	}
   }
 }
 

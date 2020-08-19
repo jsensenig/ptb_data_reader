@@ -3,7 +3,7 @@
 //     Author: jon
 //
 
-#include "zmq.hpp"
+#include <zmq.hpp>
 
 extern "C" {
 #include <arpa/inet.h>
@@ -20,66 +20,80 @@ extern "C" {
 #include <sstream>
 #include <thread>
 #include <chrono>
-#include <map>
+#include <atomic>
 #include <fstream>
 #include <cstring>
 #include <iostream>
+#include <string>
+#include <memory>
 
 using namespace std;
 
 // Set up the ZMQ sockets
-zmq::context_t ctx_;
-zmq::socket_t send_sock_(ctx_, zmq::socket_type::sub);
-zmq::socket_t recv_sock_(ctx_, zmq::socket_type::sub);
-const std::string addr_ = "inproc://5678";
-const size_t size = 1024;
+const std::string addr_ = "inproc://test";
+zmq::context_t ctx_ (1);
+zmq::socket_t send_sock_(ctx_, ZMQ_PUB);
+zmq::socket_t recv_sock_(ctx_, ZMQ_SUB);
 
-bool run_ = false;
+const size_t size = 5;
+std::atomic<bool> run_ (false);
 
 void data_sender();
 void data_receiver();
-//int main();
+
 
 void data_sender() {
 
 	// Set up socket to send data
-	//send_sock_.bind(addr_);
+	send_sock_.bind(addr_);
+
 
 	// Create and fill buffer with data
-	void* buf_ptr = malloc(size*sizeof(uint32_t));
+	void* buf_ptr = malloc(sizeof(uint32_t));
 	const void* cptr = buf_ptr;
+
 	// Recast so we can fill with data
 	uint32_t* buff = static_cast<uint32_t*>(buf_ptr);
 
-	for (size_t i = 0; i < size; i++) {
-		buff[i] = (uint32_t)i;
+	for (size_t i = 0; i < 1; i++) {
+		buff[i] = (uint32_t)(65001);
 	}
-	cout << "Allocated and filled send buffer" << endl;
-	// Basic construction
-	zmq::const_buffer cbuf = zmq::buffer(cptr, size);
-	cout << "Created ZMQ buffer send" << endl;
-	sleep(1);
-	// Send buffer over ZMQ
-	auto res = send_sock_.send(cbuf, zmq::send_flags::none);
-	if(res) {
-      cout << "Sent bytes" << endl;
+
+	zmq::message_t send_msg(sizeof(uint32_t));
+
+	while (run_) {
+
+	  std::memcpy (send_msg.data(), buf_ptr, sizeof(uint32_t));
+
+	// Send buffer over ZMQ (implicit send_flag = none)
+	  auto res = send_sock_.send(send_msg, zmq::send_flags::none);
+
+	  if(res) cout << "Sent message size " << send_msg.size() << endl;
+	  sleep(1);
 	}
+    // Send one last message to allow the receiver thread to join
+	auto res = send_sock_.send(send_msg, zmq::send_flags::none);
 }
 
 void data_receiver() {
+
+  sleep(1);
   // Connect to port
-  //recv_sock_.connect(addr_);
+  recv_sock_.connect(addr_);
+  // Subscribe to ALL messages
+  recv_sock_.setsockopt(ZMQ_SUBSCRIBE, "", 0);
 
-  // Create receiving buffer
-  void* buf_ptr = malloc(size*sizeof(uint32_t));
-  cout << "Allocated buffer recv" << endl;
+  zmq::message_t rmsg;
 
-  zmq::mutable_buffer recv_mbuf = zmq::buffer(buf_ptr, size);
-  cout << "Created ZMQ buffer recv" << endl;
   while (run_) {
-	auto recv_bytes = recv_sock_.recv(recv_mbuf, zmq::recv_flags::none);
-	if (recv_bytes) {
-      cout << "Bytes received " << endl;
+	// Implicit recv flag = none
+    auto recvd = recv_sock_.recv(rmsg, zmq::recv_flags::none);
+
+	if(true) {
+	  cout << "Received message size: " << rmsg.size() << endl;
+	  // Recast data into original type
+	  const uint32_t *iptr = rmsg.data<uint32_t>();
+	  cout << "Received message: " << *iptr << endl;
 	}
   }
 }
@@ -87,16 +101,9 @@ void data_receiver() {
 int main() {
 
   cout << "Starting test " << endl;
-  // Create receiving buffer
-  void* buf_ptr = malloc(size);
-  cout << "Allocated buffer recv" << endl;
 
-  zmq::mutable_buffer recv_mbuf = zmq::buffer(buf_ptr, size);
-  cout << "ZMQ buffer main" << endl;
   // Set run flag true
   run_ = true;
-  send_sock_.bind(addr_);
-  recv_sock_.connect(addr_);
 
   // Start a thread for both sender and receiver
   std::thread *sendr_thread = new std::thread(&data_sender);
@@ -108,8 +115,12 @@ int main() {
   cout << "Ending test " << endl;
   run_ = false;
 
-  sendr_thread->join();
   rcvr_thread->join();
+  sendr_thread->join();
+  cout << "Joined threads" << endl;
+
+  delete sendr_thread;
+  delete rcvr_thread;
 
 }
 

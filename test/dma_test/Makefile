@@ -1,5 +1,5 @@
 CXX      = gcc -pthread -std=c++11
-CFLAGS  = -I. -I/usr/include/
+CFLAGS  = -I. -I/usr/include/ -I../../src/
 CXXFLAGS := -Wall -Wextra -pedantic-errors
 CC = g++
 LFLAGS = -lpthread -lzmq
@@ -19,13 +19,9 @@ zmq_test.o: zmq_test.cpp
 	$(CXX) $(CFLAGS) -c $(CXXFLAGS) $<
 
 
-
-
-.PHONY: clean cleanest
+.PHONY: clean
 
 clean:
 	rm *.o
-
-cleanest: clean
-	rm dma_test
 	rm zmq_test
+	rm dma_test
