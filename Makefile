@@ -43,7 +43,8 @@ else
       LFLAGS   := 
    else
       CC       := g++
-      CFLAGS   := $(DEF_CFLAGS) -fpermissive -m32 $(BOOST_CFLAGS_SERVER)
+     # CFLAGS   := $(DEF_CFLAGS) -fpermissive -m32 $(BOOST_CFLAGS_SERVER)
+      CFLAGS   := $(DEF_CFLAGS) -fpermissive $(BOOST_CFLAGS_SERVER)
       LFLAGS   := $(DEF_LFLAGS) $(BOOST_LFLAGS_SERVER)
    endif
    DEF      := 

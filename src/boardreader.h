@@ -73,6 +73,10 @@ namespace ptb {
         ready_ = ready;
       }
 
+      void set_fake_data(bool fake_data) {
+    	fake_data_ = fake_data;
+      }
+
       void init_data_connection();
      /**
        * Stop the client threads without touching the mutex.
@@ -121,12 +125,14 @@ namespace ptb {
       void dump_packet(uint32_t* buffer, uint32_t tot_size);
       void clean_and_shutdown_dma();
       void init_dma();
+      void fake_data_sender();
     private:
 
       std::thread     *client_thread_collector_;
       std::thread     *client_thread_transmitter_;
 
       bool ready_;
+      bool fake_data_;
 
 
       /// -- DMA parameters

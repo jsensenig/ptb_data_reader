@@ -11,6 +11,8 @@
 #include "zmq.hpp"
 #include <thread>
 
+#include "../../src/interface.hpp"
+
 using json = nlohmann::json;
 
 class DMATest {
@@ -23,12 +25,12 @@ class DMATest {
 	void data_receiver();
 
 	DataReaderI brI;
+	//ptb::board_reader brI;
 
   protected :
 
 	zmq::context_t ctx_;
 	zmq::socket_t sock_;
-	static const size_t buf_size = 0x100;
 	bool run_;
 
 	std::thread *rcvr_thread_;

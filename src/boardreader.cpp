@@ -43,6 +43,7 @@ board_reader::board_reader() :
     client_thread_collector_(0),
     client_thread_transmitter_(0),
     ready_(false),
+	fake_data_(false),
     s2mm(nullptr),
     dma_initialized_(false),
     error_state_(false),
@@ -141,7 +142,7 @@ void board_reader::stop_data_taking() {
   Log(info,"Resetting existing buffers");
   reset_buffers();
 
-  // Close zmq connection
+  // Close zmq socket
   sock_.close();
 
   Log(info,"Data taking stopped.");
@@ -152,42 +153,46 @@ void board_reader::stop_data_taking() {
 void board_reader::start_data_taking() {
 
   if (ready_) {
+	  if(!fake_data_) {
+		init_dma();
 
-    init_dma();
-
-    // We are ready to do business. Start reading the DMA into the queue.
-    Log(verbose, "==> Creating collector thread\n" );
-    keep_collecting_.store(true,std::memory_order_relaxed);
-    client_thread_collector_ = new std::thread(&board_reader::data_collector,this);
-    if (client_thread_collector_ == nullptr) {
-      Log(error,"Unable to create collector thread . Failing..." );
-      json obj;
-      obj["type"] = "error";
-      obj["message"] = "Unable to create collector thread";
-      feedback_messages_.push_back(obj);
-      error_state_.store(true,std::memory_order_relaxed);
-    }
-    // We are ready to do business. Start reading the DMA into the queue.
-    Log(verbose, "==> Creating transmitter\n" );
-    keep_transmitting_ = true;
-    client_thread_transmitter_ = new std::thread(&board_reader::data_transmitter,this);
-    if (client_thread_transmitter_ == nullptr) {
-      Log(error,"Unable to create transmitter thread . Failing..." );
-      json obj;
-      obj["type"] = "error";
-      obj["message"] = "Unable to create transmitter thread";
-      feedback_messages_.push_back(obj);
-      error_state_.store(true,std::memory_order_relaxed);
-    }
-
-
+		// We are ready to do business. Start reading the DMA into the queue.
+		Log(verbose, "==> Creating collector thread\n" );
+		keep_collecting_.store(true,std::memory_order_relaxed);
+		client_thread_collector_ = new std::thread(&board_reader::data_collector,this);
+		if (client_thread_collector_ == nullptr) {
+		  Log(error,"Unable to create collector thread . Failing..." );
+		  json obj;
+		  obj["type"] = "error";
+		  obj["message"] = "Unable to create collector thread";
+		  feedback_messages_.push_back(obj);
+		  error_state_.store(true,std::memory_order_relaxed);
+		}
+		// We are ready to do business. Start reading the DMA into the queue.
+		Log(verbose, "==> Creating transmitter\n" );
+		keep_transmitting_ = true;
+		client_thread_transmitter_ = new std::thread(&board_reader::data_transmitter,this);
+		if (client_thread_transmitter_ == nullptr) {
+		  Log(error,"Unable to create transmitter thread . Failing..." );
+		  json obj;
+		  obj["type"] = "error";
+		  obj["message"] = "Unable to create transmitter thread";
+		  feedback_messages_.push_back(obj);
+		  error_state_.store(true,std::memory_order_relaxed);
+		}
+	  } else {
+		// Only sends an incrementing integer over zmq for testing
+		keep_transmitting_ = true;
+		client_thread_transmitter_ = new std::thread(&board_reader::fake_data_sender,this);
+		Log(info,"Started fake data transmission");
+	  }
   } else {
-    Log(error,"Calling to start data taking but connection is not ready yet" );
-    json obj;
-    obj["type"] = "error";
-    obj["message"] = "Calling to start data taking but data connection is not ready yet";
-    feedback_messages_.push_back(obj);
-    error_state_.store(true,std::memory_order_relaxed);
+	Log(error,"Calling to start data taking but connection is not ready yet" );
+	json obj;
+	obj["type"] = "error";
+	obj["message"] = "Calling to start data taking but data connection is not ready yet";
+	feedback_messages_.push_back(obj);
+	error_state_.store(true,std::memory_order_relaxed);
   }
 }
 
@@ -210,13 +215,14 @@ void board_reader::init_data_connection() {
   //-- If a connection exists, assume it is correct and continue to use it
   // NOTE: A ghost connection can exist
   // Try first if the connection is good
-  try {
-    sock_.bind("inproc://test");
-  }
-  catch(...) {
-	  ready_ = false;
-  }
-  ready_ = true;
+	//ZMQ connection should be made in thread where it is used
+//  try {
+//    sock_.bind("inproc://test");
+//  }
+//  catch(...) {
+//	  ready_ = false;
+//  }
+//  ready_ = true;
 }
 
 void board_reader::data_collector() {
@@ -454,7 +460,6 @@ void board_reader::data_transmitter() {
   // This will keep track on the number of u32 words
   // In the end the size of the buffer will be ipck*sizeof(uint32_t);
   static uint32_t n_u32_words = 0;
-  static uint32_t n_bytes_sent = 0;
   static uint32_t seq_num_ = 0;
   static bool first_message = true;
   // Temporary variables that will end up making part of the eth packet
@@ -467,19 +472,25 @@ void board_reader::data_transmitter() {
   /// -- Initialize the sequence number to 1 (first packet)
   seq_num_ = 1;
   first_message = true;
-  /// Assign the skeleton packet header
-  /// This would be nice to go out of the loop but it
-  ptb::content::tcp_header eth_header;
-  eth_header.word.format_version = (ptb::content::format_version << 4) | ((~ptb::content::format_version) & 0xF);
 
   // The whole method runs on an infinite loop with a control variable
   // That is set from the main thread.
   ptb::content::word::word_t *frame;
   ptb::content::word::feedback_t*fbk;
+
+  //Open up the ZMQ conection
+  try {
+    sock_.bind("inproc://test");
+  }
+  catch(...) {
+	  ready_ = false;
+  }
+
   while(keep_transmitting_.load(std::memory_order_acquire)) {
 
     // Set the local pointer to the place pointed by the global pointer
-    eth_buffer = &global_eth_buffer[global_eth_pos];
+
+    zmq::message_t zmq_send((uint32_t)dma_buffer.len);
 
     /**
     !!!! Start by not doing any size modifications into the memory
@@ -500,9 +511,6 @@ void board_reader::data_transmitter() {
     /// -- Start by generating a header
 
     n_u32_words = 0;
-    n_bytes_sent = 0;
-
-    eth_header.word.sequence_id = seq_num_;
 
     // FIXME: Finish implementing feedback word injection here
     //if ()
@@ -521,10 +529,6 @@ void board_reader::data_transmitter() {
     // to data in memory not much overhead is created
     buffer_queue_.read(dma_buffer);
 
-    // -- at this point there is a buffer available
-    // Assign the size to the header
-    eth_header.word.packet_size = dma_buffer.len & 0xFFFF;
-
     /// -- NFB : Using memcpy as I am sure that there is no memory
     ///          overlap, therefore can use the faster version
 
@@ -538,21 +542,10 @@ void board_reader::data_transmitter() {
       Log(warning,
           "DMA error caught. Sneaking in feedback word : \nTS : [%" PRIu64 "]\nCode : [%X]\nSource : [%X]\nPayload : [%" PRIX64 "]\nType : [%X]",
           feedback_dma.timestamp,feedback_dma.code,feedback_dma.source,feedback_dma.get_payload(),(uint32_t)feedback_dma.word_type);
-      //Log(warning,"Caught a DMA error. Sneaking in a feedback word");
-
-      //std::memcpy(&(eth_buffer[1]),(void*)&feedback_dma,sizeof(feedback_dma));
-      //wpos = 5;
-      //num_word_feedback_++;
-      //eth_header.word.packet_size = (dma_buffer.len + sizeof(feedback_dma)) & 0xFFFF;
-
     }
 
-    // -- Now copy the header. The reason it is done afterwards is because we
-    // want to first sneak in the feedback word from the DMA error
-    std::memcpy(&(eth_buffer[0]),&eth_header,sizeof(eth_header));
-
-    // -- copy the whole buffer
-    std::memcpy(&(eth_buffer[1]),(void*)buff_addr_[dma_buffer.handle],dma_buffer.len);
+    // -- copy the whole buffer into the zmq message
+    std::memcpy(zmq_send.data(), (void*)buff_addr_[dma_buffer.handle], dma_buffer.len);
 
     // -- loop over the buffer to collect word statistics
     //FIXME: Might want to do this at the FPGA level
@@ -599,56 +592,19 @@ void board_reader::data_transmitter() {
        tpos += ptb::content::word::word_t::size_bytes;
     }
 
-    // -- Send the data
-    // add words to the queue here
-    n_bytes_sent = sizeof(eth_header)+dma_buffer.len;
+    // Send/publish the data
+    auto sent = sock_.send(zmq_send, zmq::send_flags::none);
 
-    sock_.send(zmq::buffer(eth_buffer,n_bytes_sent));
-
-
-    n_u32_words = n_bytes_sent/sizeof(uint32_t);
+    n_u32_words = dma_buffer.len/sizeof(uint32_t);
       //Log(debug,"Releasing buffer %u",dma_buffer.handle);
       // -- Do a copy of the data
       // -- release the memory buffer
     pzdud_release(s2mm, dma_buffer.handle, 0);
 
-    bytes_sent_ += n_bytes_sent;
+    bytes_sent_ += dma_buffer.len;
     num_eth_fragments_++;
 
       //TODO implement error handling
-//      Log(error,"Unknown exception caught sending data");
-//      error_state_.store(true, std::memory_order_relaxed);
-//      std::string err_msg;
-//      err_msg = "Unknown exception [";
-//      std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-//      std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-//      std::tm now_tm = *std::localtime(&now_c);
-//      char date[128];
-//      strftime(date, sizeof(date), "%A %c", &now_tm);
-//      err_msg += date;
-//      err_msg += "]";
-//      json obj;
-//      obj["type"] = "error";
-//      obj["message"] = err_msg;
-//      feedback_messages_.push_back(obj);
-//      keep_collecting_.store(false,std::memory_order_relaxed);
-//      keep_transmitting_.store(false,std::memory_order_relaxed);
-//
-//      // -- dump the previous eth package to disk
-//      //FIXME Remove this once the issue with the BR is sorted out
-//      char fname[128];
-//      strftime(fname, sizeof(fname), "ctb_eth_dump_%Y%m%d_%H%M%S.txt", &now_tm);
-//
-//      std::ofstream dfout(fname);
-//      for (size_t i = 0; i < debug_eth_buffer.nentries; i++) {
-//        dfout << std::hex << debug_eth_buffer.data[i] ;
-//        if (!(i%4)) dfout << std::dec << "\n";
-//      }
-//      dfout << '\n';
-//      dfout.close();
-//
-//
-//    }
 
     // increment the sequence number
     seq_num_++;
@@ -672,6 +628,43 @@ void board_reader::data_transmitter() {
   Log(info,"Closing data socket.");
   Log(info,"Data socket closed.");
 
+}
+
+void board_reader::fake_data_sender() {
+
+	// Set up socket to send data
+	sock_.bind("tcp://127.0.0.1:3855");
+
+	// Create and fill buffer with data
+	void* buf_ptr = malloc(sizeof(uint32_t));
+	const void* cptr = buf_ptr;
+
+	// Recast so we can fill with data
+	uint32_t* buff = static_cast<uint32_t*>(buf_ptr);
+
+	uint32_t iter = 0;
+	Log(info,"Starting transmission loop");
+
+    while(keep_transmitting_.load(std::memory_order_acquire)) {
+      zmq::message_t send_msg(sizeof(uint32_t));
+	  buff[0] = iter;
+	  std::memcpy (send_msg.data(), buf_ptr, sizeof(uint32_t));
+
+	  // Send buffer over ZMQ (implicit send_flag = none)
+	  auto res = sock_.send(send_msg, zmq::send_flags::none);
+
+      // Unsuccessful send attempts return -1
+	  if (res.value() < 0) {
+		Log(info,"Error message not sent!");
+	  } else {
+	    bytes_sent_ += res.value();
+	  }
+
+	  sleep(1);
+	  iter++;
+	}
+    // Send one last message to allow the receiver thread to join
+	auto res = sock_.send(zmq::message_t(sizeof(uint32_t)), zmq::send_flags::none);
 }
 
 
